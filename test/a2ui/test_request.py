@@ -205,6 +205,7 @@ class TestParseRequestActions:
                 ],
             },
             resolve_action=_no_actions,
+            version_key="v1.0",
         )
         assert len(req.current_inputs) == 1
         content = req.current_inputs[0].content

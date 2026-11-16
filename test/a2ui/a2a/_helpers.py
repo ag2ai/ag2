@@ -35,6 +35,13 @@ from ag2.stream import MemoryStream
 # of pausing forever (see CallRendererFunctionThenComplete).
 FUNCTION_RESULT_MARK = "FUNCTION-RESULT-DELIVERED"
 
+# Pinned A2A extension URIs, written out so a change to them shows up in the tests.
+EXTENSION_URIS: dict[str, str] = {
+    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
+    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
+    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
+}
+
 
 class CapturingConfig(ModelConfig):
     """A mock LLM config that records the resolved prompt and message list per call.

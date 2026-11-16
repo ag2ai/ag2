@@ -277,16 +277,16 @@
     }
    }
   },
-  "escaped_function_v10": {
-   "$id": "https://example.com/catalog.json",
+  "renderer_fn_v10": {
+   "$id": "https://mycompany.com/cat.json",
    "functions": {
-    "lookup/~definition": {
+    "localCheck": {
      "type": "object",
-     "returnType": "string",
-     "requiresUserActivation": false,
+     "returnType": "boolean",
+     "allowedCallers": "rendererOnly",
      "properties": {
       "@call": {
-       "const": "lookup"
+       "const": "localCheck"
       }
      },
      "required": [
@@ -1798,8 +1798,8 @@
   {
    "id": "v0.9:create_unknown_catalog",
    "version": "v0.9",
-   "note": "createSurface with unknown catalogId",
-   "expect": "frames",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
    "messages": [
     {
      "version": "v0.9",
@@ -1808,13 +1808,14 @@
       "catalogId": "https://example.com/nope.json"
      }
     }
-   ]
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'"
   },
   {
    "id": "v0.9:create_twice",
    "version": "v0.9",
-   "note": "same surface created twice",
-   "expect": "frames",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
    "messages": [
     {
      "version": "v0.9",
@@ -1828,6 +1829,217 @@
      "createSurface": {
       "surfaceId": "s",
       "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+  },
+  {
+   "id": "v0.9:update_before_create",
+   "version": "v0.9",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:data_model_before_create",
+   "version": "v0.9",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_after_delete",
+   "version": "v0.9",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:delete_then_create",
+   "version": "v0.9",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_earlier_surface_then_recreate",
+   "version": "v0.9",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
      }
     }
    ]
@@ -3280,8 +3492,8 @@
   {
    "id": "v0.9.1:create_unknown_catalog",
    "version": "v0.9.1",
-   "note": "createSurface with unknown catalogId",
-   "expect": "frames",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
    "messages": [
     {
      "version": "v0.9.1",
@@ -3290,13 +3502,14 @@
       "catalogId": "https://example.com/nope.json"
      }
     }
-   ]
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'"
   },
   {
    "id": "v0.9.1:create_twice",
    "version": "v0.9.1",
-   "note": "same surface created twice",
-   "expect": "frames",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
    "messages": [
     {
      "version": "v0.9.1",
@@ -3310,6 +3523,217 @@
      "createSurface": {
       "surfaceId": "s",
       "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+  },
+  {
+   "id": "v0.9.1:update_before_create",
+   "version": "v0.9.1",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:data_model_before_create",
+   "version": "v0.9.1",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_after_delete",
+   "version": "v0.9.1",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:delete_then_create",
+   "version": "v0.9.1",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_earlier_surface_then_recreate",
+   "version": "v0.9.1",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
      }
     }
    ]
@@ -4724,6 +5148,141 @@
    ]
   },
   {
+   "id": "v1.0:component_id_not_an_identifier",
+   "version": "v1.0",
+   "note": "component ids MUST be UAX #31 identifiers (v1_0 a2ui_protocol.md, Catalog Entity Naming Rules)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'user-card' (Text): 'user-card' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits or '_')",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "user-card"
+        ]
+       },
+       {
+        "id": "user-card",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:child_reference_not_an_identifier",
+   "version": "v1.0",
+   "note": "a reference is a ComponentId too",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Card): '1st_item' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits or '_')",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "1st_item"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_id_unicode_identifier",
+   "version": "v1.0",
+   "note": "UAX #31 admits non-ASCII letters",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "ünïcödé_1"
+        ]
+       },
+       {
+        "id": "ünïcödé_1",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:component_id_with_hyphen",
+   "version": "v0.9",
+   "note": "v0.9 sets no naming rule for component ids",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "user-card"
+        ]
+       },
+       {
+        "id": "user-card",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
    "id": "v1.0:udm_relative_path",
    "version": "v1.0",
    "note": "updateDataModel path 'a/b'",
@@ -4759,8 +5318,8 @@
   {
    "id": "v1.0:create_unknown_catalog",
    "version": "v1.0",
-   "note": "createSurface with unknown catalogId",
-   "expect": "frames",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
    "messages": [
     {
      "version": "1.0",
@@ -4769,13 +5328,14 @@
       "catalogId": "https://example.com/nope.json"
      }
     }
-   ]
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'"
   },
   {
    "id": "v1.0:create_twice",
    "version": "v1.0",
-   "note": "same surface created twice",
-   "expect": "frames",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
    "messages": [
     {
      "version": "1.0",
@@ -4789,6 +5349,217 @@
      "createSurface": {
       "surfaceId": "s",
       "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+  },
+  {
+   "id": "v1.0:update_before_create",
+   "version": "v1.0",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:data_model_before_create",
+   "version": "v1.0",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_after_delete",
+   "version": "v1.0",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:delete_then_create",
+   "version": "v1.0",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_earlier_surface_then_recreate",
+   "version": "v1.0",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
      }
     }
    ]
@@ -4909,8 +5680,8 @@
   {
    "id": "v1.0:no_catalog_components_no_catalogId",
    "version": "v1.0",
-   "note": "surface w/o catalogId, component w/o catalogId",
-   "expect": "frames",
+   "note": "surface w/o catalogId, component w/o @catalogId: does not resolve (no fallback; SDK CATALOG_NOT_FOUND)",
+   "expect": "retry",
    "messages": [
     {
      "version": "1.0",
@@ -4925,7 +5696,8 @@
       ]
      }
     }
-   ]
+   ],
+   "error": "Operation 0: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)"
   },
   {
    "id": "v1.0:no_catalog_components_with_catalogId",
@@ -5033,7 +5805,7 @@
    "version": "v1.0",
    "note": "metadata.extensions key '1x'",
    "expect": "retry",
-   "error": "Operation 0: '1x' is not a 'xid-identifier' (at /createSurface/metadata/extensions)",
+   "error": "Operation 0: '1x' is not a UAX #31 identifier (a letter or '_', then letters, digits or '_') (at /createSurface/metadata/extensions)",
    "messages": [
     {
      "version": "1.0",
@@ -5088,7 +5860,7 @@
    "version": "v1.0",
    "note": "callRendererFunction openUrl (rendererOnly in basic)",
    "expect": "retry",
-   "error": "Operation 0: {'@call': 'openUrl', 'catalogId': 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json', 'args': {'url': 'https://example.com'}} should not be valid under {} (at /callRendererFunction/callFunction)",
+   "error": "Operation 0: function 'openUrl' cannot be called by agent (allowedCallers is rendererOnly) (at /callRendererFunction/callFunction)",
    "messages": [
     {
      "version": "1.0",
@@ -5636,7 +6408,7 @@
    "version": "v1.0",
    "note": "MyWidget on basic surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (MyWidget): '@catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (MyWidget): unknown component 'MyWidget'",
    "catalog": "widget_v10",
    "messages": [
     {
@@ -5695,7 +6467,7 @@
    "version": "v1.0",
    "note": "basic-style Text on custom surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (Text): 'customText' is a required property",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5721,11 +6493,11 @@
    ]
   },
   {
-   "id": "custom:v10_override_default_catalog_text",
+   "id": "custom:v10_no_default_catalog_text",
    "version": "v1.0",
-   "note": "no catalogId: the surface uses the agent's catalog, whose Text needs customText",
+   "note": "no catalogId: upstream has no fallback to the agent's catalog (v1_0 a2ui_protocol.md, catalog resolution)",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5750,10 +6522,10 @@
    ]
   },
   {
-   "id": "custom:v10_override_default_catalog_customText_ok",
+   "id": "custom:v10_no_default_catalog_customText",
    "version": "v1.0",
-   "note": "no catalogId: the agent's catalog accepts its own Text",
-   "expect": "frames",
+   "note": "no catalogId: even a component the agent's catalog accepts does not resolve",
+   "expect": "retry",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5771,6 +6543,117 @@
         "id": "root",
         "component": "Text",
         "customText": "x"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)"
+  },
+  {
+   "id": "v1.0:no_default_catalog_create_only",
+   "version": "v1.0",
+   "note": "createSurface without catalogId and no components: nothing to resolve (SDK accepts)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_explicit_components",
+   "version": "v1.0",
+   "note": "no surface default, every component names its catalog",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_function",
+   "version": "v1.0",
+   "note": "no surface default: a function call without catalogId does not resolve",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): function 'formatString' names no 'catalogId' and the surface has no default 'catalogId' (set it in createSurface)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "text": {
+         "@call": "formatString",
+         "args": {
+          "value": "hi"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_function_explicit",
+   "version": "v1.0",
+   "note": "no surface default, the call names its catalog",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "text": {
+         "@call": "formatString",
+         "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+         "args": {
+          "value": "hi"
+         }
+        }
        }
       ]
      }
@@ -5812,7 +6695,7 @@
    "version": "v1.0",
    "note": "customText on basic surface",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): '@catalogId' is a required property",
+   "error": "Operation 1: Component 'root' (Text): 'text' is a required property",
    "catalog": "text_override_v10",
    "messages": [
     {
@@ -5861,7 +6744,7 @@
    "version": "v1.0",
    "note": "agentOnly function bound in Button action",
    "expect": "retry",
-   "error": "Operation 0: Component 'root' (Button): unknown function 'lookup'",
+   "error": "Operation 0: Component 'root' (Button): function 'lookup' cannot be called by renderer (allowedCallers is agentOnly)",
    "catalog": "agent_fn_v10",
    "messages": [
     {
@@ -5887,6 +6770,60 @@
         "component": "Text",
         "text": "x",
         "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_rendererfn_call_renderer",
+   "version": "v1.0",
+   "note": "a custom rendererOnly function exists but the agent may not call it (a2ui_protocol.md, callRendererFunction)",
+   "expect": "retry",
+   "error": "Operation 0: function 'localCheck' cannot be called by agent (allowedCallers is rendererOnly) (at /callRendererFunction/callFunction)",
+   "catalog": "renderer_fn_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "functionCallId": "fc",
+      "callFunction": {
+       "@call": "localCheck",
+       "catalogId": "https://mycompany.com/cat.json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:surface_component",
+   "version": "v1.0",
+   "note": "the Surface container is created by createSurface and cannot be sent in updateComponents",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Surface): component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Surface",
+        "child": "t"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi"
        }
       ]
      }
@@ -6052,49 +6989,6 @@
     [
      1
     ]
-   ]
-  },
-  {
-   "id": "custom:v1.0_escaped_component_name",
-   "version": "v1.0",
-   "note": "component definition named with JSON Pointer characters",
-   "expect": "frames",
-   "catalog": "escaped_component",
-   "messages": [
-    {
-     "version": "1.0",
-     "updateComponents": {
-      "surfaceId": "s",
-      "components": [
-       {
-        "id": "root",
-        "component": "Widget"
-       }
-      ]
-     }
-    }
-   ]
-  },
-  {
-   "id": "custom:v1.0_escaped_component_name_is_not_a_type",
-   "version": "v1.0",
-   "note": "the definition name is not a component type",
-   "expect": "retry",
-   "error": "Operation 0: Component 'root' (widget/~definition): unknown component 'widget/~definition'",
-   "catalog": "escaped_component",
-   "messages": [
-    {
-     "version": "1.0",
-     "updateComponents": {
-      "surfaceId": "s",
-      "components": [
-       {
-        "id": "root",
-        "component": "widget/~definition"
-       }
-      ]
-     }
-    }
    ]
   },
   {
@@ -6313,69 +7207,6 @@
         "id": "root",
         "component": "Label",
         "text": "Hi"
-       }
-      ]
-     }
-    }
-   ]
-  },
-  {
-   "id": "custom:v10_escaped_function_name",
-   "version": "v1.0",
-   "note": "function definition named with JSON Pointer characters",
-   "expect": "frames",
-   "catalog": "escaped_function_v10",
-   "messages": [
-    {
-     "version": "1.0",
-     "createSurface": {
-      "surfaceId": "s",
-      "catalogId": "https://example.com/catalog.json"
-     }
-    },
-    {
-     "version": "1.0",
-     "updateComponents": {
-      "surfaceId": "s",
-      "components": [
-       {
-        "id": "root",
-        "component": "Text",
-        "text": {
-         "@call": "lookup"
-        }
-       }
-      ]
-     }
-    }
-   ]
-  },
-  {
-   "id": "custom:v10_escaped_function_name_is_not_a_call",
-   "version": "v1.0",
-   "note": "the definition name is not a function name",
-   "expect": "retry",
-   "error": "Operation 1: Component 'root' (Text): unknown function 'lookup/~definition'",
-   "catalog": "escaped_function_v10",
-   "messages": [
-    {
-     "version": "1.0",
-     "createSurface": {
-      "surfaceId": "s",
-      "catalogId": "https://example.com/catalog.json"
-     }
-    },
-    {
-     "version": "1.0",
-     "updateComponents": {
-      "surfaceId": "s",
-      "components": [
-       {
-        "id": "root",
-        "component": "Text",
-        "text": {
-         "@call": "lookup/~definition"
-        }
        }
       ]
      }

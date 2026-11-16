@@ -5,14 +5,14 @@
 import json
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from typing import cast
 
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
-from ._graph import ComponentReferences, component_graph_errors, is_json_pointer
+from ._graph import ComponentReferences, component_graph_errors, is_json_pointer, surface_lifecycle_errors
 from ._messages import is_server_message
 from ._types import (
     JsonObject,
@@ -159,6 +159,20 @@ def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
     return errors
 
 
+def _unknown_catalog_errors(messages: Sequence[JsonObject], catalog_ids: Collection[str]) -> list[str]:
+    """A surface must be created on a catalog the agent has; the official SDK answers ``CATALOG_NOT_FOUND``."""
+    errors: list[str] = []
+    for i, message in enumerate(messages):
+        payload = message.get("createSurface")
+        catalog_id = payload.get("catalogId") if isinstance(payload, dict) else None
+        if isinstance(catalog_id, str) and catalog_id not in catalog_ids:
+            known = ", ".join(repr(known_id) for known_id in catalog_ids)
+            errors.append(
+                f"Operation {i}: unknown catalog {catalog_id!r} (at /createSurface/catalogId); use one of: {known}"
+            )
+    return errors
+
+
 def _components_of(update_components: JsonValue) -> list[JsonValue]:
     """Return the ``components`` list of an ``updateComponents`` (or v1.0 ``createSurface``) value, or ``[]``."""
     if not isinstance(update_components, dict):
@@ -167,24 +181,28 @@ def _components_of(update_components: JsonValue) -> list[JsonValue]:
     return components if isinstance(components, list) else []
 
 
-def _surface_catalog(operation: JsonValue, surfaces: dict[str, str], default_catalog_id: str | None) -> str | None:
-    """The catalog of the surface ``operation`` targets; a ``createSurface`` without ``catalogId`` uses the agent's."""
+_UNKNOWN_SURFACE = object()
+"""The catalog of a surface this response did not create: any configured catalog may apply."""
+
+
+def _surface_catalog(operation: JsonValue, surfaces: dict[str, str | None]) -> "str | None | object":
+    """The default catalog of the surface ``operation`` targets: an id, ``None`` (none), or ``_UNKNOWN_SURFACE``.
+
+    A v1.0 ``createSurface`` without ``catalogId`` gives its surface no default; upstream has no fallback.
+    """
     if not isinstance(operation, dict):
-        return None
+        return _UNKNOWN_SURFACE
     for key in ("createSurface", "updateComponents", "callRendererFunction", "deleteSurface"):
         payload = operation.get(key)
         if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
             continue
         if key == "createSurface":
             catalog_id = payload.get("catalogId")
-            if not isinstance(catalog_id, str):
-                catalog_id = default_catalog_id
-            if catalog_id is not None:
-                surfaces[surface_id] = catalog_id
+            surfaces[surface_id] = catalog_id if isinstance(catalog_id, str) else None
         elif key == "deleteSurface":
             surfaces.pop(surface_id, None)
-        return surfaces.get(surface_id)
-    return None
+        return surfaces.get(surface_id, _UNKNOWN_SURFACE)
+    return _UNKNOWN_SURFACE
 
 
 class A2UIResponseParser:
@@ -202,6 +220,7 @@ class A2UIResponseParser:
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: Registry | None = None,
         component_references: ComponentReferences | None = None,
+        catalog_ids: Collection[str] | None = None,
     ) -> None:
         self._checker = (
             MessageChecker(server_to_client_schema, schema_registry) if server_to_client_schema is not None else None
@@ -210,11 +229,7 @@ class A2UIResponseParser:
         self._schema = server_to_client_schema
         self._registry = schema_registry
         self._component_references = component_references
-        # ``catalog.json`` next to the message schema names the agent's catalog (see ``build_schema_registry``).
-        default_catalog = (
-            schema_registry.get(f"{protocol.schema_base_uri}catalog.json") if schema_registry is not None else None
-        )
-        self._default_catalog_id = default_catalog.id() if default_catalog is not None else None
+        self._catalog_ids = catalog_ids
 
     @property
     def protocol(self) -> A2UIProtocol:
@@ -302,14 +317,14 @@ class A2UIResponseParser:
         # Message TypedDicts are JSON objects on the wire; the checker reads them as such.
         objects = cast(Sequence[JsonObject], operations)
         errors: list[str] = []
-        surface_catalogs: dict[str, str] = {}
-        catalog_checkers: dict[str, MessageChecker] = {}
+        surface_catalogs: dict[str, str | None] = {}
+        catalog_checkers: dict[str | None, MessageChecker] = {}
         for i, op in enumerate(objects):
             try:
                 checker = self._checker
                 if self._protocol.per_surface_catalogs and self._registry is not None and self._schema is not None:
-                    catalog_id = _surface_catalog(op, surface_catalogs, self._default_catalog_id)
-                    if catalog_id is not None:
+                    catalog_id = _surface_catalog(op, surface_catalogs)
+                    if catalog_id is None or isinstance(catalog_id, str):
                         if catalog_id not in catalog_checkers:
                             catalog_checkers[catalog_id] = MessageChecker(
                                 self._schema, _registry_for_surface_catalog(self._registry, catalog_id)
@@ -323,6 +338,9 @@ class A2UIResponseParser:
 
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
+        errors.extend(surface_lifecycle_errors(objects))
+        if self._catalog_ids is not None:
+            errors.extend(_unknown_catalog_errors(objects, self._catalog_ids))
         if self._component_references is not None:
             errors.extend(component_graph_errors(objects, self._component_references))
 

@@ -229,11 +229,11 @@ async def run_agent_function(
         return [_invalid_function_arguments(call, version)]
     except Exception:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI function %r failed", call.call)
-        return [_function_failed(call, version)]
+        return [_execution_error(call, version)]
 
     messages = _messages_of(result, version, handler=call.call)
     if _invalid(messages, validator, handler=call.call):
-        return [_function_failed(call, version)]
+        return [_execution_error(call, version)]
     # Messages are the handler's surface updates; there is no separate value to return.
     value = None if messages else result
     return [*messages, _function_response(call.function_call_id, version, value=value)]
@@ -305,7 +305,7 @@ def _invalid(messages: list[ServerToClientMessage], validator: A2UIResponseParse
     return True
 
 
-def _function_failed(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -> ServerToClientMessage:
+def _execution_error(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -> ServerToClientMessage:
     return _function_response(
         call.function_call_id,
         version,

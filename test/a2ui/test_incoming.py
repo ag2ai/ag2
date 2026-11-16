@@ -330,18 +330,25 @@ class TestIncomingPrompts:
         envelopes = [
             {"callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}}},
         ]
-        assert list(incoming_prompts(decode_envelopes(envelopes), lambda name: None)) == []
+        assert list(incoming_prompts(decode_envelopes(envelopes, function_rpc=True), lambda name: None)) == []
 
     def test_function_response_without_id_is_dropped(self) -> None:
         assert (
-            list(incoming_prompts(decode_envelopes([{"rendererFunctionResponse": {"value": 1}}]), lambda name: None))
+            list(
+                incoming_prompts(
+                    decode_envelopes([{"rendererFunctionResponse": {"value": 1}}], function_rpc=True), lambda name: None
+                )
+            )
             == []
         )
 
     def test_function_response_becomes_a_prompt(self) -> None:
         prompts = list(
             incoming_prompts(
-                decode_envelopes([{"rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}]), lambda n: None
+                decode_envelopes(
+                    [{"rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}], function_rpc=True
+                ),
+                lambda n: None,
             )
         )
         assert len(prompts) == 1

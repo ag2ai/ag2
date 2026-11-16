@@ -10,12 +10,9 @@ from ag2.a2ui._types import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.extension import ACTIVATED_EXTENSIONS_KEY, try_activate_a2ui_extension
 
+from ._helpers import EXTENSION_URIS
+
 # Pinned wire values, written out so a change to them shows up here.
-EXTENSION_URIS: dict[str, str] = {
-    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
-    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
-    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
-}
 BASIC_CATALOG_IDS: dict[str, str] = {
     "v0.9": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
     "v0.9.1": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",

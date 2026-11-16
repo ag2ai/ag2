@@ -321,6 +321,35 @@ async def test_incoming_error_envelope_becomes_corrective_prompt() -> None:
 
 
 @pytest.mark.asyncio
+async def test_malformed_envelope_is_dropped_with_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    # Same rule as AG-UI: an envelope key is enough to reach the decoder, which warns about the bad payload.
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, validate_responses=False)
+    malformed = {"version": "v0.9", "action": "submit"}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await client.ask("go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([malformed])})
+
+    assert "Skipping A2UI envelope of unrecognized kind" in caplog.text
+    assert "submit" not in synthesized_text(config.messages[-1])
+
+
+@pytest.mark.asyncio
+async def test_function_response_is_dropped_before_v1_0(caplog: pytest.LogCaptureFixture) -> None:
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, validate_responses=False)
+    envelope: Any = {**FUNCTION_RESPONSE_ENVELOPE, "version": "v0.9"}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await client.ask("continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([envelope])})
+
+    assert "exists only in protocol v1.0" in caplog.text
+    assert "fc-1" not in synthesized_text(config.messages[-1])
+
+
+@pytest.mark.asyncio
 async def test_incoming_function_response_becomes_continuation_prompt() -> None:
     config = CapturingConfig()
     agent = Agent(name="ui_agent", config=config)

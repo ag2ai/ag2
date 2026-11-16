@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import assert_never
 
+from ._messages import CLIENT_TO_SERVER_KEYS
 from ._types import JsonValue
 from .actions import A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
@@ -52,6 +53,12 @@ class A2UIIncomingFunctionCall:
     ``catalog_id_valid`` distinguishes an omitted catalog from an explicitly
     malformed override, including JSON null, so malformed input cannot select a
     handler by silently falling back to the active catalog.
+
+    An omitted ``catalog_id`` is tolerated on purpose: the call resolves against
+    the agent's catalog. Upstream (v1.0 ``a2ui_protocol.md``, "callAgentFunction")
+    puts the MUST to send ``catalogId`` on the renderer, and
+    ``renderer_to_agent.json`` does not require the field, so the agent does not
+    reject a call that leaves it out.
     """
 
     function_call_id: str
@@ -238,15 +245,23 @@ def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
     Accepts a dict shaped like ``{"version": ..., "action": {...}}``,
     ``{"version": ..., "callAgentFunction": {...}}``,
     ``{"version": ..., "rendererFunctionResponse": {...}}``, or
-    ``{"version": ..., "error": {...}}`` and returns a typed result. Parsing is
-    structural and version-neutral — v1.0-only arms (``callAgentFunction``,
-    ``rendererFunctionResponse``, ``action.userMessage``, ``error.functionCallId``)
-    decode when present and are simply absent for v0.9 clients. Does NOT validate
-    the envelope against the JSON schema — use
-    ``A2UISchemaManager.client_to_server_schema`` for strict validation.
+    ``{"version": ..., "error": {...}}`` and returns a typed result. An envelope
+    with more than one of those keys is unknown: upstream requires exactly one.
+    Parsing is structural and version-neutral — v1.0-only arms
+    (``callAgentFunction``, ``rendererFunctionResponse``, ``action.userMessage``,
+    ``error.functionCallId``) decode when present; :func:`decode_envelopes` drops
+    the v1.0-only envelopes for an older protocol. The envelope is not validated
+    against the vendored renderer→agent JSON schema.
     """
     if not isinstance(data, dict):
         return A2UIIncomingUnknownResult(parse_error="envelope is not a JSON object")
+
+    present = [key for key in CLIENT_TO_SERVER_KEYS if key in data]
+    if len(present) > 1:
+        return A2UIIncomingUnknownResult(
+            parse_error=f"envelope must carry exactly one of {', '.join(map(repr, CLIENT_TO_SERVER_KEYS))}; "
+            f"it carries {', '.join(map(repr, present))}",
+        )
 
     action_obj = data.get("action")
     if isinstance(action_obj, dict):
@@ -423,17 +438,32 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     )
 
 
-def decode_envelopes(envelopes: Iterable[JsonValue]) -> list[A2UIIncomingParseResult]:
+def decode_envelopes(envelopes: Iterable[JsonValue], *, function_rpc: bool) -> list[A2UIIncomingParseResult]:
     """Decode client→server envelopes once per request, dropping (with a warning) those of no known kind.
 
     Both the agent's prompts (:func:`incoming_prompts`) and the
     :class:`~ag2.a2ui.A2UIClientEvent`\\s observers see come from this decode.
+
+    Args:
+        envelopes: The raw envelopes the request carried.
+        function_rpc: Whether the served protocol has function RPC (v1.0). Without
+            it, ``callAgentFunction`` and ``rendererFunctionResponse`` are dropped
+            with a warning: v0.9's ``client_to_server.json`` has only ``action``
+            and ``error``.
     """
     results: list[A2UIIncomingParseResult] = []
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
         if isinstance(result, A2UIIncomingUnknownResult):
             logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
+            continue
+        if not function_rpc and isinstance(result, A2UIIncomingFunctionCallResult | A2UIIncomingFunctionResponseResult):
+            kind = (
+                "callAgentFunction"
+                if isinstance(result, A2UIIncomingFunctionCallResult)
+                else "rendererFunctionResponse"
+            )
+            logger.warning("Skipping A2UI envelope '%s': it exists only in protocol v1.0.", kind)
             continue
         results.append(result)
     return results

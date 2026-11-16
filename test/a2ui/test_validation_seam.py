@@ -166,3 +166,48 @@ async def test_stripping_the_a2ui_block_keeps_the_message_metadata(
 
     [response] = turn.responses
     assert response.message == ModelMessage("Here.", metadata={"trace": "t-1"})
+
+
+@pytest.mark.asyncio
+async def test_surface_on_an_unknown_catalog_is_reported_once() -> None:
+    # The SDK answers CATALOG_NOT_FOUND; the surface's components have no catalog to be checked against.
+    unknown = "https://example.com/nope.json"
+    messages = [
+        {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": unknown}},
+        {
+            "version": "1.0",
+            "updateComponents": {"surfaceId": "s", "components": [{"id": "root", "component": "Text", "text": "hi"}]},
+        },
+    ]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
+
+    [feedback] = turn.feedback
+    errors = [line for line in feedback.splitlines() if line.startswith("- ")]
+    assert errors == [
+        f"- Operation 0: unknown catalog '{unknown}' (at /createSurface/catalogId); use one of: '{BASIC_CATALOG['v1.0']}'"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_surface_component_is_reported_once() -> None:
+    # a2ui_protocol.md, createSurface: the Surface container "cannot be modified using updateComponents".
+    messages = [
+        {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": BASIC_CATALOG["v1.0"]}},
+        {
+            "version": "1.0",
+            "updateComponents": {
+                "surfaceId": "s",
+                "components": [{"id": "root", "component": "Surface", "child": "root"}],
+            },
+        },
+    ]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
+
+    [feedback] = turn.feedback
+    errors = [line for line in feedback.splitlines() if line.startswith("- ")]
+    assert errors == [
+        "- Operation 1: Component 'root' (Surface): component type 'Surface' is reserved for the container "
+        "createSurface creates and cannot be sent as a component"
+    ]

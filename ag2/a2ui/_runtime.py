@@ -110,6 +110,7 @@ def build_runtime(
             server_to_client_schema=schema_manager.server_to_client_schema,
             schema_registry=schema_manager.build_schema_registry(),
             component_references=schema_manager.component_references(),
+            catalog_ids=schema_manager.catalog_ids,
         )
         middleware = Middleware(A2UIValidationMiddleware, parser=parser, max_retries=validation_retries)
         validator = parser

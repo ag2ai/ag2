@@ -410,7 +410,10 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
     else:
         value = {"@call": "formatString", "args": {"value": call}} if binding == "nested" else call
         components = [{"id": "root", "component": "Text", "text": value}]
-    operation = {"version": "1.0", message_key: {"surfaceId": "s", "components": components}}
+    payload: dict[str, Any] = {"surfaceId": "s", "components": components}
+    if message_key == "createSurface":
+        payload["catalogId"] = _catalog()["$id"]
+    operation = {"version": "1.0", message_key: payload}
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>", "Corrected."))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -432,6 +435,7 @@ async def test_renderer_callable_bindings_are_emitted(allowed_callers: str) -> N
         "version": "1.0",
         "createSurface": {
             "surfaceId": "s",
+            "catalogId": "https://example.com/catalog.json",
             "components": [{"id": "root", "component": "Text", "text": {"@call": "lookup"}}],
         },
     }
@@ -456,6 +460,7 @@ async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
             "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
+                "catalogId": "https://example.com/catalog.json",
                 "dataModel": {"literal": {"@call": "lookup"}},
                 "metadata": {"extensions": {"literal": {"@call": "lookup"}}},
                 "components": [

@@ -1,5 +1,5 @@
 Each message in the JSON array must be one of:
-- `createSurface`: Initialize a new surface. Requires `surfaceId`. `catalogId` ("{catalog_id}") sets the surface's default catalog. It may also carry the initial `components` array and `dataModel` object, so a whole UI can be sent in this single message.
+- `createSurface`: Initialize a new surface. Requires `surfaceId` and `catalogId` ("{catalog_id}"), the surface's default catalog: a component without `@catalogId` and a function call without `catalogId` resolve against it, and nothing falls back to another catalog. It may also carry the initial `components` array and `dataModel` object, so a whole UI can be sent in this single message.
 - `updateComponents`: Add/update components on a surface. Requires `surfaceId` and `components` array.
 - `updateDataModel`: Update the data model. Requires `surfaceId` and `value`; `path` is optional. Set `value` to `null` to delete the key at `path`.
 - `deleteSurface`: Remove a surface. Requires `surfaceId`.

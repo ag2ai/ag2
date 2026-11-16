@@ -70,6 +70,10 @@ class A2UIProtocol:
     function_rpc: bool
     """``callRendererFunction`` / ``callAgentFunction`` and their responses exist."""
 
+    entity_naming_rules: bool
+    """Component ids and a catalog's component, function, property and argument names are UAX #31 identifiers,
+    and ``Surface`` is a reserved component name (v1_0 a2ui_protocol.md, "Catalog Entity Naming Rules")."""
+
 
 _V0_9_BASE = "https://a2ui.org/specification/v0_9/"
 _V1_0_BASE = "https://a2ui.org/specification/v1_0/"
@@ -96,6 +100,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         per_surface_catalogs=False,
         restricted_catalog_refs=False,
         function_rpc=False,
+        entity_naming_rules=False,
     ),
     "v0.9.1": A2UIProtocol(
         version="v0.9.1",
@@ -114,6 +119,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         per_surface_catalogs=False,
         restricted_catalog_refs=False,
         function_rpc=False,
+        entity_naming_rules=False,
     ),
     "v1.0": A2UIProtocol(
         version="v1.0",
@@ -132,6 +138,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         per_surface_catalogs=True,
         restricted_catalog_refs=True,
         function_rpc=True,
+        entity_naming_rules=True,
     ),
 }
 

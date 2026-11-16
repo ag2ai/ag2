@@ -19,6 +19,7 @@ def validating_parser(
         server_to_client_schema=manager.server_to_client_schema,
         schema_registry=manager.build_schema_registry(),
         component_references=manager.component_references(),
+        catalog_ids=manager.catalog_ids,
     )
 
 

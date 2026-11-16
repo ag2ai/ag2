@@ -63,7 +63,7 @@ from ag2.ag_ui.stream import (
 from ag2.ag_ui.thought_signature import encrypted_signature_of, signature_event
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
-from .._messages import CLIENT_TO_SERVER_KEYS
+from .._messages import is_client_envelope
 from .._types import JsonObject, JsonValue, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
 from ..incoming import decode_envelopes, incoming_prompts
@@ -189,8 +189,7 @@ def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
                     "context": context if isinstance(context, dict) else {},
                 },
             })
-        elif any(key in a2ui_action for key in CLIENT_TO_SERVER_KEYS):
-            # Any envelope key passes, so ``decode_envelopes`` warns about a malformed one rather than it vanishing.
+        elif is_client_envelope(a2ui_action):
             envelopes.append(a2ui_action)
     a2ui = forwarded_props.get("a2ui")
     if isinstance(a2ui, list):
@@ -217,7 +216,9 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
-    interactions = decode_envelopes(_client_envelopes(incoming.forwarded_props))
+    interactions = decode_envelopes(
+        _client_envelopes(incoming.forwarded_props), function_rpc=core.runtime.protocol.function_rpc
+    )
     current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, core.runtime.get_action))
     return A2UIServerRequest(
         current_inputs=current_inputs,

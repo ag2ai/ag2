@@ -307,6 +307,21 @@ async def test_renderer_function_response_in_forwarded_props_reaches_the_agent()
 
 
 @pytest.mark.asyncio
+async def test_renderer_function_response_is_dropped_before_v1_0(caplog: pytest.LogCaptureFixture) -> None:
+    tracking = TrackingConfig(TestConfig("Got it."))
+    server = A2UIServer(Agent(name="ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    response = {"version": "v0.9", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await _dispatch_events(server, _forwarded_input({"a2uiAction": response}))
+
+    assert "exists only in protocol v1.0" in caplog.text
+    sent = tracking.mock.call_args_list[0].args[0]
+    assert isinstance(sent, ModelRequest)
+    assert "Berlin" not in " ".join(p.content for p in sent.parts if isinstance(p, TextInput))
+
+
+@pytest.mark.asyncio
 async def test_button_click_resolves_injected_dependency() -> None:
     # DI is not transport-specific: the AG-UI transport shares the same turn
     # core as REST, so a clicked server action resolves its Depends(...) against

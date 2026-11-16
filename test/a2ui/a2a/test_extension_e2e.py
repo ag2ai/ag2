@@ -38,14 +38,10 @@ from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
 from ag2.testing import TestConfig
 
+from ._helpers import EXTENSION_URIS
+
 URL = "http://test"
 REPLY = "ok"
-# Pinned wire values, written out so a change to them shows up here.
-EXTENSION_URIS: dict[str, str] = {
-    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
-    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
-    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
-}
 A2UI_URI = EXTENSION_URIS["v0.9"]
 OTHER_URI = "urn:example:unrelated:v1"
 

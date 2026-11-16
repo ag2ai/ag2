@@ -17,6 +17,7 @@ from typing import Any
 from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelResponse, TextInput
 
 from ._types import A2UIVersion, JsonObject, JsonValue
+from ._versions import get_protocol
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, parse_client_capabilities
 from .data_model import parse_client_data_model
@@ -73,7 +74,9 @@ def parse_request(
             read: ``a2uiClientCapabilities["v0.9"]`` for v0.9 and v0.9.1,
             ``a2uiRendererCapabilities["1.0"]`` for v1.0. Defaults to ``"v0.9"``;
             pass the served protocol's version, else a newer client's
-            capabilities are silently dropped.
+            capabilities are silently dropped. It also decides whether the
+            v1.0-only envelopes (``callAgentFunction``, ``rendererFunctionResponse``)
+            are accepted.
 
     Returns:
         The parsed turn. When neither ``messages`` nor ``a2ui`` yields any
@@ -102,7 +105,7 @@ def parse_request(
     prompt, history, current_inputs = _map_messages(raw_messages)
     # The server is stateless: a v1.0 ``rendererFunctionResponse`` (the reply to an earlier
     # ``callRendererFunction``) simply arrives in the next request and becomes a continuation prompt.
-    interactions = decode_envelopes(raw_a2ui)
+    interactions = decode_envelopes(raw_a2ui, function_rpc=get_protocol(version_key).function_rpc)
     current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, resolve_action))
 
     return A2UIServerRequest(

@@ -175,7 +175,7 @@ class A2UIAgentExecutor(AgentExecutor):
             # An A2UI DataPart is always consumed (never forwarded raw); a
             # registered action simply produces no replacement prompt.
             consumed_a2ui = True
-            decoded = decode_envelopes(envelopes)
+            decoded = decode_envelopes(envelopes, function_rpc=self._runtime.protocol.function_rpc)
             interactions.extend(decoded)
             new_parts.extend(Part(text=prompt) for prompt in incoming_prompts(decoded, self._runtime.get_action))
 

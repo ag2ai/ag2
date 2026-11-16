@@ -309,7 +309,10 @@ class TestA2UIResponseParserV1Validation:
     ) -> None:
         # The envelope's ``oneOf`` alone only says "no branch matched"; the LLM needs the property.
         slider = {"id": "root", "component": "Slider", "min": 1, "max": 3, "step": 1, "value": {"@path": "/n"}}
-        ops = [{"version": "1.0", message_key: {"surfaceId": "s", "components": [slider]}}]
+        payload: JsonObject = {"surfaceId": "s", "components": [slider]}
+        if message_key == "createSurface":
+            payload["catalogId"] = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+        ops = [{"version": "1.0", message_key: payload}]
 
         result = parser_v1.validate(ops)
 
@@ -392,6 +395,7 @@ class TestA2UIResponseParserV1Validation:
                 "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
                     "components": [{"id": "root", "component": "Text", "text": {"@path": "/greeting"}}],
                     "dataModel": {"greeting": "hi"},
                     "metadata": {"extensions": {"a2ui_trace": "t-1"}},
@@ -532,9 +536,13 @@ class TestA2UIResponseParserV1Validation:
             {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": {"@call": "lookup"}}},
             {"id": "label", "component": "Text", "text": "Go"},
         ]
-        ops = [{"version": "1.0", "createSurface": {"surfaceId": "s", "components": components}}]
+        surface = {"surfaceId": "s", "catalogId": "https://mycompany.com/cat.json", "components": components}
+        ops = [{"version": "1.0", "createSurface": surface}]
         result = parser_v1_agent_function.validate(ops)
-        assert result.errors == ["Operation 0: Component 'root' (Button): unknown function 'lookup'"]
+        assert result.errors == [
+            "Operation 0: Component 'root' (Button): function 'lookup' cannot be called by renderer "
+            "(allowedCallers is agentOnly)"
+        ]
 
 
 class TestSurfaceCatalogValidation:
@@ -853,7 +861,7 @@ class TestCatalogFunctionDefinitions:
             protocol_version="v1.0",
             custom_catalog={
                 "$id": "https://example.com/catalog.json",
-                "functions": {"lookup/~definition": function_schema},
+                "functions": {"lookupDefinition": function_schema},
             },
         )
         parser = A2UIResponseParser(
@@ -869,6 +877,7 @@ class TestCatalogFunctionDefinitions:
                 "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s",
+                    "catalogId": manager.catalog_id,
                     "components": [
                         {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
                         {"id": "label", "component": "Text", "text": "Lookup"},

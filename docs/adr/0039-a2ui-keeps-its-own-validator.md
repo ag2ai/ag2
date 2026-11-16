@@ -24,9 +24,14 @@ The differences come from what core is, not from bugs:
 - Core is a stateful renderer-side processor. It stops at the first error, needs surfaces from
   earlier turns seeded before it accepts updates to them, and picks a version adapter per message
   instead of pinning one version.
-- Core coerces where an agent framework must be strict: Pydantic lax mode turns `"yes"` into `true`,
-  it accepts another version's binding key in v1.0, it leaves custom components open, and it does
-  not reject messages a model must not send (`agentFunctionResponse`, renderer-only calls).
+- Core coerces where an agent framework must be strict: it accepts a string `weight: "1"` where the
+  schema asks for a number, in both its default and its `STRICT_VALIDATION` mode (ag2 reports
+  `'1' is not of type 'number'`), it accepts another version's binding key in v1.0, it leaves custom
+  components open, and it does not reject messages a model must not send (`agentFunctionResponse`,
+  renderer-only calls).
+- Core's default mode skips the component graph checks and the component property checks: a dangling
+  child reference and a CheckBox `value: "yes"` both pass, and fail only under `STRICT_VALIDATION`.
+  ag2 has one mode, and it always runs both.
 - Its type-error texts are Pydantic union noise a model cannot act on.
 - It has no prompt generator and no parser for the LLM's `<a2ui-json>` text format.
 - `a2ui-a2a` pins `a2a-sdk<0.4`; ag2 requires `>=1.3`.

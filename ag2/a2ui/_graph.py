@@ -215,9 +215,57 @@ def _cycles(edges: Mapping[str, list[str]]) -> Iterator[list[str]]:
                 iterators.append(iter(edges[target]))
 
 
+_SURFACE_UPDATES = ("updateComponents", "updateDataModel")
+
+
+def surface_lifecycle_errors(messages: Sequence[JsonObject]) -> list[str]:
+    """Check, in message order, that each surface is created before it is updated and not created twice.
+
+    A surface must be created before ``updateComponents`` / ``updateDataModel`` reach it, and creating an existing
+    surface without deleting it first is an integrity error (a2ui_protocol.md, ``createSurface``). A surface this
+    response never creates may come from an earlier turn, so updates to it are accepted until it is deleted.
+    """
+    errors: list[str] = []
+    # Per surface: the last ``createSurface`` / ``deleteSurface``, or the first update while neither has happened.
+    last: dict[str, tuple[str, int]] = {}
+    for index, message in enumerate(messages):
+        for key, payload in message.items():
+            if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
+                continue
+            event, at = last.get(surface_id, ("", -1))
+            if key == "createSurface":
+                if event == "createSurface":
+                    errors.append(
+                        f"Operation {index}: surface '{surface_id}' already exists (operation {at} created it); "
+                        "send deleteSurface before creating it again"
+                    )
+                elif event in _SURFACE_UPDATES:
+                    errors.append(
+                        f"Operation {at}: '{event}' targets surface '{surface_id}' before operation {index} "
+                        "creates it; send createSurface first"
+                    )
+                last[surface_id] = (key, index)
+            elif key == "deleteSurface":
+                last[surface_id] = (key, index)
+            elif key in _SURFACE_UPDATES:
+                if event == "deleteSurface":
+                    errors.append(
+                        f"Operation {index}: '{key}' targets surface '{surface_id}' after operation {at} deleted it"
+                    )
+                elif not event:
+                    last[surface_id] = (key, index)
+    return errors
+
+
 def is_json_pointer(path: str) -> bool:
     """Whether ``path`` is an RFC 6901 JSON Pointer: empty, or ``/``-prefixed tokens with ``~`` only as ``~0`` / ``~1``."""
     return _JSON_POINTER.fullmatch(path) is not None
 
 
-__all__ = ("ComponentReferences", "component_graph_errors", "component_references", "is_json_pointer")
+__all__ = (
+    "ComponentReferences",
+    "component_graph_errors",
+    "component_references",
+    "is_json_pointer",
+    "surface_lifecycle_errors",
+)

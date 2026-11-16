@@ -42,8 +42,12 @@ def mentions_server_message(value: JsonValue) -> bool:
 
 
 def is_client_envelope(value: JsonValue) -> TypeGuard[JsonObject]:
-    """Whether ``value`` is an envelope a renderer sends the agent: an object with a payload object."""
-    return isinstance(value, dict) and any(isinstance(value.get(key), dict) for key in CLIENT_TO_SERVER_KEYS)
+    """Whether ``value`` is meant as an envelope a renderer sends the agent: an object with one of its keys.
+
+    The payload is not checked here, so a malformed envelope reaches ``decode_envelopes``, which warns about it,
+    instead of vanishing. Every transport classifies incoming envelopes with this one rule.
+    """
+    return isinstance(value, dict) and any(key in value for key in CLIENT_TO_SERVER_KEYS)
 
 
 __all__ = (

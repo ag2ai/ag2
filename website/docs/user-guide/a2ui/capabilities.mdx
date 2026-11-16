@@ -50,6 +50,8 @@ The custom catalog's rules are appended to the basic catalog's rules in the syst
 !!! note "v1.0 catalogs"
     A v1.0 catalog may `#!python $ref` only the components, functions and leaf `#!python $defs` it declares (`#!python #/components/...`, `#!python #/functions/...`, `#!python #/$defs/...`) and the standard types the spec lists, written as `#!python common_types.json#/$defs/<Type>` (for example `#!python DynamicString`, `#!python ChildList` or `#!python Action`). A reference into another catalog, the basic one included, is rejected when the catalog is loaded. v1.0 catalogs carry their guidance in an `#!python instructions` field; without `#!python custom_catalog_rules`, the custom catalog's `#!python instructions` are appended instead.
 
+    A v1.0 catalog's names follow the spec's naming rules, checked when the catalog is loaded: each component and function key, and each component property and function argument name, must be a [UAX #31](https://www.unicode.org/reports/tr31/){.external-link target="_blank"} identifier (a letter or `#!python _`, then letters, digits or `#!python _`), and no component may be called `#!python Surface`. A key such as `#!python widget/~definition` is rejected. Since there is no default catalog in v1.0, the agent's `#!python createSurface` must name one in `#!python catalogId`, or every component must carry its own `#!python @catalogId`.
+
 !!! tip
     Two knobs control prompt size: `#!python include_schema_in_prompt` (the full JSON schema — better validation, more tokens) and `#!python include_rules_in_prompt` (the plain-text catalog rules). Both default to `#!python True`; turn them off to trade strictness for a shorter prompt.
 

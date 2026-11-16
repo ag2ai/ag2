@@ -19,7 +19,15 @@ from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
 from ._versions import A2UIProtocol, get_protocol
 from .actions import A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
-from .diagnostics import XID_FORMAT
+from .diagnostics import (
+    AGENT_CANNOT_CALL_FORMAT,
+    COMPONENT_ID_FORMAT,
+    NO_DEFAULT_CATALOG_FORMAT,
+    RENDERER_CANNOT_CALL_FORMAT,
+    RESERVED_SURFACE_FORMAT,
+    UAX31_IDENTIFIER,
+    XID_FORMAT,
+)
 
 _PACKAGE_DIR = Path(__file__).parent
 
@@ -89,6 +97,22 @@ def _instructions_of(catalog: JsonSchema) -> str:
     """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
     instructions = catalog.get("instructions")
     return instructions.strip() if isinstance(instructions, str) else ""
+
+
+def _component_description(comp_def: JsonSchema, envelope: frozenset[str]) -> str:
+    """A custom component's prompt line: its ``description``, else the properties it adds to ``envelope``."""
+    raw_desc = comp_def.get("description")
+    if isinstance(raw_desc, str) and raw_desc:
+        return raw_desc
+
+    props: set[str] = set()
+    all_of = comp_def.get("allOf")
+    if isinstance(all_of, list):
+        for item in all_of:
+            item_props = _as_object(item.get("properties")) if isinstance(item, dict) else {}
+            props.update(k for k in item_props if k not in envelope)
+    props.update(k for k in _as_object(comp_def.get("properties")) if k not in envelope)
+    return f"Properties: {', '.join(sorted(props))}" if props else ""
 
 
 def _pointer_token(key: str) -> str:
@@ -197,9 +221,21 @@ def _catalog_selection(catalog_id: str, *, explicit: bool, key: str) -> JsonSche
 
 
 def _catalog_component_variant(catalog: JsonSchema, *, explicit: bool) -> JsonSchema:
+    """Check a component against the catalog's ``anyComponent`` when it selects this catalog.
+
+    Like a function variant, a component that does not select the catalog fails only through ``else``, so
+    diagnostics skip the variant instead of reporting its missing ``@catalogId``.
+    """
     catalog_id = str(catalog["$id"])
     selection = _catalog_selection(catalog_id, explicit=explicit, key=_COMPONENT_CATALOG_KEY)
-    return {"allOf": [{"$ref": f"{catalog_id}#/$defs/anyComponent"}, selection]}
+    return {"if": selection, "then": {"$ref": f"{catalog_id}#/$defs/anyComponent"}, "else": selection}
+
+
+_NO_DEFAULT_CATALOG: JsonSchema = {"format": NO_DEFAULT_CATALOG_FORMAT}
+"""What an implicit component or function call meets on a v1.0 surface created without a default ``catalogId``.
+
+Upstream resolution has no fallback: such a component or call does not resolve (v1_0 a2ui_protocol.md).
+"""
 
 
 _CALL_ENVELOPE = ("@call", _FUNCTION_CATALOG_KEY)
@@ -262,7 +298,6 @@ def _catalog_function_variant(
     callable_here = {
         key: _callable_by(definition, agent_initiated=agent_initiated) for key, definition in functions.items()
     }
-    allowed: list[JsonValue] = [_call_tag_is(tags[key]) for key in functions if callable_here[key]]
     answered = [key for key in functions if owned is None or key in owned]
     dispatch: list[JsonValue] = []
     for key in answered:
@@ -270,7 +305,8 @@ def _catalog_function_variant(
         body = _function_body(ref, functions[key])
         if not callable_here[key]:
             # Report malformed arguments before the caller restriction.
-            body = {"allOf": [body, {"if": {"$ref": ref}, "then": {"anyOf": allowed} if allowed else {"not": {}}}]}
+            refusal = AGENT_CANNOT_CALL_FORMAT if agent_initiated else RENDERER_CANNOT_CALL_FORMAT
+            body = {"allOf": [body, {"if": {"$ref": ref}, "then": {"format": refusal}}]}
         dispatch.append({"if": _call_tag_is(tags[key]), "then": body})
     selection = _catalog_selection(catalog_id, explicit=explicit, key=_FUNCTION_CATALOG_KEY)
     return {
@@ -298,24 +334,67 @@ def _owned_functions(catalogs: list[JsonSchema]) -> list[tuple[JsonSchema, set[s
     return pairs
 
 
-def _registry_for_surface_catalog(registry: Registry, catalog_id: str) -> Registry:
-    """Select the surface's component and function defaults in a request-local registry."""
-    catalog = registry.get(catalog_id)
-    schema = (
-        _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
-        if catalog is not None
-        else {"not": {}}
-    )
+def _registry_for_surface_catalog(registry: Registry, catalog_id: str | None) -> Registry:
+    """Select the surface's default catalog for components and function calls in a request-local registry.
+
+    ``None`` is a surface without a default: only components and calls that name their catalog resolve.
+    """
+    catalog = registry.get(catalog_id) if catalog_id is not None else None
+    function_schema: JsonSchema
+    component_schema: JsonSchema
+    if catalog is None:
+        # An unknown catalog is reported on its ``createSurface``; what it holds cannot be checked. Evaluating every
+        # property keeps the closed ``Component`` envelope from reporting them as unexpected.
+        function_schema = component_schema = (
+            _NO_DEFAULT_CATALOG if catalog_id is None else {"additionalProperties": True}
+        )
+    else:
+        function_schema = _catalog_function_variant(catalog.contents, agent_initiated=False, explicit=False)
+        component_schema = _catalog_component_variant(catalog.contents, explicit=False)
     return registry.with_resources([
-        (_IMPLICIT_FUNCTION_SCHEMA_URI, Resource.from_contents(schema, default_specification=DRAFT202012)),
-        (
-            _IMPLICIT_COMPONENT_SCHEMA_URI,
-            Resource.from_contents(
-                _catalog_component_variant(catalog.contents, explicit=False) if catalog is not None else {"not": {}},
-                default_specification=DRAFT202012,
-            ),
-        ),
+        (_IMPLICIT_FUNCTION_SCHEMA_URI, _resource(function_schema)),
+        (_IMPLICIT_COMPONENT_SCHEMA_URI, _resource(component_schema)),
     ])
+
+
+_RESERVED_COMPONENT_NAME = "Surface"
+"""The canonical container ``createSurface`` instantiates; no catalog may define a component by that name."""
+
+
+def _check_entity_names(catalog: JsonSchema) -> None:
+    """Reject a v1.0 catalog whose component, function, property or argument names are not UAX #31 identifiers.
+
+    Like the official SDK, a component's names are its key and its own ``properties``; a function's are its key
+    and the properties of its ``args``.
+    """
+    for name, definition in _as_object(catalog.get("components")).items():
+        if name == _RESERVED_COMPONENT_NAME:
+            raise ValueError(
+                f"Invalid custom catalog: component name {name!r} is reserved for the surface container "
+                "that createSurface creates"
+            )
+        _check_entity_name("component name", name)
+        for prop in _as_object(_as_object(definition).get("properties")):
+            _check_entity_name("property name", prop, owner=f"component {name!r}")
+    for name, definition in _as_object(catalog.get("functions")).items():
+        _check_entity_name("function name", name)
+        args = _as_object(_as_object(_as_object(definition).get("properties")).get("args"))
+        for argument in _as_object(args.get("properties")):
+            _check_entity_name("argument name", argument, owner=f"function {name!r}")
+
+
+def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
+    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    if not name.isidentifier():
+        of_owner = f" of {owner}" if owner else ""
+        raise ValueError(f"Invalid custom catalog: {kind} {name!r}{of_owner} is not a {UAX31_IDENTIFIER}")
+
+
+def _with_identifier_component_ids(common_types: JsonSchema) -> JsonSchema:
+    """``ComponentId`` (so every id and every reference to one) checked as a UAX #31 identifier."""
+    definitions = dict(_as_object(common_types.get("$defs")))
+    definitions["ComponentId"] = {**_as_object(definitions.get("ComponentId")), "format": COMPONENT_ID_FORMAT}
+    return {**common_types, "$defs": definitions}
 
 
 def _load_json(path: Path) -> JsonValue:
@@ -400,6 +479,8 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
         catalog = _load_object(path)
     if protocol.restricted_catalog_refs:
         _check_catalog_references(catalog)
+    if protocol.entity_naming_rules:
+        _check_entity_names(catalog)
     if "$id" not in catalog:
         raise ValueError(
             "Custom catalog must include a '$id' field. "
@@ -495,18 +576,23 @@ def _with_catalog_function_dispatch(
 def _with_catalog_component_selection(server_to_client: JsonSchema, catalogs: dict[str, JsonSchema]) -> JsonSchema:
     """A ``Component`` checked against its surface's catalog, and a renderer call that names its catalog."""
     definitions = dict(_as_object(server_to_client.get("$defs")))
+    component = {key: value for key, value in _as_object(definitions.get("Component")).items() if key != "allOf"}
     definitions["Component"] = {
-        **_as_object(definitions.get("Component")),
-        "allOf": [
-            {"$ref": "common_types.json#/$defs/ComponentCommon"},
-            {
-                "oneOf": [
-                    *[_catalog_component_variant(catalog, explicit=True) for catalog in catalogs.values()],
-                    {"$ref": _IMPLICIT_COMPONENT_SCHEMA_URI},
-                ],
-            },
-            {"properties": {"component": {"not": {"const": "Surface"}}}},
-        ],
+        **component,
+        # The reserved ``Surface`` gets one error saying so, not one per catalog that lacks it.
+        "if": {"properties": {"component": {"const": _RESERVED_COMPONENT_NAME}}, "required": ["component"]},
+        "then": {"format": RESERVED_SURFACE_FORMAT},
+        "else": {
+            "allOf": [
+                {"$ref": "common_types.json#/$defs/ComponentCommon"},
+                {
+                    "oneOf": [
+                        *[_catalog_component_variant(catalog, explicit=True) for catalog in catalogs.values()],
+                        {"$ref": _IMPLICIT_COMPONENT_SCHEMA_URI},
+                    ],
+                },
+            ],
+        },
     }
     message = _as_object(definitions.get("CallRendererFunctionMessage"))
     message_properties = _as_object(message.get("properties"))
@@ -580,6 +666,8 @@ class A2UISchemaManager:
 
         basic = spec.basic_catalog
         common_types = _as_object(_xid_property_names(spec.common_types))
+        if protocol.entity_naming_rules:
+            common_types = _with_identifier_component_ids(common_types)
         server_to_client = spec.server_to_client
         if protocol.per_surface_catalogs:
             # A closed function lets each call be checked against one definition (see ``_closed_objects``).
@@ -601,6 +689,12 @@ class A2UISchemaManager:
     def catalog_id(self) -> str:
         self._ensure_loaded()
         return self._catalog.id
+
+    @property
+    def catalog_ids(self) -> tuple[str, ...]:
+        """Every catalog a surface may name: the basic one, and the agent's merged one when it differs."""
+        self._ensure_loaded()
+        return tuple(self._catalog.by_id)
 
     @property
     def server_to_client_schema(self) -> JsonSchema:
@@ -703,9 +797,13 @@ class A2UISchemaManager:
                 comp_section += f"**Basic catalog:** {', '.join(basic_components)}\n\n"
             if custom_components:
                 comp_section += f"**Custom components:** {', '.join(custom_components)}\n\n"
+                # The properties every component shares: the ``component`` discriminator and ``ComponentCommon``
+                # (``id`` in every version, then v0.9 ``accessibility`` or v1.0 ``@catalogId``, ...).
+                common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
+                envelope = frozenset({"component", *_as_object(common.get("properties"))})
                 for comp_name in custom_components:
                     comp_def = _as_object(custom_comp_defs.get(comp_name))
-                    desc = self._extract_component_description(comp_name, comp_def)
+                    desc = _component_description(comp_def, envelope)
                     if desc:
                         comp_section += f"- **{comp_name}**: {desc}\n"
                 comp_section += "\n"
@@ -755,25 +853,3 @@ class A2UISchemaManager:
             sections.append(f"\n\n## A2UI Message Schema ({protocol_version})\n\n```json\n{schema_str}\n```")
 
         return "\n".join(sections)
-
-    def _extract_component_description(self, name: str, comp_def: JsonSchema) -> str:
-        """Extract a human-readable description of a custom component for the prompt."""
-        raw_desc = comp_def.get("description")
-        if isinstance(raw_desc, str) and raw_desc:
-            return raw_desc
-
-        # The envelope every component shares (``ComponentCommon``: v0.9 ``accessibility``, v1.0 ``@catalogId``, ...).
-        common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
-        envelope = {"component", *_as_object(common.get("properties"))}
-        props: set[str] = set()
-        all_of = comp_def.get("allOf")
-        if isinstance(all_of, list):
-            for item in all_of:
-                item_props = _as_object(item.get("properties")) if isinstance(item, dict) else {}
-                props.update(k for k in item_props if k not in envelope)
-        own_props = _as_object(comp_def.get("properties"))
-        props.update(k for k in own_props if k not in envelope)
-
-        if props:
-            return f"Properties: {', '.join(sorted(props))}"
-        return ""

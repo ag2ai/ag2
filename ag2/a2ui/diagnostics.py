@@ -65,9 +65,32 @@ class _Leaf:
 
 
 XID_FORMAT = "xid-identifier"
+COMPONENT_ID_FORMAT = "a2ui-component-id"
+"""A component id, or a reference to one, that must be a UAX #31 identifier (v1.0)."""
+UAX31_IDENTIFIER = "UAX #31 identifier (a letter or '_', then letters, digits or '_')"
+
+# Formats no value has. A derived schema puts one where the instance is known to be wrong for a reason the JSON
+# schema cannot word, and the diagnostics replace jsonschema's text with that reason.
+NO_DEFAULT_CATALOG_FORMAT = "a2ui-no-default-catalog"
+"""An implicit component or call on a surface created without a default catalog (v1.0)."""
+AGENT_CANNOT_CALL_FORMAT = "a2ui-agent-cannot-call"
+"""A ``callRendererFunction`` naming a ``rendererOnly`` function."""
+RENDERER_CANNOT_CALL_FORMAT = "a2ui-renderer-cannot-call"
+"""A binding or action naming an ``agentOnly`` function."""
+RESERVED_SURFACE_FORMAT = "a2ui-reserved-surface"
+"""A component of type ``Surface``, the container ``createSurface`` creates (v1.0)."""
+_REJECTING_FORMATS = (
+    NO_DEFAULT_CATALOG_FORMAT,
+    AGENT_CANNOT_CALL_FORMAT,
+    RENDERER_CANNOT_CALL_FORMAT,
+    RESERVED_SURFACE_FORMAT,
+)
+_NO_DEFAULT_CATALOG_HINT = "and the surface has no default 'catalogId' (set it in createSurface)"
 
 _UNKNOWN_TAG = "unknown-tag"
 """The keyword of a leaf reporting a tag value no variant accepts."""
+_AIMED_KEYWORDS = frozenset((_UNKNOWN_TAG, *_REJECTING_FORMATS))
+"""Leaf keywords that show the instance meant the variant reporting them (it names a function, say)."""
 _TAG_NOUNS = {"call": "function", "@call": "function", "catalogId": "catalog", "@catalogId": "catalog"}
 
 
@@ -92,6 +115,9 @@ class MessageChecker:
         validator_cls = jsonschema.validators.validator_for(schema)
         formats = FormatChecker(formats=())
         formats.checks(XID_FORMAT)(_check_identifier)
+        formats.checks(COMPONENT_ID_FORMAT)(_check_identifier)
+        for rejecting in _REJECTING_FORMATS:
+            formats.checks(rejecting)(_never)
         self._validators: dict[str, Any] = {}
         defs = schema.get("$defs")
         branches = schema.get("oneOf")
@@ -132,10 +158,42 @@ class MessageChecker:
         return [A2UIIssue(leaf.path, leaf.message) for leaf in issues]
 
 
+def _never(instance: object) -> bool:
+    return False
+
+
+def _rejecting_format(error: _SchemaError) -> str | None:
+    """The rejecting format that failed in ``error``, if that is what it reports."""
+    if error.validator == "format" and error.validator_value in _REJECTING_FORMATS:
+        return str(error.validator_value)
+    return None
+
+
+def _leaf_message(error: _SchemaError, rejecting: str | None) -> str:
+    instance = error.instance
+    call = instance.get("@call") if isinstance(instance, dict) else None
+    if rejecting == NO_DEFAULT_CATALOG_FORMAT:
+        if isinstance(call, str):
+            return f"function {call!r} names no 'catalogId' {_NO_DEFAULT_CATALOG_HINT}"
+        return f"names no '@catalogId' {_NO_DEFAULT_CATALOG_HINT}"
+    if rejecting == AGENT_CANNOT_CALL_FORMAT:
+        return f"function {call!r} cannot be called by agent (allowedCallers is rendererOnly)"
+    if rejecting == RENDERER_CANNOT_CALL_FORMAT:
+        return f"function {call!r} cannot be called by renderer (allowedCallers is agentOnly)"
+    if rejecting == RESERVED_SURFACE_FORMAT:
+        return "component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component"
+    if error.validator == "format" and error.validator_value == COMPONENT_ID_FORMAT:
+        return f"{instance!r} is not a valid component id: it must be a {UAX31_IDENTIFIER}"
+    if error.validator == "format" and error.validator_value == XID_FORMAT:
+        return f"{instance!r} is not a {UAX31_IDENTIFIER}"
+    return str(error.message)
+
+
 def _narrow(error: _SchemaError) -> list[_Leaf]:
     """The leaf failures of ``error``, descending a failed ``oneOf`` / ``anyOf`` into its closest variant."""
     if not error.context:
-        return [_Leaf(tuple(error.absolute_path), error.message, error.validator)]
+        rejecting = _rejecting_format(error)
+        return [_Leaf(tuple(error.absolute_path), _leaf_message(error, rejecting), rejecting or error.validator)]
 
     variants: Mapping[int, list[_SchemaError]] = _group_by_variant(error.context)
     # A variant that fails on a ``const`` tag (``component: "Slider"``, ``@call: "openUrl"``) is
@@ -150,10 +208,10 @@ def _narrow(error: _SchemaError) -> list[_Leaf]:
         value = error.instance.get(tag) if isinstance(error.instance, dict) else None
         return [_Leaf(tuple(error.absolute_path), f"unknown {_TAG_NOUNS.get(tag, tag)} {value!r}", _UNKNOWN_TAG)]
     narrowed = [[issue for e in errors for issue in _narrow(e)] for errors in candidates.values()]
-    # An object carrying a tag the catalog does not know (``{"call": "nosuch"}``) meant that variant,
-    # not a plain ``string`` one beside it that fails only on the JSON type.
+    # An object carrying a tag the catalog does not know (``{"call": "nosuch"}``), or a call with no catalog to
+    # resolve against, meant that variant, not a plain ``string`` one beside it that fails only on the JSON type.
     here = tuple(error.absolute_path)
-    if any(leaves and all(leaf.keyword == _UNKNOWN_TAG for leaf in leaves) for leaves in narrowed):
+    if any(leaves and all(leaf.keyword in _AIMED_KEYWORDS for leaf in leaves) for leaves in narrowed):
         narrowed = [
             leaves
             for leaves in narrowed
@@ -190,4 +248,14 @@ def _tag_mismatch(errors: list[_SchemaError]) -> str | None:
     return None
 
 
-__all__ = ("A2UIIssue", "MessageChecker")
+__all__ = (
+    "AGENT_CANNOT_CALL_FORMAT",
+    "COMPONENT_ID_FORMAT",
+    "NO_DEFAULT_CATALOG_FORMAT",
+    "RENDERER_CANNOT_CALL_FORMAT",
+    "RESERVED_SURFACE_FORMAT",
+    "UAX31_IDENTIFIER",
+    "XID_FORMAT",
+    "A2UIIssue",
+    "MessageChecker",
+)
