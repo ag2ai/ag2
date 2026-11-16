@@ -12,9 +12,9 @@ from starlette.applications import Starlette
 
 from ag2.agent import Agent
 
-from ._runtime import _A2UIRuntime
+from ._runtime import build_runtime
 from ._types import A2UIVersion, JsonSchema
-from .actions import A2UIAction, collect_action_declarations, collect_server_actions
+from .actions import A2UIAction
 from .dispatch import _A2UITurnCore
 from .transports.base import A2UITransport
 
@@ -95,10 +95,8 @@ class A2UIServer:
         """
         self._agent = agent
         self._transport = transport
-        action_objs = tuple(actions)
-        self._runtime = _A2UIRuntime(
-            # Buttons are declared to the LLM so it can render them.
-            actions=collect_action_declarations(action_objs),
+        self._runtime = build_runtime(
+            actions,
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -108,13 +106,7 @@ class A2UIServer:
             validation_retries=validation_retries,
             system_message=system_message,
         )
-        # A click on a registered action runs its handler on the server, never
-        # invoking the agent.
-        self._core = _A2UITurnCore(
-            agent,
-            self._runtime,
-            collect_server_actions(action_objs),
-        )
+        self._core = _A2UITurnCore(agent, self._runtime)
         # The instance IS the app (no ``.app``/``build_app()``): build the
         # Starlette app once from the transport's routes and delegate to it.
         # A transport that holds anything of its own — a paused turn waiting on

@@ -44,6 +44,22 @@ sqlite = [
 ]
 
 [[package]]
+name = "a2ui-core"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "babel" },
+    { name = "jsonschema" },
+    { name = "pydantic" },
+    { name = "referencing" },
+    { name = "regex" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c7/69/616c649b2acecaf30e7ebd8841fd27a9bb98443d61a048dd2a83fe6d9b6f/a2ui_core-0.6.0.tar.gz", hash = "sha256:c1d149f698981f2cf525b7d409a7873a9a7b8b6c46ab190a393370ce4dcd04b5", size = 408230, upload-time = "2026-11-10T22:20:47.17Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/24/b5/418cfb670f9d3e9920cda90029a6ec45768f4f7e83905faa7b9c9d6e6090/a2ui_core-0.6.0-py3-none-any.whl", hash = "sha256:6df953da2848998f24aa4aa7b00ca59ffe560aec3cf9280d2ac680ed29725359", size = 316994, upload-time = "2026-11-10T22:20:41.936Z" },
+]
+
+[[package]]
 name = "ag-ui-protocol"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -237,6 +253,7 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extra = ["signing", "sqlite"] },
+    { name = "a2ui-core" },
     { name = "ag2", extra = ["a2a", "a2ui", "acp", "ag-ui", "anthropic", "bedrock", "dashscope", "ddgs", "elevenlabs", "gemini", "mcp", "mcp-ui", "metrics", "mistral", "ollama", "openai", "perplexity", "redis", "tavily", "tracing", "typesafe", "xai", "zai"] },
     { name = "agent-client-protocol", extra = ["http"] },
     { name = "boxd" },
@@ -463,6 +480,7 @@ lint = [
 ]
 optionals = [
     { name = "a2a-sdk", extras = ["signing", "sqlite"] },
+    { name = "a2ui-core", specifier = ">=0.6.0,<0.7" },
     { name = "ag2", extras = ["a2a"] },
     { name = "ag2", extras = ["a2ui"] },
     { name = "ag2", extras = ["acp"] },

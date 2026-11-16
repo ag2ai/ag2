@@ -20,12 +20,12 @@ from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
 from ag2.a2a.mappers import ParsedMessage, struct_to_dict
 from ag2.agent import Agent
 from ag2.context import strip_reserved_variables
-from ag2.events import BaseEvent
 from ag2.stream import MemoryStream
 
-from .._runtime import _A2UIRuntime
+from .._messages import is_client_envelope
+from .._runtime import build_runtime, collect_a2ui_messages
 from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
-from ..actions import A2UIAction, collect_action_declarations, collect_server_actions
+from ..actions import A2UIAction
 from ..capabilities import (
     A2UIClientCapabilities,
     parse_client_capabilities,
@@ -34,10 +34,9 @@ from ..data_model import data_model_to_prompt, parse_client_data_model
 from ..events import A2UIMessageEvent
 from ..incoming import (
     A2UIIncomingParseResult,
-    iter_incoming_prompts,
-    parse_incoming_interactions,
+    decode_envelopes,
+    incoming_prompts,
 )
-from ..middleware import A2UIInboundMiddleware
 from ..server_action import run_client_interactions
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
@@ -112,10 +111,8 @@ class A2UIAgentExecutor(AgentExecutor):
         on any other button is rewritten into a prompt for the agent.
         """
         super().__init__(agent)
-        action_objs = tuple(actions)
-        self._server_actions = collect_server_actions(action_objs)
-        self._runtime = _A2UIRuntime(
-            actions=collect_action_declarations(action_objs),
+        self._runtime = build_runtime(
+            actions,
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -128,7 +125,7 @@ class A2UIAgentExecutor(AgentExecutor):
 
     @property
     def protocol_version(self) -> A2UIVersion:
-        return self._runtime.protocol_version
+        return self._runtime.protocol.version
 
     async def execute(self, request_context: RequestContext, event_queue: EventQueue) -> None:
         token: contextvars.Token[_IncomingRequest | None] | None = None
@@ -168,7 +165,7 @@ class A2UIAgentExecutor(AgentExecutor):
 
         new_parts: list[Part] = []
         consumed_a2ui = False
-        all_envelopes: list[JsonObject] = []
+        interactions: list[A2UIIncomingParseResult] = []
         for part in msg.parts:
             envelopes = _extract_a2ui_envelopes(part)
             if not envelopes:
@@ -178,15 +175,15 @@ class A2UIAgentExecutor(AgentExecutor):
             # An A2UI DataPart is always consumed (never forwarded raw); a
             # registered action simply produces no replacement prompt.
             consumed_a2ui = True
-            all_envelopes.extend(envelopes)
-            for prompt in iter_incoming_prompts(envelopes, self._runtime.get_action):
-                new_parts.append(Part(text=prompt))
+            decoded = decode_envelopes(envelopes)
+            interactions.extend(decoded)
+            new_parts.extend(Part(text=prompt) for prompt in incoming_prompts(decoded, self._runtime.get_action))
 
         if consumed_a2ui:
             del msg.parts[:]
             msg.parts.extend(new_parts)
 
-        return parse_incoming_interactions(all_envelopes)
+        return interactions
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
         """Apply the A2UI prompt to the plain agent and fold in client capabilities.
@@ -205,7 +202,7 @@ class A2UIAgentExecutor(AgentExecutor):
                 prompts.append(fragment)
         msg = request_context.message
         if msg is not None and msg.metadata:
-            surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.protocol_version)
+            surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.protocol.version)
             if data_model_fragment := data_model_to_prompt(surfaces):
                 prompts.append(data_model_fragment)
         return tuple(prompts)
@@ -220,7 +217,7 @@ class A2UIAgentExecutor(AgentExecutor):
         msg = request_context.message
         if msg is None or not msg.metadata:
             return None
-        version_key = self._runtime.protocol_version
+        version_key = self._runtime.protocol.version
         return parse_client_capabilities(struct_to_dict(msg.metadata), version_key=version_key)
 
     async def _run_one_turn(
@@ -239,20 +236,14 @@ class A2UIAgentExecutor(AgentExecutor):
         # A2UI message onto this turn's stream. Collect them as the single
         # source of UI content (the event seam) instead of re-parsing text.
         a2ui_messages: list[ServerToClientMessage] = []
-
-        @stream.subscribe
-        async def _collect_a2ui_messages(event: BaseEvent) -> None:
-            if isinstance(event, A2UIMessageEvent):
-                a2ui_messages.append(event.message)
+        stream.where(A2UIMessageEvent).subscribe(collect_a2ui_messages(a2ui_messages))
 
         # Surface each incoming client→server interaction (captured in execute,
         # before the A2UI DataParts were rewritten to text) as an A2UIClientEvent
         # on the turn's stream, alongside the validation middleware.
-        extra_middleware = list(self._runtime.middleware_factories())
         incoming = _INCOMING_REQUEST.get()
         interactions = incoming.interactions if incoming is not None else ()
-        if interactions:
-            extra_middleware.append(A2UIInboundMiddleware(interactions))
+        extra_middleware = self._runtime.turn_middleware(interactions)
 
         # Answer the interactions the server handles itself — registered clicks and
         # callAgentFunction calls (the prompt rewriter already skipped these, so the
@@ -261,11 +252,9 @@ class A2UIAgentExecutor(AgentExecutor):
         # agent's DI surface, exactly like the agent's own tools (and the REST path).
         server_messages, handled_server = await run_client_interactions(
             interactions,
-            self._server_actions,
+            self._runtime,
             self._agent,
             variables=parsed.context_update,
-            version=self._runtime.version_string,
-            catalog_id=self._runtime.catalog_id,
         )
         a2ui_messages.extend(server_messages)
 
@@ -348,9 +337,6 @@ class A2UIAgentExecutor(AgentExecutor):
         return writer.new_agent_message(parts=parts, metadata=metadata)
 
 
-_RENDERER_ENVELOPE_KEYS = ("action", "callAgentFunction", "rendererFunctionResponse", "error")
-
-
 def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
     """Return the A2UI envelope dicts the renderer sends the agent from an A2A ``Part``.
 
@@ -370,7 +356,7 @@ def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
         else:
             raw_entries.append(data)
 
-    return [e for e in raw_entries if any(isinstance(e.get(key), dict) for key in _RENDERER_ENVELOPE_KEYS)]
+    return [e for e in raw_entries if is_client_envelope(e)]
 
 
 __all__ = ("A2UIAgentExecutor",)

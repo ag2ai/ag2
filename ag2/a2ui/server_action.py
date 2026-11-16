@@ -28,8 +28,8 @@ plain JSON — the same way the sibling AG-UI transport renders agent state.
 """
 
 import logging
-from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, Any, TypeGuard
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, cast
 
 from fast_depends.exceptions import ValidationError
 from fast_depends.pydantic.schema import get_schema
@@ -39,7 +39,9 @@ from ag2.context import ConversationContext, strip_reserved_variables
 from ag2.stream import MemoryStream
 from ag2.utils import CONTEXT_OPTION_NAME
 
+from ._messages import is_server_message, mentions_server_message
 from ._types import A2UIWireVersion, JsonObject, JsonValue, ServerToClientMessage, server_to_client_payload_keys
+from ._versions import A2UIProtocol
 from .actions import A2UIAction
 from .incoming import (
     A2UIIncomingAction,
@@ -52,23 +54,16 @@ from .incoming import (
 if TYPE_CHECKING:
     from ag2.agent import Agent
 
+    from ._runtime import _A2UIRuntime
+
 logger = logging.getLogger(__name__)
 
 
-def _is_message(value: JsonValue) -> TypeGuard[JsonObject]:
-    """True if ``value`` looks like an A2UI server→client message envelope.
-
-    A :class:`~typing.TypeGuard` so a ``True`` result narrows the (otherwise
-    opaque) handler return to a JSON object at the call site.
-    """
-    return isinstance(value, dict) and not server_to_client_payload_keys().isdisjoint(value)
-
-
-def _stamp(message: JsonObject, version: A2UIWireVersion) -> ServerToClientMessage:
+def _stamp(message: ServerToClientMessage, version: A2UIWireVersion) -> ServerToClientMessage:
     """Ensure a handler-returned message carries the wire ``version``."""
-    if "version" not in message:
-        message = {"version": version, **message}
-    return message  # type: ignore[return-value]
+    if "version" in message:
+        return message
+    return cast(ServerToClientMessage, {"version": version, **message})
 
 
 def _function_response(
@@ -135,15 +130,10 @@ async def run_server_action(
 ) -> list[ServerToClientMessage]:
     """Run a server-side action for a click and map its result to A2UI messages.
 
-    The DI execution lives on the action itself (:meth:`A2UIAction.run`, the same
-    path as an agent tool); this function owns only the wire mapping — turning the
-    handler's return into A2UI server→client messages. A click is fire-and-forget,
-    so a failing handler is logged and answered with nothing.
+    A click is fire-and-forget, so a failing handler is logged and answered with nothing.
 
     Args:
-        action: The :class:`A2UIAction` to run. :meth:`A2UIAction.run` solves it
-            against ``context`` so ``Depends``/``Inject`` parameters resolve and
-            ``event.context`` is coerced by the serializer.
+        action: The :class:`A2UIAction` to run, with dependency injection resolved against ``context``.
         click: The parsed incoming click (``name`` / ``context``).
         version: The wire ``version`` string to stamp on emitted messages.
         context: The conversation context supplying dependencies, variables, and
@@ -158,7 +148,7 @@ async def run_server_action(
         logger.exception("A2UI server action %r failed", click.name)
         return []
 
-    messages = _messages_of(result, version)
+    messages = _messages_of(result, version, handler=click.name)
     if not messages and result is not None:
         logger.debug(
             "A2UI server action %r returned a value, but an action has no response channel; dropping it. "
@@ -172,7 +162,7 @@ async def run_agent_function(
     action: A2UIAction | None,
     call: A2UIIncomingFunctionCall,
     *,
-    version: A2UIWireVersion,
+    protocol: A2UIProtocol,
     catalog_id: str,
     context: ConversationContext,
 ) -> list[ServerToClientMessage]:
@@ -182,8 +172,8 @@ async def run_agent_function(
         action: The registered :class:`A2UIAction` named by the call, or ``None``
             when nothing is registered under that name (answered ``UNKNOWN_FUNCTION``).
         call: The parsed incoming call; its ``args`` become the handler's keyword arguments.
-        version: The wire ``version`` to stamp on emitted messages. ``callAgentFunction``
-            only exists in v1.0, so any other version is logged and answered with nothing.
+        protocol: The served protocol version. A version without function RPC
+            cannot answer the call, so it is logged and answered with nothing.
         catalog_id: The active catalog. An explicit different catalog must not
             select a local action merely because its function name matches.
         context: The conversation context supplying dependencies, variables, and
@@ -193,13 +183,14 @@ async def run_agent_function(
         Any messages the handler returned, then the response correlated by
         ``call.function_call_id`` — always exactly one, the renderer is waiting on it.
     """
-    if version != "1.0":
+    if not protocol.function_rpc:
         logger.warning(
             "A2UI callAgentFunction %r needs protocol v1.0 (have %s); it cannot be answered in-protocol.",
             call.call,
-            version,
+            protocol.version,
         )
         return []
+    version = protocol.wire_version
 
     if not call.catalog_id_valid:
         return [
@@ -237,7 +228,7 @@ async def run_agent_function(
             )
         ]
 
-    messages = _messages_of(result, version)
+    messages = _messages_of(result, version, handler=call.call)
     # Messages are the handler's surface updates; there is no separate value to return.
     value = None if messages else result
     return [*messages, _function_response(call.function_call_id, version, value=value)]
@@ -245,12 +236,10 @@ async def run_agent_function(
 
 async def run_client_interactions(
     interactions: Iterable[A2UIIncomingParseResult],
-    server_actions: Mapping[str, A2UIAction],
+    runtime: "_A2UIRuntime",
     agent: "Agent",
     *,
     variables: dict[str, Any] | None,
-    version: A2UIWireVersion,
-    catalog_id: str,
 ) -> tuple[list[ServerToClientMessage], bool]:
     """Run the interactions the server answers itself, without invoking the agent.
 
@@ -267,19 +256,27 @@ async def run_client_interactions(
     context: ConversationContext | None = None
     for interaction in interactions:
         if isinstance(interaction, A2UIIncomingActionResult):
-            action = server_actions.get(interaction.action.name)
+            action = runtime.server_actions.get(interaction.action.name)
             if action is None:
                 continue
             handled = True
             if context is None:
                 context = build_server_action_context(agent, variables=variables)
-            messages.extend(await run_server_action(action, interaction.action, version=version, context=context))
+            messages.extend(
+                await run_server_action(
+                    action, interaction.action, version=runtime.protocol.wire_version, context=context
+                )
+            )
         elif isinstance(interaction, A2UIIncomingFunctionCallResult):
             call = interaction.function_call
             if context is None:
                 context = build_server_action_context(agent, variables=variables)
             answer = await run_agent_function(
-                server_actions.get(call.call), call, version=version, catalog_id=catalog_id, context=context
+                runtime.server_actions.get(call.call),
+                call,
+                protocol=runtime.protocol,
+                catalog_id=runtime.catalog_id,
+                context=context,
             )
             # Before v1.0 there is no reply to send: leave the turn to the agent.
             handled = handled or bool(answer)
@@ -306,14 +303,25 @@ async def _run_handler(
     return result
 
 
-def _messages_of(result: JsonValue, version: A2UIWireVersion) -> list[ServerToClientMessage]:
-    """The handler return as A2UI message(s) to emit verbatim, or ``[]`` when it is a plain value."""
-    if _is_message(result):
+def _messages_of(result: JsonValue, version: A2UIWireVersion, *, handler: str) -> list[ServerToClientMessage]:
+    """The handler return as A2UI message(s) to emit verbatim, or ``[]`` when it is a plain value.
+
+    A result that only partly looks like messages (several payload keys in one object, or a list mixing
+    messages with other values) is treated as a plain value, with a warning.
+    """
+    if is_server_message(result):
         return [_stamp(result, version)]
     if isinstance(result, list) and result:
-        items = [item for item in result if _is_message(item)]
+        items = [item for item in result if is_server_message(item)]
         if len(items) == len(result):
             return [_stamp(item, version) for item in items]
+    if mentions_server_message(result):
+        logger.warning(
+            "A2UI handler %r returned something shaped like A2UI messages, so it is treated as a plain value; "
+            "to send messages, return one message per object (exactly one of %s), or a list of only such objects.",
+            handler,
+            ", ".join(sorted(server_to_client_payload_keys())),
+        )
     return []
 
 

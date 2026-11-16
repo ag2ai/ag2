@@ -13,23 +13,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from ._types import A2UIVersion, JsonObject, JsonValue
-from .constants import A2UI_DEFAULT_VERSION
+from ._versions import (
+    A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
+    A2UI_RENDERER_CAPABILITIES_METADATA_KEY,
+    DEFAULT_PROTOCOL,
+    get_protocol,
+)
 from .incoming import sanitize_for_prompt
 
 logger = logging.getLogger(__name__)
-
-A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
-# v1.0 renamed the client "renderer" (A2A extension spec).
-A2UI_RENDERER_CAPABILITIES_METADATA_KEY = "a2uiRendererCapabilities"
-
-# Where each protocol version's capabilities sit: the metadata key and the version key
-# nested under it. v0.9.1 reuses the v0.9 key (``v0_9_1/spec/client_capabilities.json``);
-# v1.0 uses its bare wire version (``renderer_capabilities.json``).
-_CAPABILITIES_LOCATION: dict[A2UIVersion, tuple[str, str]] = {
-    "v0.9": (A2UI_CLIENT_CAPABILITIES_METADATA_KEY, "v0.9"),
-    "v0.9.1": (A2UI_CLIENT_CAPABILITIES_METADATA_KEY, "v0.9"),
-    "v1.0": (A2UI_RENDERER_CAPABILITIES_METADATA_KEY, "1.0"),
-}
 
 # Cap how many catalog ids / inline-component names we splice into the prompt,
 # bounding the blast radius of a runaway or hostile capabilities payload.
@@ -48,7 +40,7 @@ class A2UIClientCapabilities:
 def parse_client_capabilities(
     metadata: Mapping[str, JsonValue] | None,
     *,
-    version_key: A2UIVersion = A2UI_DEFAULT_VERSION,
+    version_key: A2UIVersion = DEFAULT_PROTOCOL.version,
 ) -> A2UIClientCapabilities | None:
     """Decode the client's capabilities for protocol version ``version_key``.
 
@@ -61,11 +53,11 @@ def parse_client_capabilities(
     """
     if not metadata:
         return None
-    metadata_key, nested_key = _CAPABILITIES_LOCATION[version_key]
-    caps = metadata.get(metadata_key)
+    protocol = get_protocol(version_key)
+    caps = metadata.get(protocol.capabilities_key)
     if not isinstance(caps, dict):
         return None
-    v = caps.get(nested_key)
+    v = caps.get(protocol.capabilities_version_key)
     if not isinstance(v, dict):
         return None
     raw_ids = v.get("supportedCatalogIds")

@@ -7,19 +7,21 @@ import logging
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TypeGuard, cast
+from typing import cast
 
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
+from ._graph import ComponentReferences, component_graph_errors, is_json_pointer
+from ._messages import is_server_message
 from ._types import (
-    A2UIWireVersion,
     JsonObject,
     JsonSchema,
     JsonValue,
     ServerToClientMessage,
     server_to_client_payload_keys,
 )
+from ._versions import A2UIProtocol
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
 from .schema_manager import _registry_for_surface_catalog
@@ -108,24 +110,27 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
     return _as_messages(values)
 
 
-def _is_message(value: JsonValue) -> TypeGuard[ServerToClientMessage]:
-    """Whether ``value`` has the envelope of a message: an object with exactly one payload key.
-
-    The payload's contents are left to ``validate()``, which checks them against the schema.
-    """
-    return isinstance(value, dict) and len(server_to_client_payload_keys().intersection(value)) == 1
-
-
 def _as_messages(values: list[JsonValue]) -> "tuple[list[ServerToClientMessage], str | None]":
     messages: list[ServerToClientMessage] = []
     for i, value in enumerate(values):
-        if not _is_message(value):
+        if not is_server_message(value):
             return (
                 [],
                 f"Operation {i} is not an A2UI message: expected an object with exactly one of {sorted(server_to_client_payload_keys())}",
             )
         messages.append(value)
     return messages, None
+
+
+def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
+    """A data-model update's ``path`` must be a JSON Pointer (RFC 6901)."""
+    errors: list[str] = []
+    for i, message in enumerate(messages):
+        payload = message.get("updateDataModel")
+        path = payload.get("path") if isinstance(payload, dict) else None
+        if isinstance(path, str) and not is_json_pointer(path):
+            errors.append(f"Operation {i}: {path!r} is not a JSON Pointer (at /updateDataModel/path)")
+    return errors
 
 
 def _components_of(update_components: JsonValue) -> list[JsonValue]:
@@ -167,20 +172,22 @@ class A2UIResponseParser:
 
     def __init__(
         self,
-        version_string: A2UIWireVersion,
+        protocol: A2UIProtocol,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: Registry | None = None,
+        component_references: ComponentReferences | None = None,
     ) -> None:
         self._checker = (
             MessageChecker(server_to_client_schema, schema_registry) if server_to_client_schema is not None else None
         )
-        self._version_string = version_string
+        self._protocol = protocol
         self._schema = server_to_client_schema
         self._registry = schema_registry
+        self._component_references = component_references
 
     @property
-    def version_string(self) -> A2UIWireVersion:
-        return self._version_string
+    def protocol(self) -> A2UIProtocol:
+        return self._protocol
 
     def parse(self, response: str) -> A2UIParseResult:
         """Extract conversational text and A2UI messages from a response.
@@ -236,21 +243,15 @@ class A2UIResponseParser:
             raw_json=json_part,
         )
 
-    def format_validation_error(
-        self,
-        parse_result: A2UIParseResult,
-        validation_result: A2UIValidationResult,
-    ) -> str:
+    def format_validation_error(self, errors: Sequence[str]) -> str:
         """Format validation errors as feedback for the LLM to self-correct."""
         lines = ["Your A2UI output had validation errors:"]
-        for error in validation_result.errors:
+        for error in errors:
             lines.append(f"- {error}")
-        if parse_result.parse_error:
-            lines.append(f"- JSON parse error: {parse_result.parse_error}")
         lines.append("")
         lines.append(
             "Please fix these errors and regenerate the A2UI JSON. "
-            f'Make sure each message includes "version": "{self._version_string}" and all required properties. '
+            f'Make sure each message includes "version": "{self._protocol.wire_version}" and all required properties. '
             "The user never sees this exchange: do not mention the errors or the correction in your reply."
         )
         return "\n".join(lines)
@@ -275,7 +276,7 @@ class A2UIResponseParser:
         for i, op in enumerate(objects):
             try:
                 checker = self._checker
-                if self._version_string == "1.0" and self._registry is not None and self._schema is not None:
+                if self._protocol.per_surface_catalogs and self._registry is not None and self._schema is not None:
                     catalog_id = _surface_catalog(op, surface_catalogs, self._registry)
                     if catalog_id is not None:
                         if catalog_id not in catalog_checkers:
@@ -284,18 +285,16 @@ class A2UIResponseParser:
                             )
                         checker = catalog_checkers[catalog_id]
                 errors.extend(f"Operation {i}: {issue.render(op)}" for issue in checker.issues(op))
-            except Unresolvable as re:
-                # A ref we cannot resolve means we could not validate this op —
-                # surface it instead of letting it escape as an unhandled crash.
-                # (``referencing.exceptions.Unresolvable`` replaces the deprecated
-                # ``jsonschema.RefResolutionError`` as of jsonschema 4.18.)
-                logger.warning("Schema ref resolution failed for operation %d: %s", i, re)
-                errors.append(f"Operation {i}: could not resolve schema reference ({re})")
-            except Exception as exc:
-                logger.warning("Unexpected error validating operation %d: %s", i, exc)
-                errors.append(f"Operation {i}: unexpected validation error ({exc})")
+            except Unresolvable as exc:
+                # A model-written ``$ref`` target the registry lacks: report it rather than crash the turn.
+                logger.warning("Schema ref resolution failed for operation %d: %s", i, exc)
+                errors.append(f"Operation {i}: could not resolve schema reference ({exc})")
 
         errors.extend(self._check_function_messages(operations))
+        errors.extend(_data_path_errors(objects))
+        # A tree is only worth checking once its messages are well-formed; otherwise each mistake echoes.
+        if self._component_references is not None and not errors:
+            errors.extend(component_graph_errors(objects, self._component_references))
 
         # Spec rule (server_to_client.json + a2ui.org): across all component-carrying
         # ops, at least one component must have id 'root'. v1.0's createSurface can

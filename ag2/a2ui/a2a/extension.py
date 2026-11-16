@@ -10,11 +10,7 @@ from a2a.server.agent_execution import RequestContext
 from a2a.types import AgentExtension
 
 from .._types import A2UIVersion, JsonValue
-from ..constants import (
-    A2UI_DEFAULT_CATALOG_ID_BY_VERSION,
-    A2UI_DEFAULT_VERSION,
-    A2UI_EXTENSION_URI_BY_VERSION,
-)
+from .._versions import DEFAULT_PROTOCOL, get_protocol
 
 # Key under which activated extension URIs accumulate on the per-request
 # ``ServerCallContext.state``. Shared across extensions, not A2UI-specific.
@@ -23,7 +19,7 @@ ACTIVATED_EXTENSIONS_KEY = "activated_extensions"
 
 def get_a2ui_agent_extension(
     *,
-    version: A2UIVersion = A2UI_DEFAULT_VERSION,
+    version: A2UIVersion = DEFAULT_PROTOCOL.version,
     supported_catalog_ids: Sequence[str] | None = None,
     accepts_inline_catalogs: bool = False,
 ) -> AgentExtension:
@@ -46,8 +42,8 @@ def get_a2ui_agent_extension(
     Returns:
         A configured ``AgentExtension`` for the requested A2UI version.
     """
-    default_catalog = A2UI_DEFAULT_CATALOG_ID_BY_VERSION[version]
-    catalog_source = supported_catalog_ids if supported_catalog_ids is not None else [default_catalog]
+    protocol = get_protocol(version)
+    catalog_source = supported_catalog_ids if supported_catalog_ids is not None else [protocol.catalog_id]
     # Spread into a JsonValue list so it drops into the JsonValue-typed params dict
     # (a plain list[str] would trip list invariance).
     catalog_ids: list[JsonValue] = [*catalog_source]
@@ -56,7 +52,7 @@ def get_a2ui_agent_extension(
         params["acceptsInlineCatalogs"] = True
 
     return AgentExtension(
-        uri=A2UI_EXTENSION_URI_BY_VERSION[version],
+        uri=protocol.extension_uri,
         description=f"Provides agent-driven UI using the A2UI {version} JSON format.",
         params=params,
     )
@@ -65,7 +61,7 @@ def get_a2ui_agent_extension(
 def try_activate_a2ui_extension(
     context: RequestContext,
     *,
-    version: A2UIVersion = A2UI_DEFAULT_VERSION,
+    version: A2UIVersion = DEFAULT_PROTOCOL.version,
 ) -> bool:
     """Activate the A2UI extension if the client requested it.
 
@@ -81,7 +77,7 @@ def try_activate_a2ui_extension(
     scratch space and is shared by every helper handling the request, so
     activations from several extensions accumulate in one list.
     """
-    extension_uri = A2UI_EXTENSION_URI_BY_VERSION[version]
+    extension_uri = get_protocol(version).extension_uri
     requested = getattr(context, "requested_extensions", None) or []
     if extension_uri not in requested:
         return False

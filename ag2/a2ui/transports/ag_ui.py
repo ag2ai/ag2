@@ -63,9 +63,10 @@ from ag2.ag_ui.stream import (
 from ag2.ag_ui.thought_signature import encrypted_signature_of, signature_event
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
+from .._messages import is_client_envelope
 from .._types import JsonObject, JsonValue, ServerToClientMessage
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
-from ..incoming import iter_incoming_prompts, parse_incoming_interactions
+from ..incoming import decode_envelopes, incoming_prompts
 from ..request import A2UIServerRequest
 
 if TYPE_CHECKING:
@@ -153,9 +154,6 @@ async def _endpoint(turns: ServedTurns, core: "_A2UITurnCore", request: Request)
     )
 
 
-_A2UI_ENVELOPE_KEYS = ("action", "callAgentFunction", "rendererFunctionResponse", "error")
-
-
 def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
     """Extract A2UI client→server envelopes from a run's ``forwardedProps``.
 
@@ -191,7 +189,7 @@ def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
                     "context": context if isinstance(context, dict) else {},
                 },
             })
-        elif any(key in a2ui_action for key in _A2UI_ENVELOPE_KEYS):
+        elif is_client_envelope(a2ui_action):
             envelopes.append(a2ui_action)
     a2ui = forwarded_props.get("a2ui")
     if isinstance(a2ui, list):
@@ -218,14 +216,14 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
-    envelopes = _client_envelopes(incoming.forwarded_props)
-    current_inputs.extend(TextInput(p) for p in iter_incoming_prompts(envelopes, core.runtime.get_action))
+    interactions = decode_envelopes(_client_envelopes(incoming.forwarded_props))
+    current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, core.runtime.get_action))
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,
         prompt=prompt,
         variables=variables,
-        client_interactions=parse_incoming_interactions(envelopes),
+        client_interactions=interactions,
     )
 
 

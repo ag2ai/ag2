@@ -12,17 +12,8 @@ import json
 from collections.abc import Mapping
 
 from ._types import A2UIVersion, JsonObject, JsonValue
+from ._versions import get_protocol
 from .incoming import sanitize_for_prompt
-
-A2UI_CLIENT_DATA_MODEL_METADATA_KEY = "a2uiClientDataModel"
-A2UI_RENDERER_DATA_MODEL_METADATA_KEY = "a2uiRendererDataModel"
-
-# The metadata key each protocol version's data model is read from (v1.0 renamed the client "renderer").
-_DATA_MODEL_METADATA_KEY: dict[A2UIVersion, str] = {
-    "v0.9": A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
-    "v0.9.1": A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
-    "v1.0": A2UI_RENDERER_DATA_MODEL_METADATA_KEY,
-}
 
 
 def parse_client_data_model(
@@ -37,7 +28,7 @@ def parse_client_data_model(
     """
     if not metadata:
         return None
-    envelope = metadata.get(_DATA_MODEL_METADATA_KEY[version_key])
+    envelope = metadata.get(get_protocol(version_key).data_model_key)
     surfaces = envelope.get("surfaces") if isinstance(envelope, dict) else None
     if not isinstance(surfaces, dict):
         return None
@@ -58,8 +49,6 @@ def data_model_to_prompt(surfaces: Mapping[str, JsonObject] | None) -> str:
 
 
 __all__ = (
-    "A2UI_CLIENT_DATA_MODEL_METADATA_KEY",
-    "A2UI_RENDERER_DATA_MODEL_METADATA_KEY",
     "data_model_to_prompt",
     "parse_client_data_model",
 )

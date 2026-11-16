@@ -8,10 +8,9 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import ExitStack
-from dataclasses import dataclass, field
-from types import MappingProxyType
+from dataclasses import dataclass
 from typing import Union
 
 from ag2.agent import Agent
@@ -34,12 +33,10 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
-from ._runtime import _A2UIRuntime
+from ._runtime import _A2UIRuntime, collect_a2ui_messages
 from ._types import ServerToClientMessage
-from .actions import A2UIAction
 from .data_model import data_model_to_prompt
 from .events import A2UIMessageEvent
-from .middleware import A2UIInboundMiddleware
 from .request import A2UIServerRequest
 from .server_action import run_client_interactions
 
@@ -74,178 +71,15 @@ TaskObserver = Callable[[TaskEvent], Awaitable[None]]
 ToolCallObserver = Callable[[ToolCallEvent], Awaitable[None]]
 ToolResultObserver = Callable[[ToolResultEvent], Awaitable[None]]
 
-# Shared immutable default so the keyword arg never aliases a mutable {}.
-_NO_SERVER_ACTIONS: Mapping[str, A2UIAction] = MappingProxyType({})
 
-
-async def stream_turn(
-    agent: Agent,
-    runtime: _A2UIRuntime,
-    request: A2UIServerRequest,
-    *,
-    server_actions: Mapping[str, A2UIAction] = _NO_SERVER_ACTIONS,
-    usage_records: list[UsageEvent] | None = None,
-    interrupter: Interrupter | None = None,
-    on_task: TaskObserver | None = None,
-    on_tool_call: ToolCallObserver | None = None,
-    on_tool_result: ToolResultObserver | None = None,
-) -> AsyncIterator[A2UIFrame]:
-    """Execute one turn and yield its prose then A2UI message frames.
-
-    Server-side actions are handled first and never invoke the agent: each
-    incoming click whose name maps to a ``server_actions`` entry runs that
-    action and its result is yielded as A2UI message frames, and each v1.0
-    ``callAgentFunction`` is answered with an ``agentFunctionResponse``. The
-    agent then runs only if the turn still has input for it (a user message, or
-    a click on a button with no registered action) — a turn carrying *only*
-    server-side interactions skips the agent entirely.
-
-    Args:
-        agent: The plain ``Agent`` to run. Must have ``config`` set (unless the
-            turn carries only server-side clicks, in which case it is not run).
-        runtime: The A2UI runtime supplying the prompt section, validation
-            middleware, and catalog/capabilities helpers.
-        request: The parsed turn (history, current inputs, prompt, variables).
-        server_actions: Action name → :class:`A2UIAction` for ``@a2ui_action``
-            buttons, executed on click without invoking the agent.
-        usage_records: Filled with this turn's :class:`~ag2.events.UsageEvent`
-            events as they are sent, for a transport that reports what the turn
-            cost. The list is the caller's because the turn's stream is not: it
-            is created here and never leaves, and a caller handed the records
-            only on a clean return would have none for a turn that raised —
-            which is the turn whose cost most wants reporting.
-        interrupter: Where a question the agent asks goes. Supplied only by a
-            transport that can put it to whoever is connected, and only when the
-            agent has no hook of its own.
-        on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
-            ``TaskFailed`` / ``TaskCancelled`` / ``TaskExpired`` on the turn's
-            stream, for a transport that reports delegations.
-        on_tool_call: Called with each tool call on the turn's stream.
-        on_tool_result: Called with each tool result on the turn's stream.
-
-    Yields:
-        Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
-        runs) an :class:`A2UIProseFrame` for its prose followed by an
-        :class:`A2UIMessageFrame` per A2UI message it produced.
-
-    Raises:
-        RuntimeError: If the agent must run but has no ``config`` to create an
-            LLM client.
-    """
-    # Answer the interactions the server handles itself (registered clicks and
-    # callAgentFunction calls) and emit their messages. These never reach the
-    # agent (the prompt rewriter already skipped them).
-    server_messages, handled_server = await run_client_interactions(
-        request.client_interactions,
-        server_actions,
-        agent,
-        variables=request.variables,
-        version=runtime.version_string,
-        catalog_id=runtime.catalog_id,
-    )
-    for message in server_messages:
-        yield A2UIMessageFrame(message)
-
-    # Run the agent only when the turn has real input for it. A turn whose only
-    # content was server-side clicks is complete already; don't fabricate a
-    # blank agent turn for it (but keep the blank-turn fallback otherwise).
-    if not request.current_inputs and handled_server:
-        return
-
-    if agent.config is None:
-        raise RuntimeError("Agent.config is not set; cannot serve over REST")
-    client = agent.config.create()
-
-    stream = MemoryStream()
-    if request.history:
-        await stream.history.replace(request.history)
-
-    # The validation middleware emits one A2UIMessageEvent per validated A2UI
-    # message onto this turn's stream. Collect them as the single source of UI
-    # content (the event seam) — consistent with the A2A executor.
-    a2ui_messages: list[ServerToClientMessage] = []
-
-    @stream.subscribe
-    async def _collect_a2ui_messages(event: BaseEvent) -> None:
-        if isinstance(event, A2UIMessageEvent):
-            a2ui_messages.append(event.message)
-
-    if usage_records is not None:
-        stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
-    if on_task is not None:
-        stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
-    if on_tool_call is not None:
-        stream.where(ToolCallEvent).subscribe(on_tool_call)
-    if on_tool_result is not None:
-        stream.where(ToolResultEvent).subscribe(on_tool_result)
-
-    # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
-    # prompt section, fold in negotiated client capabilities so the LLM only
-    # targets components the client can render, add the client's data model, and inject the validation
-    # middleware that emits the A2UIMessageEvents collected above.
-    caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
-    data_model_prompt = data_model_to_prompt(request.client_data_model)
-    extra_prompt = [
-        runtime.system_prompt_section,
-        *([caps_prompt] if caps_prompt else []),
-        *([data_model_prompt] if data_model_prompt else []),
-    ]
-
-    merged_variables = {
-        **dict(agent._agent_variables),
-        **strip_reserved_variables(request.variables, source="an inbound A2UI request"),
-    }
-    ctx = ConversationContext(
-        stream,
-        prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
-        dependencies=dict(agent._agent_dependencies),
-        variables=merged_variables,
-        dependency_provider=agent.dependency_provider,
-    )
-
-    # Surface each incoming client→server interaction as an A2UIClientEvent on
-    # the turn's stream (alongside the validation middleware), so observers see
-    # client clicks/responses — not just the LLM via the rewritten prompt.
-    extra_middleware = list(runtime.middleware_factories())
-    if request.client_interactions:
-        extra_middleware.append(A2UIInboundMiddleware(request.client_interactions))
-
-    initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
-    with ExitStack() as stack:
-        if interrupter is not None:
-            stack.enter_context(stream.where(HumanInputRequest).sub_scope(interrupter, interrupt=True))
-
-        reply = await agent._execute(
-            initial_event,
-            context=ctx,
-            client=client,
-            additional_middleware=extra_middleware,
-        )
-
-    response = reply.response
-    prose = response.message.content if response.message else ""
-    if prose:
-        yield A2UIProseFrame(prose)
-    for message in a2ui_messages:
-        yield A2UIMessageFrame(message)
-
-
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class _A2UITurnCore:
-    """Transport-neutral turn engine shared by every transport.
-
-    Bundles the plain ``Agent``, the configured ``_A2UIRuntime``, and the
-    ``server_actions`` for clickable actions, so a transport can run one turn
-    via :meth:`run_turn` without knowing how A2UI is wired. A click on a
-    registered action runs its handler on the server without invoking the agent;
-    a click on any other button is rewritten into a prompt for the agent.
-    """
+    """The transport-neutral turn engine: the plain ``Agent`` and its A2UI runtime."""
 
     agent: Agent
     runtime: _A2UIRuntime
-    server_actions: Mapping[str, A2UIAction] = field(default_factory=dict)
 
-    def run_turn(
+    async def run_turn(
         self,
         request: A2UIServerRequest,
         *,
@@ -255,24 +89,122 @@ class _A2UITurnCore:
         on_tool_call: ToolCallObserver | None = None,
         on_tool_result: ToolResultObserver | None = None,
     ) -> AsyncIterator[A2UIFrame]:
-        """Run one turn and yield its prose then A2UI message frames.
+        """Execute one turn and yield its prose then A2UI message frames.
 
-        Pass ``usage_records`` to have the turn's token accounting collected into
-        it, ``interrupter`` to answer the agent's questions from wherever the
-        transport can reach a human, and ``on_task`` to hear of its delegations;
-        see :func:`stream_turn`.
+        Registered ``@a2ui_action`` clicks and v1.0 ``callAgentFunction`` calls are answered first,
+        without the agent. The agent runs only if the turn still has input for it.
+
+        Args:
+            request: The parsed turn (history, current inputs, prompt, variables).
+            usage_records: Filled with this turn's :class:`~ag2.events.UsageEvent`
+                events as they are sent, so the caller has them even when the turn raises.
+            interrupter: Where a question the agent asks goes. Supplied only by a
+                transport that can put it to whoever is connected, and only when the
+                agent has no hook of its own.
+            on_task: Called with each ``TaskStarted`` / ``TaskCompleted`` /
+                ``TaskFailed`` / ``TaskCancelled`` / ``TaskExpired`` on the turn's
+                stream, for a transport that reports delegations.
+            on_tool_call: Called with each tool call on the turn's stream.
+            on_tool_result: Called with each tool result on the turn's stream.
+
+        Yields:
+            Any server-action :class:`A2UIMessageFrame`s first, then (when the agent
+            runs) an :class:`A2UIProseFrame` for its prose followed by an
+            :class:`A2UIMessageFrame` per A2UI message it produced.
+
+        Raises:
+            RuntimeError: If the agent must run but has no ``config`` to create an
+                LLM client.
         """
-        return stream_turn(
-            self.agent,
-            self.runtime,
-            request,
-            server_actions=self.server_actions,
-            usage_records=usage_records,
-            interrupter=interrupter,
-            on_task=on_task,
-            on_tool_call=on_tool_call,
-            on_tool_result=on_tool_result,
+        agent, runtime = self.agent, self.runtime
+        # Answer the interactions the server handles itself (registered clicks and
+        # callAgentFunction calls) and emit their messages. These never reach the
+        # agent (the prompt rewriter already skipped them).
+        server_messages, handled_server = await run_client_interactions(
+            request.client_interactions,
+            runtime,
+            agent,
+            variables=request.variables,
         )
+        for message in server_messages:
+            yield A2UIMessageFrame(message)
+
+        # Run the agent only when the turn has real input for it. A turn whose only
+        # content was server-side clicks is complete already; don't fabricate a
+        # blank agent turn for it (but keep the blank-turn fallback otherwise).
+        if not request.current_inputs and handled_server:
+            return
+
+        if agent.config is None:
+            raise RuntimeError("Agent.config is not set; cannot serve over REST")
+        client = agent.config.create()
+
+        stream = MemoryStream()
+        if request.history:
+            await stream.history.replace(request.history)
+
+        # The validation middleware emits one A2UIMessageEvent per validated A2UI
+        # message onto this turn's stream. Collect them as the single source of UI
+        # content (the event seam) — consistent with the A2A executor.
+        a2ui_messages: list[ServerToClientMessage] = []
+        stream.where(A2UIMessageEvent).subscribe(collect_a2ui_messages(a2ui_messages))
+
+        if usage_records is not None:
+            stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
+        if on_task is not None:
+            stream.where((TaskStarted, TaskCompleted, TaskFailed, TaskCancelled, TaskExpired)).subscribe(on_task)
+        if on_tool_call is not None:
+            stream.where(ToolCallEvent).subscribe(on_tool_call)
+        if on_tool_result is not None:
+            stream.where(ToolResultEvent).subscribe(on_tool_result)
+
+        # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
+        # prompt section, fold in negotiated client capabilities so the LLM only
+        # targets components the client can render, add the client's data model, and inject the validation
+        # middleware that emits the A2UIMessageEvents collected above.
+        caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
+        data_model_prompt = data_model_to_prompt(request.client_data_model)
+        extra_prompt = [
+            runtime.system_prompt_section,
+            *([caps_prompt] if caps_prompt else []),
+            *([data_model_prompt] if data_model_prompt else []),
+        ]
+
+        merged_variables = {
+            **dict(agent._agent_variables),
+            **strip_reserved_variables(request.variables, source="an inbound A2UI request"),
+        }
+        ctx = ConversationContext(
+            stream,
+            prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
+            dependencies=dict(agent._agent_dependencies),
+            variables=merged_variables,
+            dependency_provider=agent.dependency_provider,
+        )
+
+        # Surface each incoming client→server interaction as an A2UIClientEvent on
+        # the turn's stream (alongside the validation middleware), so observers see
+        # client clicks/responses — not just the LLM via the rewritten prompt.
+        extra_middleware = runtime.turn_middleware(request.client_interactions)
+
+        initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
+        with ExitStack() as stack:
+            if interrupter is not None:
+                stack.enter_context(stream.where(HumanInputRequest).sub_scope(interrupter, interrupt=True))
+
+            reply = await agent._execute(
+                initial_event,
+                context=ctx,
+                client=client,
+                additional_middleware=extra_middleware,
+            )
+
+        response = reply.response
+        prose = response.message.content if response.message else ""
+        if prose:
+            yield A2UIProseFrame(prose)
+        for message in a2ui_messages:
+            yield A2UIMessageFrame(message)
 
 
 __all__ = (
@@ -284,5 +216,4 @@ __all__ = (
     "TaskObserver",
     "ToolCallObserver",
     "ToolResultObserver",
-    "stream_turn",
 )

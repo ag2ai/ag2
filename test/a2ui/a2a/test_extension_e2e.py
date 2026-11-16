@@ -36,12 +36,17 @@ from ag2.a2a.extension import EXTENSION_URI
 from ag2.a2ui._types import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
-from ag2.a2ui.constants import A2UI_EXTENSION_URI_BY_VERSION
 from ag2.testing import TestConfig
 
 URL = "http://test"
 REPLY = "ok"
-A2UI_URI = A2UI_EXTENSION_URI_BY_VERSION["v0.9"]
+# Pinned wire values, written out so a change to them shows up here.
+EXTENSION_URIS: dict[str, str] = {
+    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
+    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
+    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
+}
+A2UI_URI = EXTENSION_URIS["v0.9"]
 OTHER_URI = "urn:example:unrelated:v1"
 
 
@@ -154,7 +159,7 @@ class TestActivationReachesTheServer:
 
     @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
     async def test_each_protocol_version_negotiates_its_own_uri(self, version: A2UIVersion) -> None:
-        uri = A2UI_EXTENSION_URI_BY_VERSION[version]
+        uri = EXTENSION_URIS[version]
         client, recorder = _pair(activate=uri, server_version=version)
 
         await client.ask("show me a form")
@@ -214,7 +219,7 @@ class TestActivationIsRecorded:
 
     async def test_a_version_mismatch_records_nothing(self) -> None:
         """Client activates v0.9, server negotiates v1.0 — no activation, no record."""
-        client, recorder = _pair(activate=A2UI_EXTENSION_URI_BY_VERSION["v0.9"], server_version="v1.0")
+        client, recorder = _pair(activate=A2UI_URI, server_version="v1.0")
 
         await client.ask("show me a form")
 

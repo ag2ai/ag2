@@ -20,7 +20,7 @@ from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities, parse_client_capabilities
 from .data_model import parse_client_data_model
-from .incoming import A2UIIncomingParseResult, iter_incoming_prompts, parse_incoming_interactions
+from .incoming import A2UIIncomingParseResult, decode_envelopes, incoming_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,6 @@ def parse_request(
     body: bytes | str | JsonObject,
     *,
     resolve_action: Callable[[str], A2UIEventAction | None],
-    resolve_function: Callable[[str], str | None] | None = None,
     version_key: A2UIVersion = "v0.9",
 ) -> A2UIServerRequest:
     """Parse a raw request body into an :class:`A2UIServerRequest`.
@@ -70,15 +69,11 @@ def parse_request(
             ``runtime.get_action``). A matched action's click runs on the server
             (handled in the turn core, kept out of the prompt); an unmatched click
             is rewritten generically so the LLM can react to the button it rendered.
-        resolve_function: Looks up the name of an issued ``callRendererFunction`` by
-            its ``functionCallId`` using caller-scoped state, so
-            a ``rendererFunctionResponse`` prompt can name the function.
         version_key: The protocol version whose capabilities and data model to
             read: ``a2uiClientCapabilities["v0.9"]`` for v0.9 and v0.9.1,
             ``a2uiRendererCapabilities["1.0"]`` for v1.0. Defaults to ``"v0.9"``;
-            callers serving a non-v0.9 agent should pass
-            ``agent.schema_manager.protocol_version`` (the ASGI adapter does),
-            else a newer client's capabilities are silently dropped.
+            pass the served protocol's version, else a newer client's
+            capabilities are silently dropped.
 
     Returns:
         The parsed turn. When neither ``messages`` nor ``a2ui`` yields any
@@ -105,7 +100,10 @@ def parse_request(
         raise ValueError("'a2ui' must be a list")
 
     prompt, history, current_inputs = _map_messages(raw_messages)
-    current_inputs.extend(_map_a2ui_envelopes(raw_a2ui, resolve_action, resolve_function))
+    # The server is stateless: a v1.0 ``rendererFunctionResponse`` (the reply to an earlier
+    # ``callRendererFunction``) simply arrives in the next request and becomes a continuation prompt.
+    interactions = decode_envelopes(raw_a2ui)
+    current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, resolve_action))
 
     return A2UIServerRequest(
         current_inputs=current_inputs,
@@ -113,7 +111,7 @@ def parse_request(
         prompt=prompt,
         variables=dict(raw_variables),
         client_capabilities=parse_client_capabilities(data, version_key=version_key),
-        client_interactions=parse_incoming_interactions(raw_a2ui),
+        client_interactions=interactions,
         client_data_model=parse_client_data_model(data, version_key=version_key),
     )
 
@@ -167,22 +165,6 @@ def _map_messages(raw_messages: list[JsonValue]) -> tuple[list[str], list[BaseEv
             raise ValueError(f"unsupported message role: {role!r}")
 
     return prompt, history, input_buffer
-
-
-def _map_a2ui_envelopes(
-    raw_a2ui: list[JsonValue],
-    resolve_action: Callable[[str], A2UIEventAction | None],
-    resolve_function: Callable[[str], str | None] | None,
-) -> list[Input]:
-    """Rewrite client→server ``action`` / ``rendererFunctionResponse`` / ``error`` envelopes as prompt inputs.
-
-    The server is stateless, so a v1.0 ``rendererFunctionResponse`` (the client's
-    reply to a prior server ``callRendererFunction``) simply arrives as another
-    envelope in the next request and is rewritten to a continuation prompt — no
-    pause/resume bookkeeping is needed on this transport. A ``callAgentFunction``
-    yields no prompt: the server answers it itself.
-    """
-    return [TextInput(prompt) for prompt in iter_incoming_prompts(raw_a2ui, resolve_action, resolve_function)]
 
 
 __all__ = ("A2UIServerRequest", "parse_request")

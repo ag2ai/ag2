@@ -66,6 +66,10 @@ class _Leaf:
 
 XID_FORMAT = "xid-identifier"
 
+_UNKNOWN_TAG = "unknown-tag"
+"""The keyword of a leaf reporting a tag value no variant accepts."""
+_TAG_NOUNS = {"call": "function", "@call": "function", "catalogId": "catalog"}
+
 
 def _is_identifier(value: JsonValue) -> bool:
     # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
@@ -105,14 +109,12 @@ class MessageChecker:
                     else validator_cls(branch_schema, format_checker=formats)
                 )
 
-    def issues(self, message: JsonValue) -> list[A2UIIssue]:
+    def issues(self, message: JsonObject) -> list[A2UIIssue]:
         """Every way ``message`` violates the schema; empty when it is valid.
 
         Raises:
             referencing.exceptions.Unresolvable: A ``$ref`` in the schema cannot be resolved.
         """
-        if not isinstance(message, dict):
-            return [A2UIIssue((), f"Expected operation to be an object, got {type(message).__name__}")]
         validator = next((v for key, v in self._validators.items() if key in message), None)
         if validator is None:
             keys = sorted(self._validators)
@@ -139,16 +141,25 @@ def _narrow(error: _SchemaError) -> list[_Leaf]:
     # A variant that fails on a ``const`` tag (``component: "Slider"``, ``@call: "openUrl"``) is
     # simply not the one the instance meant; what is left are the variants worth reporting on.
     tags = {index: tag for index, errors in variants.items() if (tag := _tag_mismatch(errors)) is not None}
-    # A variant whose selector (``if``) did not match fails only through its ``else``: it was never tried.
-    unselected = {index for index, errors in variants.items() if all(_in_else(e) for e in errors)}
+    unselected = {index for index, errors in variants.items() if all(_unselected(e) for e in errors)}
     candidates = {index: errors for index, errors in variants.items() if index not in tags.keys() | unselected}
     if not candidates and not tags:
         candidates = dict(variants)
     if not candidates:
         tag = next(iter(tags.values()))
         value = error.instance.get(tag) if isinstance(error.instance, dict) else None
-        return [_Leaf(tuple(error.absolute_path), f"unknown {tag} {value!r}", "oneOf")]
-    return min(([issue for e in errors for issue in _narrow(e)] for errors in candidates.values()), key=len)
+        return [_Leaf(tuple(error.absolute_path), f"unknown {_TAG_NOUNS.get(tag, tag)} {value!r}", _UNKNOWN_TAG)]
+    narrowed = [[issue for e in errors for issue in _narrow(e)] for errors in candidates.values()]
+    # An object carrying a tag the catalog does not know (``{"call": "nosuch"}``) meant that variant,
+    # not a plain ``string`` one beside it that fails only on the JSON type.
+    here = tuple(error.absolute_path)
+    if any(leaves and all(leaf.keyword == _UNKNOWN_TAG for leaf in leaves) for leaves in narrowed):
+        narrowed = [
+            leaves
+            for leaves in narrowed
+            if not (len(leaves) == 1 and leaves[0].keyword == "type" and leaves[0].path == here)
+        ]
+    return min(narrowed, key=len)
 
 
 def _group_by_variant(context: list[_SchemaError]) -> dict[int, list[_SchemaError]]:
@@ -158,9 +169,17 @@ def _group_by_variant(context: list[_SchemaError]) -> dict[int, list[_SchemaErro
     return variants
 
 
-def _in_else(error: _SchemaError) -> bool:
-    """Whether the error comes from an ``if``/``then``/``else`` schema's ``else`` branch."""
-    return list(error.schema_path)[1:2] == ["else"]
+def _unselected(error: _SchemaError) -> bool:
+    """Whether the error only says the variant does not apply, so the variant was never tried.
+
+    That is a selector (``if``) that did not match, failing through its ``else``, or a ``not: {required: ...}``
+    guard such as "no ``catalogId``" on the implicit-catalog component.
+    """
+    if list(error.schema_path)[1:2] == ["else"]:
+        return True
+    if error.validator == "not":
+        return isinstance(error.validator_value, dict) and set(error.validator_value) == {"required"}
+    return error.validator in ("anyOf", "oneOf") and bool(error.context) and all(_unselected(e) for e in error.context)
 
 
 def _tag_mismatch(errors: list[_SchemaError]) -> str | None:

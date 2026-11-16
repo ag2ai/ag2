@@ -34,6 +34,8 @@ What the handler returns is mapped to the client per the A2UI spec:
 - one A2UI server→client message — or a list of them (e.g. `#!python updateComponents` / `#!python updateDataModel`) — is sent to the renderer as a **surface update** (works on every protocol version);
 - any other JSON value is dropped: a click is fire-and-forget. To get a value back, the renderer [calls the action as a function](#calling-an-action-as-a-function-v10) instead.
 
+A result that only partly looks like messages (several message keys in one object, or a list mixing messages with other values) is treated as a plain value, with a warning.
+
 A turn whose only input is registered server-action interactions **skips the agent entirely** — the handlers' messages are the whole response.
 
 Declaring the button on the transport — not on the agent — keeps the `#!python Agent` plain and reusable across deployments. The same `#!python actions=[...]` is accepted by `#!python A2UIAgentExecutor` for the [A2A transport](/docs/user-guide/a2ui/a2a), so a button is declared the same way wherever the agent is served.
@@ -133,6 +135,16 @@ async def on_client_event(event):
 
 !!! note
     A purely client-side `#!python functionCall` button (e.g. `#!python openUrl`) runs on the renderer with no network round-trip per the A2UI spec, so it produces no envelope and therefore no `#!python A2UIClientEvent`.
+
+## What Validation Checks
+
+With `#!python validate_responses=True` (the default), every A2UI message the model emits is checked before it reaches the client. All problems in a response are listed in one retry prompt.
+
+- **Schema**: each message must match the protocol version's message schema and the merged catalog (basic plus custom). A call to a function the catalog does not define reports `unknown function '<name>'`. A component naming an unregistered `#!python catalogId` (v1.0) reports `unknown catalog '<id>'`.
+- **Component tree**: component references are the properties whose schema refers to `#!python ComponentId`, `#!python Child` or `#!python ChildList` from `#!python common_types.json`, plus any `#!python child` / `#!python children` property. For a surface the response creates, every reference must resolve to a component on that surface, every component must be reachable from `#!python root`, there must be no reference cycles, and no id may appear twice in one message (a later message may update an earlier component by id). A surface created in an earlier response may be updated partially, so its references may point at earlier components; only duplicate ids and cycles among the response's own components are rejected there.
+- **Data paths**: the `#!python path` of an `#!python updateDataModel` must be a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901){.external-link target="_blank"}, such as `#!python "/user/name"`.
+
+With `#!python validate_responses=False`, nothing is rejected: the A2UI block is still split from the prose and sent as-is.
 
 ## Observing Validation Failures
 

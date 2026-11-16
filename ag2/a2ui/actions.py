@@ -23,8 +23,8 @@ deterministic server logic on click.
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, overload
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, overload
 
 from fast_depends.core import CallModel
 from fast_depends.dependencies import Provider
@@ -73,10 +73,6 @@ class A2UIEventAction:
     name: str
     description: str = ""
     example_context: dict[str, JsonValue] | None = None
-
-    # Discriminator as a fixed instance field (``init=False`` so callers can't
-    # set it), kept for forward-compatibility with additional action kinds.
-    action_type: Literal["event"] = field(default="event", init=False)
 
 
 def _placeholder_for(prop_schema: JsonValue) -> JsonValue:

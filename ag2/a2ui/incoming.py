@@ -396,17 +396,14 @@ def error_to_prompt(err: A2UIIncomingError) -> str:
     )
 
 
-def function_response_to_prompt(fr: A2UIIncomingFunctionResponse, function_name: str | None = None) -> str:
+def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     """Rewrite a client ``rendererFunctionResponse`` (v1.0) as a continuation instruction.
 
     The client has run a server-initiated ``callRendererFunction`` and returned
-    its result or its failure. ``function_name`` (when the server remembers the call)
-    names the function. All client-supplied values pass through
+    its result or its failure. All client-supplied values pass through
     :func:`sanitize_for_prompt`.
     """
     fc_id = sanitize_for_prompt(fr.function_call_id)
-    if function_name:
-        fc_id = f"{fc_id}, function={sanitize_for_prompt(function_name)}"
     if fr.error is not None:
         code = sanitize_for_prompt(fr.error.code) if fr.error.code else "(none)"
         return (
@@ -426,49 +423,38 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse, function_name:
     )
 
 
-def parse_incoming_interactions(envelopes: Iterable[JsonValue]) -> list[A2UIIncomingParseResult]:
-    """Parse client→server envelopes into typed results, dropping unclassifiable ones.
+def decode_envelopes(envelopes: Iterable[JsonValue]) -> list[A2UIIncomingParseResult]:
+    """Decode client→server envelopes once per request, dropping (with a warning) those of no known kind.
 
-    Used by the transports to surface each incoming interaction as an
-    :class:`~ag2.a2ui.A2UIClientEvent`. Unlike :func:`iter_incoming_prompts`
-    (which rewrites envelopes into prompt strings), this keeps the structured
-    result — ``action`` / ``callAgentFunction`` / ``rendererFunctionResponse`` / ``error`` — for observers.
-    ``unknown`` (unclassifiable) envelopes are skipped.
+    Both the agent's prompts (:func:`incoming_prompts`) and the
+    :class:`~ag2.a2ui.A2UIClientEvent`\\s observers see come from this decode.
     """
     results: list[A2UIIncomingParseResult] = []
     for envelope in envelopes:
         result = parse_incoming_message(envelope)
         if isinstance(result, A2UIIncomingUnknownResult):
+            logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
             continue
         results.append(result)
     return results
 
 
-def iter_incoming_prompts(
-    envelopes: Iterable[JsonValue],
+def incoming_prompts(
+    interactions: Iterable[A2UIIncomingParseResult],
     resolve_action: Callable[[str], A2UIEventAction | None],
-    resolve_function: Callable[[str], str | None] | None = None,
 ) -> Iterator[str]:
-    """Rewrite client→server A2UI envelopes into corrective prompt strings.
+    """Rewrite decoded client→server interactions into prompt strings for the agent.
 
-    Shared by the A2A and REST transports so the (security-sensitive) envelope
-    classification + ``sanitize_for_prompt`` handling lives in one place; each
-    transport only wraps the yielded strings in its own input type
-    (``TextInput`` / ``Part(text=...)``). Clicks on a **registered** action
-    (``resolve_action`` returns its declaration) are skipped here — they run on
-    the server via ``run_server_action`` instead. So is every ``callAgentFunction``:
-    the agent is never asked to answer one, the server does, via
-    ``run_agent_function``. Envelopes that cannot be safely mapped are dropped with
-    a warning: a nameless ``action`` or an unrecognized or malformed kind.
-    ``resolve_function`` maps a ``functionCallId`` to the name of the
-    ``callRendererFunction`` it answers, so the continuation prompt can name it.
+    Shared by every transport so the security-sensitive ``sanitize_for_prompt``
+    handling lives in one place. The server answers some interactions itself, so
+    they yield no prompt: a click on a **registered** action (``resolve_action``
+    returns its declaration) runs via ``run_server_action``, and every
+    ``callAgentFunction`` is answered via ``run_agent_function``. A nameless
+    ``action`` is dropped with a warning.
     """
-    for envelope in envelopes:
-        result = parse_incoming_message(envelope)
+    for result in interactions:
         if isinstance(result, A2UIIncomingActionResult):
             if resolve_action(result.action.name) is not None:
-                # Registered action → handled on the server (its handler runs via
-                # run_server_action); never rewritten into a prompt for the agent.
                 continue
             prompt = action_to_prompt(result.action)
             if prompt is None:
@@ -476,16 +462,13 @@ def iter_incoming_prompts(
                 continue
             yield prompt
         elif isinstance(result, A2UIIncomingFunctionCallResult):
-            # Answered on the server (run_agent_function), never by the LLM.
             continue
         elif isinstance(result, A2UIIncomingFunctionResponseResult):
-            response = result.function_response
-            name = resolve_function(response.function_call_id) if resolve_function else None
-            yield function_response_to_prompt(response, name)
+            yield function_response_to_prompt(result.function_response)
         elif isinstance(result, A2UIIncomingErrorResult):
             yield error_to_prompt(result.error)
         elif isinstance(result, A2UIIncomingUnknownResult):
-            logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
+            continue
         else:
             assert_never(result)
 
@@ -505,10 +488,10 @@ __all__ = (
     "A2UIIncomingSurfaceError",
     "A2UIIncomingUnknownResult",
     "action_to_prompt",
+    "decode_envelopes",
     "error_to_prompt",
     "function_response_to_prompt",
-    "iter_incoming_prompts",
-    "parse_incoming_interactions",
+    "incoming_prompts",
     "parse_incoming_message",
     "sanitize_for_prompt",
 )
