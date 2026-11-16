@@ -15,7 +15,7 @@ from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 
-from .seam import BASIC_CATALOG, a2ui_reply, serve_turn
+from .seam import BASIC_CATALOG, WIRE_VERSION, a2ui_reply, serve_turn
 
 SURFACE = {"version": "v0.9", "createSurface": {"surfaceId": "s1", "catalogId": BASIC_CATALOG["v0.9"]}}
 MISSING_CATALOG = {"version": "v0.9", "createSurface": {"surfaceId": "s1"}}
@@ -169,23 +169,33 @@ async def test_stripping_the_a2ui_block_keeps_the_message_metadata(
 
 
 @pytest.mark.asyncio
-async def test_surface_on_an_unknown_catalog_is_reported_once() -> None:
-    # The SDK answers CATALOG_NOT_FOUND; the surface's components have no catalog to be checked against.
+@pytest.mark.parametrize("protocol_version", ["v0.9", "v1.0"])
+async def test_surface_on_an_unknown_catalog_is_reported_once(protocol_version: str) -> None:
+    # The SDK answers CATALOG_NOT_FOUND; the surface's components have no catalog to be checked against,
+    # so neither its references, its reachability nor its root are judged by the agent's catalog.
     unknown = "https://example.com/nope.json"
+    version = WIRE_VERSION[protocol_version]
     messages = [
-        {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": unknown}},
+        {"version": version, "createSurface": {"surfaceId": "s", "catalogId": unknown}},
         {
-            "version": "1.0",
-            "updateComponents": {"surfaceId": "s", "components": [{"id": "root", "component": "Text", "text": "hi"}]},
+            "version": version,
+            "updateComponents": {
+                "surfaceId": "s",
+                "components": [
+                    {"id": "top", "component": "Column", "children": ["a", "b"]},
+                    {"id": "orphan", "component": "Text", "text": "hi"},
+                ],
+            },
         },
     ]
 
-    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=protocol_version)
 
-    [feedback] = turn.feedback
-    errors = [line for line in feedback.splitlines() if line.startswith("- ")]
-    assert errors == [
-        f"- Operation 0: unknown catalog '{unknown}' (at /createSurface/catalogId); use one of: '{BASIC_CATALOG['v1.0']}'"
+    assert turn.errors == [
+        [
+            f"- Operation 0: unknown catalog '{unknown}' (at /createSurface/catalogId); "
+            f"use one of: '{BASIC_CATALOG[protocol_version]}'"
+        ]
     ]
 
 
@@ -205,9 +215,30 @@ async def test_surface_component_is_reported_once() -> None:
 
     turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
 
-    [feedback] = turn.feedback
-    errors = [line for line in feedback.splitlines() if line.startswith("- ")]
-    assert errors == [
-        "- Operation 1: Component 'root' (Surface): component type 'Surface' is reserved for the container "
-        "createSurface creates and cannot be sent as a component"
+    assert turn.errors == [
+        [
+            "- Operation 1: Component 'root' (Surface): component type 'Surface' is reserved for the container "
+            "createSurface creates and cannot be sent as a component"
+        ]
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("protocol_version", "kinds"),
+    [
+        ("v0.9", "['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']"),
+        ("v0.9.1", "['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']"),
+        (
+            "v1.0",
+            "['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', "
+            "'updateComponents', 'updateDataModel']",
+        ),
+    ],
+)
+async def test_not_a_message_lists_the_served_versions_message_kinds(protocol_version: str, kinds: str) -> None:
+    messages = [{"version": WIRE_VERSION[protocol_version], "showSurface": {"surfaceId": "s"}}]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=protocol_version)
+
+    assert turn.errors == [[f"- Operation 0 is not an A2UI message: expected an object with exactly one of {kinds}"]]

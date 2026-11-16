@@ -9,7 +9,7 @@ Modules ask the :class:`A2UIProtocol` descriptor instead of comparing version st
 
 from dataclasses import dataclass
 
-from ._types import A2UIVersion, A2UIWireVersion
+from ._types import A2UIVersion, A2UIWireVersion, server_to_client_payload_keys
 
 A2UI_CLIENT_CAPABILITIES_METADATA_KEY = "a2uiClientCapabilities"
 # v1.0 renamed the client "renderer" (A2A extension spec).
@@ -36,9 +36,6 @@ class A2UIProtocol:
 
     server_to_client_file: str
     """Vendored agent→renderer message schema. Upstream renamed server/client to agent/renderer in v1.0."""
-
-    client_to_server_file: str
-    """Vendored renderer→agent message schema."""
 
     schema_base_uri: str
     """The base the vendored schemas' ``$id``s and relative ``$ref``s resolve against."""
@@ -74,6 +71,16 @@ class A2UIProtocol:
     """Component ids and a catalog's component, function, property and argument names are UAX #31 identifiers,
     and ``Surface`` is a reserved component name (v1_0 a2ui_protocol.md, "Catalog Entity Naming Rules")."""
 
+    @property
+    def server_to_client_keys(self) -> frozenset[str]:
+        """The payload key of each message kind an agent may stream in this version."""
+        keys = server_to_client_payload_keys()
+        return keys if self.function_rpc else keys - _FUNCTION_RPC_MESSAGE_KEYS
+
+
+_FUNCTION_RPC_MESSAGE_KEYS = frozenset({"callRendererFunction", "agentFunctionResponse"})
+"""The agent→renderer message kinds that exist only with function RPC (v1.0)."""
+
 
 _V0_9_BASE = "https://a2ui.org/specification/v0_9/"
 _V1_0_BASE = "https://a2ui.org/specification/v1_0/"
@@ -89,7 +96,6 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         accepted_wire_versions=("v0.9",),
         package_dir="v0_9",
         server_to_client_file="server_to_client.json",
-        client_to_server_file="client_to_server.json",
         schema_base_uri=_V0_9_BASE,
         catalog_id=f"{_V0_9_BASE}catalogs/basic/catalog.json",
         extension_uri="https://a2ui.org/a2a-extension/a2ui/v0.9",
@@ -108,7 +114,6 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         accepted_wire_versions=("v0.9", "v0.9.1"),
         package_dir="v0_9",
         server_to_client_file="server_to_client.json",
-        client_to_server_file="client_to_server.json",
         schema_base_uri=_V0_9_BASE,
         catalog_id=f"{_V0_9_BASE}catalogs/basic/catalog.json",
         extension_uri="https://a2ui.org/a2a-extension/a2ui/v0.9.1",
@@ -127,7 +132,6 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         accepted_wire_versions=("1.0",),
         package_dir="v1_0",
         server_to_client_file="agent_to_renderer.json",
-        client_to_server_file="renderer_to_agent.json",
         schema_base_uri=_V1_0_BASE,
         catalog_id=f"{_V1_0_BASE}catalogs/basic/catalog.json",
         extension_uri="https://a2ui.org/a2a-extension/a2ui/v1.0",

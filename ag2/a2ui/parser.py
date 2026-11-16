@@ -7,7 +7,8 @@ import logging
 import re
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
-from typing import cast
+from enum import Enum
+from typing import Literal, cast
 
 from referencing import Registry
 from referencing.exceptions import Unresolvable
@@ -19,7 +20,6 @@ from ._types import (
     JsonSchema,
     JsonValue,
     ServerToClientMessage,
-    server_to_client_payload_keys,
 )
 from ._versions import A2UIProtocol
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
@@ -73,12 +73,15 @@ def strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
-def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
-    """Parse an ``<a2ui-json>`` block (JSON array/object, or JSONL) into A2UI messages."""
+def _parse_json_block(json_part: str, kinds: Collection[str]) -> "tuple[list[ServerToClientMessage], str | None]":
+    """Parse an ``<a2ui-json>`` block (JSON array/object, or JSONL) into A2UI messages.
+
+    ``kinds`` are the served version's message kinds, named when a value is not a message.
+    """
     try:
         parsed: JsonValue = json.loads(json_part)
     except json.JSONDecodeError as whole_error:
-        operations, jsonl_error = _parse_jsonl(json_part)
+        operations, jsonl_error = _parse_jsonl(json_part, kinds)
         if jsonl_error is None:
             return operations, None
         # Surface the whole-block error: it's the more informative one when
@@ -86,13 +89,13 @@ def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str
         return [], f"Invalid JSON: {whole_error}"
 
     if isinstance(parsed, dict):
-        return _as_messages([parsed])
+        return _as_messages([parsed], kinds)
     if isinstance(parsed, list):
-        return _as_messages(parsed)
+        return _as_messages(parsed, kinds)
     return [], f"Expected JSON array or object, got {type(parsed).__name__}"
 
 
-def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":
+def _parse_jsonl(json_part: str, kinds: Collection[str]) -> "tuple[list[ServerToClientMessage], str | None]":
     values: list[JsonValue] = []
     for line in json_part.splitlines():
         line = line.strip()
@@ -107,16 +110,16 @@ def _parse_jsonl(json_part: str) -> "tuple[list[ServerToClientMessage], str | No
         values.append(value)
     if not values:
         return [], "No JSON objects found"
-    return _as_messages(values)
+    return _as_messages(values, kinds)
 
 
-def _as_messages(values: list[JsonValue]) -> "tuple[list[ServerToClientMessage], str | None]":
+def _as_messages(values: list[JsonValue], kinds: Collection[str]) -> "tuple[list[ServerToClientMessage], str | None]":
     messages: list[ServerToClientMessage] = []
     for i, value in enumerate(values):
         if not is_server_message(value):
             return (
                 [],
-                f"Operation {i} is not an A2UI message: expected an object with exactly one of {sorted(server_to_client_payload_keys())}",
+                f"Operation {i} is not an A2UI message: expected an object with exactly one of {sorted(kinds)}",
             )
         messages.append(value)
     return messages, None
@@ -173,6 +176,28 @@ def _unknown_catalog_errors(messages: Sequence[JsonObject], catalog_ids: Collect
     return errors
 
 
+def _unknown_catalog_surfaces(messages: Sequence[JsonObject], catalog_ids: Collection[str]) -> set[str]:
+    """The surfaces these messages create on a catalog the agent does not have."""
+    surfaces: set[str] = set()
+    for message in messages:
+        payload = message.get("createSurface")
+        if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
+            continue
+        catalog_id = payload.get("catalogId")
+        if isinstance(catalog_id, str) and catalog_id not in catalog_ids:
+            surfaces.add(surface_id)
+    return surfaces
+
+
+def _off_surfaces(messages: Sequence[JsonObject], surfaces: Collection[str]) -> list[JsonObject]:
+    """``messages`` without those that target one of ``surfaces``."""
+    return [
+        message
+        for message in messages
+        if not any(isinstance(p, dict) and p.get("surfaceId") in surfaces for p in message.values())
+    ]
+
+
 def _components_of(update_components: JsonValue) -> list[JsonValue]:
     """Return the ``components`` list of an ``updateComponents`` (or v1.0 ``createSurface``) value, or ``[]``."""
     if not isinstance(update_components, dict):
@@ -181,17 +206,20 @@ def _components_of(update_components: JsonValue) -> list[JsonValue]:
     return components if isinstance(components, list) else []
 
 
-_UNKNOWN_SURFACE = object()
-"""The catalog of a surface this response did not create: any configured catalog may apply."""
+class _SurfaceCatalog(Enum):
+    UNKNOWN = "unknown"
+    """The catalog of a surface this response did not create: any configured catalog may apply."""
 
 
-def _surface_catalog(operation: JsonValue, surfaces: dict[str, str | None]) -> "str | None | object":
-    """The default catalog of the surface ``operation`` targets: an id, ``None`` (none), or ``_UNKNOWN_SURFACE``.
+def _surface_catalog(
+    operation: JsonValue, surfaces: dict[str, str | None]
+) -> "str | None | Literal[_SurfaceCatalog.UNKNOWN]":
+    """The default catalog of the surface ``operation`` targets: an id, ``None`` (none), or ``UNKNOWN``.
 
     A v1.0 ``createSurface`` without ``catalogId`` gives its surface no default; upstream has no fallback.
     """
     if not isinstance(operation, dict):
-        return _UNKNOWN_SURFACE
+        return _SurfaceCatalog.UNKNOWN
     for key in ("createSurface", "updateComponents", "callRendererFunction", "deleteSurface"):
         payload = operation.get(key)
         if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
@@ -201,8 +229,8 @@ def _surface_catalog(operation: JsonValue, surfaces: dict[str, str | None]) -> "
             surfaces[surface_id] = catalog_id if isinstance(catalog_id, str) else None
         elif key == "deleteSurface":
             surfaces.pop(surface_id, None)
-        return surfaces.get(surface_id, _UNKNOWN_SURFACE)
-    return _UNKNOWN_SURFACE
+        return surfaces.get(surface_id, _SurfaceCatalog.UNKNOWN)
+    return _SurfaceCatalog.UNKNOWN
 
 
 class A2UIResponseParser:
@@ -272,7 +300,7 @@ class A2UIResponseParser:
                 has_a2ui=False,
             )
 
-        operations, parse_error = _parse_json_block(json_part)
+        operations, parse_error = _parse_json_block(json_part, self._protocol.server_to_client_keys)
         if parse_error is not None:
             return A2UIParseResult(
                 text=text,
@@ -324,7 +352,7 @@ class A2UIResponseParser:
                 checker = self._checker
                 if self._protocol.per_surface_catalogs and self._registry is not None and self._schema is not None:
                     catalog_id = _surface_catalog(op, surface_catalogs)
-                    if catalog_id is None or isinstance(catalog_id, str):
+                    if catalog_id is not _SurfaceCatalog.UNKNOWN:
                         if catalog_id not in catalog_checkers:
                             catalog_checkers[catalog_id] = MessageChecker(
                                 self._schema, _registry_for_surface_catalog(self._registry, catalog_id)
@@ -339,12 +367,15 @@ class A2UIResponseParser:
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
         errors.extend(surface_lifecycle_errors(objects))
+        # A surface on an unknown catalog gets that one error: its components have no catalog to be judged by.
+        checkable: Sequence[JsonObject] = objects
         if self._catalog_ids is not None:
             errors.extend(_unknown_catalog_errors(objects, self._catalog_ids))
+            checkable = _off_surfaces(objects, _unknown_catalog_surfaces(objects, self._catalog_ids))
         if self._component_references is not None:
-            errors.extend(component_graph_errors(objects, self._component_references))
+            errors.extend(component_graph_errors(checkable, self._component_references))
 
-        errors.extend(_missing_root_errors(objects))
+        errors.extend(_missing_root_errors(checkable))
 
         return A2UIValidationResult(
             is_valid=len(errors) == 0,

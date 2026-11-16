@@ -60,6 +60,11 @@ class Turn:
                 prompts.extend(part.content for part in last.parts if isinstance(part, TextInput))
         return prompts
 
+    @property
+    def errors(self) -> list[list[str]]:
+        """The validation errors each retry prompt listed (its ``- `` lines), one list per retry."""
+        return [[line for line in prompt.splitlines() if line.startswith("- ")] for prompt in self.feedback]
+
 
 def a2ui_reply(messages: list[dict[str, Any]], prose: str = "Here.") -> str:
     """A model reply carrying ``messages`` in an ``<a2ui-json>`` block."""

@@ -13,7 +13,7 @@ offending property.
 """
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, TypeAlias
 
@@ -79,13 +79,36 @@ RENDERER_CANNOT_CALL_FORMAT = "a2ui-renderer-cannot-call"
 """A binding or action naming an ``agentOnly`` function."""
 RESERVED_SURFACE_FORMAT = "a2ui-reserved-surface"
 """A component of type ``Surface``, the container ``createSurface`` creates (v1.0)."""
-_REJECTING_FORMATS = (
-    NO_DEFAULT_CATALOG_FORMAT,
-    AGENT_CANNOT_CALL_FORMAT,
-    RENDERER_CANNOT_CALL_FORMAT,
-    RESERVED_SURFACE_FORMAT,
-)
 _NO_DEFAULT_CATALOG_HINT = "and the surface has no default 'catalogId' (set it in createSurface)"
+
+
+def _no_default_catalog(call: JsonValue) -> str:
+    if isinstance(call, str):
+        return f"function {call!r} names no 'catalogId' {_NO_DEFAULT_CATALOG_HINT}"
+    return f"names no '@catalogId' {_NO_DEFAULT_CATALOG_HINT}"
+
+
+def _agent_cannot_call(call: JsonValue) -> str:
+    return f"function {call!r} cannot be called by agent (allowedCallers is rendererOnly)"
+
+
+def _renderer_cannot_call(call: JsonValue) -> str:
+    return f"function {call!r} cannot be called by renderer (allowedCallers is agentOnly)"
+
+
+def _reserved_surface(call: JsonValue) -> str:
+    return (
+        "component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component"
+    )
+
+
+_REJECTING_FORMATS: Mapping[str, Callable[[JsonValue], str]] = {
+    NO_DEFAULT_CATALOG_FORMAT: _no_default_catalog,
+    AGENT_CANNOT_CALL_FORMAT: _agent_cannot_call,
+    RENDERER_CANNOT_CALL_FORMAT: _renderer_cannot_call,
+    RESERVED_SURFACE_FORMAT: _reserved_surface,
+}
+"""Each rejecting format, with the reason it reports given the failing instance's ``@call`` (if any)."""
 
 _UNKNOWN_TAG = "unknown-tag"
 """The keyword of a leaf reporting a tag value no variant accepts."""
@@ -171,17 +194,8 @@ def _rejecting_format(error: _SchemaError) -> str | None:
 
 def _leaf_message(error: _SchemaError, rejecting: str | None) -> str:
     instance = error.instance
-    call = instance.get("@call") if isinstance(instance, dict) else None
-    if rejecting == NO_DEFAULT_CATALOG_FORMAT:
-        if isinstance(call, str):
-            return f"function {call!r} names no 'catalogId' {_NO_DEFAULT_CATALOG_HINT}"
-        return f"names no '@catalogId' {_NO_DEFAULT_CATALOG_HINT}"
-    if rejecting == AGENT_CANNOT_CALL_FORMAT:
-        return f"function {call!r} cannot be called by agent (allowedCallers is rendererOnly)"
-    if rejecting == RENDERER_CANNOT_CALL_FORMAT:
-        return f"function {call!r} cannot be called by renderer (allowedCallers is agentOnly)"
-    if rejecting == RESERVED_SURFACE_FORMAT:
-        return "component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component"
+    if rejecting is not None:
+        return _REJECTING_FORMATS[rejecting](instance.get("@call") if isinstance(instance, dict) else None)
     if error.validator == "format" and error.validator_value == COMPONENT_ID_FORMAT:
         return f"{instance!r} is not a valid component id: it must be a {UAX31_IDENTIFIER}"
     if error.validator == "format" and error.validator_value == XID_FORMAT:

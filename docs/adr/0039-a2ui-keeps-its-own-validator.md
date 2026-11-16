@@ -63,3 +63,24 @@ compares the vendored schemas with the SDK's. It never becomes a runtime extra.
   surfaces created in earlier turns without seeding.
 - Reopening SDK adoption, including the `ag2.a2ui.beta` subpackage, needs a new ADR that supersedes
   this one.
+
+## Deviations from upstream
+
+Upstream A2UI at `6e79b2e20fe2e1543aff3b9928613daa2b37189c` is the only authority. ag2 departs from it on purpose
+in these places; line numbers are at that commit.
+
+- **`root` in the same response.** `specification/v1_0/docs/a2ui_protocol.md` L180 says one of the components sent
+  to a surface MUST have `"id": "root"`, and L787 (v0.9: `specification/v0_9/docs/a2ui_protocol.md` L331) lets the
+  renderer buffer updates until it arrives. ag2 rejects a response that creates a surface and gives it components but
+  no `root`: a stateless server cannot know whether a later response will send one, and a retry is cheaper for the
+  model than a surface that never renders. Updates to a surface created earlier need no `root`.
+- **`callAgentFunction` without `catalogId`.** v1.0 `a2ui_protocol.md` L1495 says the renderer MUST set
+  `callFunction.catalogId`. `renderer_to_agent.json` does not require it, and ag2 accepts the call without it: the MUST binds the renderer, and refusing the call would only fail the user's click.
+- **`List.listStyle` for v0.9.1.** Upstream's `specification/v0_9_1/catalogs/basic/catalog.json` lacks
+  `List.listStyle`, which a2ui-project/a2ui#3956 added only to `specification/v0_9/catalogs/basic/catalog.json`. Both
+  files declare the same `$id`, so ag2 serves the newer v0.9 content for v0.9.1, as `a2ui-core` does
+  (`ag2/a2ui/v0_9/spec/README.md`).
+- **v1.0 surfaces from earlier responses.** v1.0 `a2ui_protocol.md` L185 / L503 resolve a component without
+  `@catalogId` against its surface's `catalogId`. The server keeps no state between responses, so for a surface
+  created in an earlier response it accepts an implicit component or call if any configured catalog defines it. With
+  one catalog this is exact; with several, an explicit `@catalogId` / `catalogId` selects the definition.

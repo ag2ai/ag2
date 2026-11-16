@@ -1111,7 +1111,7 @@
    "version": "v0.9",
    "note": "createSurface + deleteSurface in one object",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     {
      "version": "v0.9",
@@ -1130,7 +1130,7 @@
    "version": "v0.9",
    "note": "updateSurface",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     {
      "version": "v0.9",
@@ -2805,7 +2805,7 @@
    "version": "v0.9.1",
    "note": "createSurface + deleteSurface in one object",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     {
      "version": "v0.9.1",
@@ -2824,7 +2824,7 @@
    "version": "v0.9.1",
    "note": "updateSurface",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     {
      "version": "v0.9.1",
@@ -6848,7 +6848,7 @@
    "version": "v0.9",
    "note": "an operation that is a list",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     [
      1
@@ -6916,7 +6916,7 @@
    "version": "v0.9.1",
    "note": "an operation that is a list",
    "expect": "retry",
-   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
    "messages": [
     [
      1
