@@ -7,6 +7,7 @@ import datetime
 
 import pytest
 
+import ag2.watch as watch_module
 from ag2 import Context
 from ag2.events import ModelMessage, ToolCallEvent
 from ag2.stream import MemoryStream
@@ -647,3 +648,49 @@ class TestCronWatchExpressions:
             assert not watch.is_armed
         finally:
             watch.disarm()
+
+
+@pytest.mark.asyncio
+class TestCronWatchRun:
+    async def test_advances_to_next_minute_when_wakeup_is_early(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        slot = datetime.datetime(2026, 3, 22, 9, 0, 0)
+        early_wake = datetime.datetime(2026, 3, 22, 8, 59, 59, 990000)
+
+        class FixedDatetime(datetime.datetime):
+            call_index = 0
+
+            @classmethod
+            def now(cls, tz: datetime.timezone | None = None) -> datetime.datetime:
+                cls.call_index += 1
+                if cls.call_index > 3:
+                    raise asyncio.CancelledError()
+                return early_wake
+
+        monkeypatch.setattr(watch_module.datetime, "datetime", FixedDatetime)
+
+        async def instant_sleep(_delay: float) -> None:
+            return None
+
+        monkeypatch.setattr(asyncio, "sleep", instant_sleep)
+
+        scheduled: list[datetime.datetime] = []
+        real_next_fire_time = CronWatch._next_fire_time
+
+        def tracking_next_fire_time(self: CronWatch, now: datetime.datetime) -> datetime.datetime:
+            result = real_next_fire_time(self, now)
+            scheduled.append(result)
+            return result
+
+        monkeypatch.setattr(CronWatch, "_next_fire_time", tracking_next_fire_time)
+
+        stream = MemoryStream()
+        cron = CronWatch("* * * * *")
+
+        async def callback(_events: list, _ctx: Context) -> None:
+            return None
+
+        cron._callback = callback
+        with pytest.raises(asyncio.CancelledError):
+            await cron._run(stream, slot)
+
+        assert scheduled == [datetime.datetime(2026, 3, 22, 9, 1, 0)]

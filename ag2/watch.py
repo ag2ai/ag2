@@ -473,7 +473,7 @@ class CronWatch(_BaseWatch):
                 except Exception:
                     logger.exception("CronWatch %s callback failed", self._id)
 
-            next_fire = self._next_fire_time(datetime.datetime.now())
+            next_fire = self._next_fire_time(max(datetime.datetime.now(), next_fire))
 
     def _next_fire_time(self, now: datetime.datetime) -> datetime.datetime:
         """Calculate next fire time from cron expression.
