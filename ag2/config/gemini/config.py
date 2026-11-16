@@ -7,13 +7,15 @@ from typing import TypedDict
 
 import google.auth
 import httpx
+import httpx2
 from google.genai import types
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
+from ._compat import warn_if_sdk_2x
 from .files import GeminiFilesClient
-from .gemini_client import CreateConfig, GeminiClient, ThinkingLevel
+from .gemini_client import CreateConfig, GeminiApiVersion, GeminiClient, ThinkingLevel, VertexAIApiVersion
 
 
 class GeminiBaseConfigOverrides(TypedDict, total=False):
@@ -34,17 +36,19 @@ class GeminiBaseConfigOverrides(TypedDict, total=False):
     thinking_level: ThinkingLevel | None
     thinking_budget: int | None
     automatic_continuation: bool | None
-    http_client: httpx.AsyncClient | None
+    http_client: httpx.AsyncClient | httpx2.AsyncClient | None
 
 
 class GeminiConfigOverrides(GeminiBaseConfigOverrides, total=False):
     api_key: str | None
+    api_version: GeminiApiVersion | None
 
 
 class VertexAIConfigOverrides(GeminiBaseConfigOverrides, total=False):
     credentials: google.auth.credentials.Credentials | str | None
     project: str | None
     location: str | None
+    api_version: VertexAIApiVersion | None
 
 
 @dataclass(slots=True)
@@ -71,7 +75,8 @@ class GeminiBaseConfig:
     # billed on its own, and the usage reported is their sum. When off (or on
     # google-genai 2.29), the response reports `finish_reason="continuation"`.
     automatic_continuation: bool | None = None
-    http_client: httpx.AsyncClient | None = None
+    # google-genai 3.x accepts an httpx2 or an httpx client; 2.x only an httpx one.
+    http_client: httpx.AsyncClient | httpx2.AsyncClient | None = None
 
     def _build_create_config(self) -> CreateConfig:
         config = CreateConfig()
@@ -121,22 +126,27 @@ class GeminiBaseConfig:
 @dataclass(slots=True)
 class GeminiConfig(GeminiBaseConfig, ModelConfig):
     api_key: str | None = None
+    # None keeps the SDK's default: `v1` from google-genai 3.x, `v1beta` before it.
+    api_version: GeminiApiVersion | None = None
 
     def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
         return replace(self, **overrides)
 
     def create(self) -> GeminiClient:
+        warn_if_sdk_2x()
         return GeminiClient(
             model=self.model,
             api_key=self.api_key,
             vertexai=False,
             http_client=self.http_client,
+            api_version=self.api_version,
             streaming=self.streaming,
             create_config=self._build_create_config(),
             cached_content=self.cached_content,
         )
 
     def create_files_client(self) -> GeminiFilesClient:
+        warn_if_sdk_2x()
         return GeminiFilesClient(self)
 
     @property
@@ -149,6 +159,8 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
     credentials: google.auth.credentials.Credentials | str | None = None
     project: str | None = None
     location: str | None = None
+    # None keeps the SDK's default, `v1beta1`.
+    api_version: VertexAIApiVersion | None = None
 
     def copy(self, /, **overrides: Unpack[VertexAIConfigOverrides]) -> "VertexAIConfig":
         return replace(self, **overrides)
@@ -158,6 +170,7 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
         return ModelProvider.VERTEXAI
 
     def create(self) -> GeminiClient:
+        warn_if_sdk_2x()
         return GeminiClient(
             model=self.model,
             vertexai=True,
@@ -165,6 +178,7 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
             project=self.project,
             location=self.location,
             http_client=self.http_client,
+            api_version=self.api_version,
             streaming=self.streaming,
             create_config=self._build_create_config(),
             cached_content=self.cached_content,

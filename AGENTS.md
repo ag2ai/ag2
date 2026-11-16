@@ -239,6 +239,13 @@ Construct `Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., p
 - Tests that exercise it on purpose assert the warning with `pytest.warns(DeprecationWarning)` (see `test/agent/test_task_deprecation.py`); new tests must not depend on it.
 - Removal in 1.4.0 covers: `Agent.task` and `AGENT_TASK_DEPRECATION`, the `deprecated-factory` parametrisations and `test_deprecated_factory_still_fails_the_task_on_error` in `test/agent/test_task_deprecation.py`, and the deprecation notes in `website/docs/`. Keep `Task`, `TaskSpec` and `TaskInject`.
 
+### Deprecated: `google-genai` 2.x (removed in 1.4.0)
+
+`ag2[gemini]` accepts `google-genai>=1.68.0,<4`; 1.4.0 requires `>=3,<4`. Everything that differs between the majors lives in `ag2/config/gemini/_compat.py`. `GeminiConfig` / `VertexAIConfig` `create()` and `create_files_client()` warn on 2.x.
+
+- Tests branch on `_compat.SDK_3X` with `skipif`; the `test-gemini-2x` CI job runs the suite against 2.x.
+- Removal in 1.4.0 covers: the `google-genai` floor in `pyproject.toml`, `SDK_2X_DEPRECATION` / `warn_if_sdk_2x` / `HTTPX2_NEEDS_SDK_3X` and the `SDK_3X` branches in `_compat.py`, the `skipif(_compat.SDK_3X)` tests in `test/config/gemini/test_http_options.py`, the `test-gemini-2x` job and its `build-check` entry in `.github/workflows/test.yml`, and the 2.x notes in `website/docs/`. Keep `build_http_options` and the `api_version` fields.
+
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.
