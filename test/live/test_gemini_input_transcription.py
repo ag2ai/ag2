@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import ssl
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
@@ -263,13 +264,13 @@ async def test_gemini_3_model_resource_name_is_complete_as_it_arrives(certificat
     assert transcripts == ["What is", "the weather today?"]
 
 
-async def test_gemini_3_5_translate_joins_fragments(certificate: Certificate) -> None:
-    # The 3.5 translate model still sends fragments, as models before Gemini 3 do.
+async def test_gemini_3_5_translate_transcription_is_complete_as_it_arrives(certificate: Certificate) -> None:
+    # The layout the live translate model sent in a real session: one final
+    # transcription, then an empty one, and no generation or turn boundary.
     async with LiveServer(
         certificate,
-        heard("What is"),
-        heard(" the weather today?"),
-        gtypes.LiveServerContent(turn_complete=True),
+        heard("What is the weather like in Paris today?"),
+        gtypes.LiveServerContent(input_transcription=gtypes.Transcription()),
     ) as server:
         stream = MemoryStream()
         agent = LiveAgent(
@@ -281,10 +282,8 @@ async def test_gemini_3_5_translate_joins_fragments(certificate: Certificate) ->
             ),
             stream=stream,
         )
-        transcripts: list[str] = []
-        stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
 
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
+        async with stream.get(TranscriptionCompletedEvent) as completed, agent.run():
+            transcript = await asyncio.wait_for(completed, timeout=5)
 
-    assert transcripts == ["What is the weather today?"]
+    assert transcript == TranscriptionCompletedEvent("What is the weather like in Paris today?")
