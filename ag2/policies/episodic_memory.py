@@ -4,12 +4,13 @@
 
 """EpisodicMemoryPolicy — injects past conversation summaries."""
 
+from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 from ag2.knowledge import CONVERSATIONS_PREFIX, KnowledgeStore
 
 
-class EpisodicMemoryPolicy:
+class EpisodicMemoryPolicy(AssemblyPolicy):
     """Injects past conversation summaries from the knowledge store.
 
     Reads /memory/conversations/ and injects the most recent summaries

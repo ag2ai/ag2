@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from dirty_equals import IsFloat
+from dirty_equals import HasAttributes, IsFloat
 
 from ag2.events import BinaryResult, FileIdInput, Input
 from ag2.files import FileContent, FileProvider, UploadedFile
@@ -37,7 +37,7 @@ class TestUploadedFile:
         assert f.created_at == 1767225600.0
 
     def test_minimal_construction_defaults(self) -> None:
-        assert UploadedFile(file_id="file-456") == UploadedFile(
+        assert UploadedFile(file_id="file-456") == HasAttributes(
             file_id="file-456",
             filename=None,
             provider=None,

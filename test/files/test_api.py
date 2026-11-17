@@ -40,7 +40,8 @@ class TestFilesAPIUpload:
         files = FilesAPI(TestConfig(files=TestFilesClient()))
 
         with pytest.raises(TypeError, match="path="):
-            await files.upload("report.pdf")
+            # The guard is for untyped callers; the type checker already rejects it.
+            await files.upload("report.pdf")  # type: ignore[arg-type]
 
         assert await files.list() == []
 

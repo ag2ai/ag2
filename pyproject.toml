@@ -443,7 +443,34 @@ convention = "google"
 [tool.mypy]
 python_version = "3.11"
 
-files = ["ag2"]
+files = [
+    "ag2",
+    "test/__init__.py",
+    "test/_helpers.py",
+    "test/_serving.py",
+    "test/beta",
+    "test/conftest.py",
+    "test/dynamic",
+    "test/files",
+    "test/knowledge",
+    "test/orchestration",
+    "test/spec",
+    "test/stream",
+    "test/test_agent_composition.py",
+    "test/test_agent_resume.py",
+    "test/test_aggregate.py",
+    "test/test_alert_halt.py",
+    "test/test_assembly.py",
+    "test/test_compact.py",
+    "test/test_history.py",
+    "test/test_optional_imports.py",
+    "test/test_plugin",
+    "test/test_task.py",
+    "test/test_textual.py",
+    "test/test_usage.py",
+    "test/test_watch.py",
+    "test/test_watch_advanced.py",
+]
 
 strict = true
 ignore_missing_imports = true
@@ -504,6 +531,16 @@ disable_error_code = ["no-any-unimported"]
 module = "numpy.*"
 follow_imports = "skip"
 follow_imports_for_stubs = true
+
+# Tests keep strict checking of what they call, but their own helpers, fixtures and
+# test functions may stay unannotated: pytest supplies the arguments, nobody imports them.
+[[tool.mypy.overrides]]
+module = "test.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+disallow_any_unimported = false
+disallow_any_generics = false
 
 [tool.codespell]
 skip = "*.js,*.map,*.pdf,*.po,*.ts,*.json,*.svg"

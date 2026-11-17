@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from dirty_equals import AnyThing, IsPartialDict
+from dirty_equals import HasAttributes, IsPartialDict
 
 from ag2 import Agent, AgentRun, Context, MemoryStream, observer, tool
 from ag2.assembly import AssemblerMiddleware
-from ag2.events import BaseEvent, HumanMessage, ModelRequest, ModelResponse, ToolCallEvent, ToolResultsEvent
+from ag2.events import BaseEvent, HumanMessage, ModelRequest, ModelResponse, TextInput, ToolCallEvent, ToolResultsEvent
 from ag2.exceptions import ToolNotFoundError
 from ag2.middleware import BaseMiddleware, HaltCheckMiddleware, Middleware
 from ag2.middleware.base import LLMCall
@@ -42,6 +42,7 @@ def tool_text(config: TrackingConfig) -> str:
     assert isinstance(event, ToolResultsEvent)
     [result] = event.results
     [part] = result.result.parts
+    assert isinstance(part, TextInput)
     return part.content
 
 
@@ -560,12 +561,11 @@ class TestContinuations:
         gate.released.set()
         await asyncio.gather(one, two)
         assert second.calls == [
-            ModelCall(
+            HasAttributes(
                 prompt=("override-two", "plugin-two", "dynamic:explicit-two:explicit-two"),
                 tools=(),
                 dependencies=IsPartialDict({"source": "explicit-two"}),
                 variables={"label": "explicit-two"},
-                messages=AnyThing,
             )
         ]
         assert reply.context.prompt == ["override-two"]

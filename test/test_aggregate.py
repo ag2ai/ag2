@@ -7,7 +7,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from dirty_equals import IsPartialDict
+from dirty_equals import HasAttributes, IsPartialDict
 
 from ag2 import Agent, KnowledgeConfig
 from ag2 import Context as Context
@@ -20,6 +20,7 @@ from ag2.events import (
     AggregationCompleted,
     AggregationFailed,
     AggregationStarted,
+    BaseEvent,
     ModelMessage,
     ModelRequest,
     ModelResponse,
@@ -60,7 +61,7 @@ class TestConversationSummaryAggregate:
         store = MemoryKnowledgeStore()
         stream = MemoryStream()
         ctx = Context(stream=stream)
-        events = [ModelRequest([TextInput("hello")]), ModelRequest([TextInput("world")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("hello")]), ModelRequest([TextInput("world")])]
 
         await strategy.aggregate(events, ctx, store)
 
@@ -322,7 +323,7 @@ class TestAggregationWiredOnAgent:
         )
         await agent.ask("go", stream=stream)
 
-        assert [(c.llm_calls, c.usage) for c in completions] == [(1, IsPartialDict({"total_tokens": 30}))]
+        assert completions == [HasAttributes(llm_calls=1, usage=IsPartialDict({"total_tokens": 30}))]
 
     @pytest.mark.asyncio
     @pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")

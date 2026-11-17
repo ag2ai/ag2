@@ -22,6 +22,7 @@ from ag2.events import (
     ModelMessage,
     ModelRequest,
     ObserverCompleted,
+    TextInput,
     ToolCallEvent,
     ToolResultEvent,
     ToolResultsEvent,
@@ -102,14 +103,23 @@ async def test_plugin_uses_effective_store_for_tool_bootstrap_and_logging(invoca
     assert await effective.read("/note") == "hello"
     assert await effective.read("/remembered") == "Remember hello"
     assert await effective.read(f"/log/{reply.context.stream.id}.dropped-1.jsonl") is not None
-    assert "writer" in await effective.read("/SKILL.md")
+    skill = await effective.read("/SKILL.md")
+    assert skill is not None
+    assert "writer" in skill
     assert await effective.read(f"/log/{reply.context.stream.id}.jsonl") is not None
     assert await default.list("/") == []
 
 
 class RememberHistory:
     async def aggregate(self, events: list[BaseEvent], context: Context, store: KnowledgeStore) -> None:
-        await store.write("/remembered", "|".join(e.parts[0].content for e in events if isinstance(e, ModelRequest)))
+        texts = [
+            part.content
+            for event in events
+            if isinstance(event, ModelRequest)
+            for part in event.parts
+            if isinstance(part, TextInput)
+        ]
+        await store.write("/remembered", "|".join(texts))
 
 
 @observer(ObserverCompleted)
@@ -138,7 +148,7 @@ async def test_aggregation_sees_history_before_compaction_and_log_includes_obser
 
     assert await store.read("/remembered") == "remember this"
     history = await reply.context.stream.history.get_events()
-    assert not any(isinstance(e, ModelRequest) and e.parts[0].content == "remember this" for e in history)
+    assert not any(isinstance(e, ModelRequest) and e.parts == [TextInput("remember this")] for e in history)
     log = await EventLogWriter(store).load(reply.context.stream.id)
     assert any(isinstance(e, ObserverCompleted) for e in log)
     assert any(isinstance(e, ModelMessage) and e.content == "observer finished" for e in log)
@@ -561,7 +571,9 @@ async def test_worker_plugin_store_wins_over_inherited_parent_store() -> None:
     await parent.ask("delegate")
 
     assert await worker_store.read("/note") == "worker"
-    assert "worker" in await worker_store.read("/SKILL.md")
+    skill = await worker_store.read("/SKILL.md")
+    assert skill is not None
+    assert "worker" in skill
     assert await parent_store.read("/note") is None
 
 
