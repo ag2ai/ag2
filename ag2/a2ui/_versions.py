@@ -57,7 +57,8 @@ class A2UIProtocol:
 
     catalog_protocol_version: str
     """The major.minor a custom catalog's ``protocolVersion`` must name; a catalog without one is ``"0.9"``
-    (v1_0 a2ui_protocol.md L635: "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond")."""
+    (v1_0 a2ui_protocol.md, "Catalog Schema Rules and Conventions": "defaults to `"0.9"` if omitted, required for
+    catalogs targeting `1.0` and beyond")."""
 
     catalog_definition_file: str | None
     """Vendored schema every custom catalog must satisfy; v0.9 publishes none."""

@@ -175,7 +175,9 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
 
 
 def _checked_catalog_id(catalog: JsonSchema) -> str:
-    """The catalog's ``catalogId``, which identifies it (v0_9 a2ui_protocol.md L317, v1_0 L543); ``$id`` must match.
+    """The catalog's ``catalogId``, which identifies it; ``$id`` must match.
+
+    See v0_9 a2ui_protocol.md, "Catalog Identification & Compatibility", and v1_0, "Catalog structure".
 
     The spec says both "should" be set "to the same URI"; ag2 requires it, since ``$ref``s resolve against ``$id``
     and the catalog is served under its ``catalogId`` (ADR 0040). The official SDK also takes the id from
@@ -211,9 +213,10 @@ def _check_catalog_protocol_version(catalog: JsonSchema, protocol: A2UIProtocol)
     """Reject a catalog written against another protocol version than the one served.
 
     ``protocolVersion`` "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond" (v1_0
-    a2ui_protocol.md L635). Its major.minor must be the served version's. The official SDK rejects a mismatch too
-    and is stricter: it matches the patch number against its known versions as well, so its v0.9.1 provider rejects
-    a ``"0.9"`` catalog. ag2 serves the same ``"0.9"`` catalogs on v0.9 and v0.9.1.
+    a2ui_protocol.md, "Catalog Schema Rules and Conventions"). Its major.minor must be the served version's. The
+    official SDK rejects a mismatch too and is stricter: it matches the patch number against its known versions as
+    well, so its v0.9.1 provider rejects a ``"0.9"`` catalog. ag2 serves the same ``"0.9"`` catalogs on v0.9 and
+    v0.9.1.
     """
     declared = catalog.get("protocolVersion", "0.9")
     match = _CATALOG_PROTOCOL_VERSION.fullmatch(declared) if isinstance(declared, str) else None

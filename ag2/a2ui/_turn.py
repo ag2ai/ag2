@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""The A2UI rules of one turn, shared by every transport.
+"""The A2UI rules of one turn, shared by every transport (ADR 0042).
 
 A transport decodes what the renderer sent (:func:`~ag2.a2ui.incoming.read_renderer_input`), opens the turn with
 :func:`open_turn`, and runs its agent with the turn's prompt and middleware. The turn decides what the agent is
