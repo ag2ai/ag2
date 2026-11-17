@@ -5,66 +5,30 @@
 import copy
 import json
 import os
-import re
 from collections.abc import Collection
 from dataclasses import dataclass
-from functools import cache
-from pathlib import Path
 from urllib.parse import urljoin
 
-from jsonschema import Draft202012Validator, FormatChecker
-from jsonschema.exceptions import best_match
 from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT202012
 
-from ._graph import ComponentTypes, component_types
-from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
-from ._versions import A2UIProtocol, get_protocol
-from .actions import A2UIEventAction
-from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
-from .diagnostics import (
+from .._graph import ComponentTypes, component_types
+from .._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
+from .._versions import A2UIProtocol, get_protocol
+from ..actions import A2UIEventAction
+from ..constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
+from ..diagnostics import (
     AGENT_CANNOT_CALL_FORMAT,
     COMPONENT_ID_FORMAT,
     NO_DEFAULT_CATALOG_FORMAT,
     RENDERER_CANNOT_CALL_FORMAT,
     RESERVED_SURFACE_FORMAT,
-    UAX31_IDENTIFIER,
-    XID_FORMAT,
 )
+from ._custom_catalog import _RESERVED_COMPONENT_NAME, _load_custom_catalog, _xid_property_names
+from ._json import _as_object, _pointer_key, _pointer_token, _resource
+from ._spec import _instructions_of, _vendored_spec
 
-_PACKAGE_DIR = Path(__file__).parent
-
-
-def _as_object(value: "JsonValue | None") -> JsonObject:
-    """Narrow a ``JsonValue`` to a JSON object, returning ``{}`` when it is not a dict.
-
-    JSON Schema documents are dynamic ``dict[str, JsonValue]`` trees, so reading a
-    nested member (``components`` / ``functions`` / ``$defs`` / ``properties``)
-    yields a broad ``JsonValue``. Funnelling those reads through this helper keeps
-    the schema-munging code statically typed without scattering ``isinstance``
-    checks or ``cast``s at every access.
-    """
-    return value if isinstance(value, dict) else {}
-
-
-# v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
-# (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
-# instead, at load time, leaving the vendored files byte-faithful.
-_XID_KEYS = r"^[\p{XID_Start}_][\p{XID_Continue}]*$"
 _IMPLICIT_FUNCTION_SCHEMA_URI = "urn:ag2:a2ui:implicit-renderer-function"
 _IMPLICIT_COMPONENT_SCHEMA_URI = "urn:ag2:a2ui:implicit-component"
-
-
-def _xid_property_names(schema: JsonValue) -> JsonValue:
-    """Rewrite objects whose keys must be UAX #31 identifiers to a ``propertyNames`` format check."""
-    if isinstance(schema, list):
-        return [_xid_property_names(item) for item in schema]
-    if not isinstance(schema, dict):
-        return schema
-    if schema.get("patternProperties") == {_XID_KEYS: {}} and schema.get("additionalProperties") is False:
-        rest = {key: value for key, value in schema.items() if key not in ("patternProperties", "additionalProperties")}
-        return {**rest, "propertyNames": {"format": XID_FORMAT}}
-    return {key: _xid_property_names(value) for key, value in schema.items()}
 
 
 # A schema with any of these can take properties from outside its own ``properties``.
@@ -94,12 +58,6 @@ def _closed_objects(schema: JsonValue) -> JsonValue:
         del closed["unevaluatedProperties"]
         closed["additionalProperties"] = False
     return closed
-
-
-def _instructions_of(catalog: JsonSchema) -> str:
-    """Return a catalog's embedded ``instructions`` text (v1.0), or ``""``."""
-    instructions = catalog.get("instructions")
-    return instructions.strip() if isinstance(instructions, str) else ""
 
 
 def _component_description(comp_def: JsonSchema, envelope: frozenset[str]) -> str:
@@ -135,97 +93,8 @@ def _example_component_types(messages: JsonValue) -> set[str]:
     return types
 
 
-def _pointer_token(key: str) -> str:
-    return key.replace("~", "~0").replace("/", "~1")
-
-
-def _pointer_key(token: str) -> str:
-    return token.replace("~1", "/").replace("~0", "~")
-
-
 def _catalog_definition_ref(catalog_id: str, collection: str, key: str) -> str:
     return f"{catalog_id}#/{collection}/{_pointer_token(key)}"
-
-
-# The ``common_types.json`` definitions a v1.0 catalog may ``$ref`` (a2ui_protocol.md, "Restricted $ref Targets").
-_CATALOG_COMMON_TYPES = frozenset({
-    "ComponentId",
-    "Child",
-    "ChildList",
-    "DynamicString",
-    "DynamicNumber",
-    "DynamicBoolean",
-    "DynamicStringList",
-    "DynamicValue",
-    "AccessibilityAttributes",
-    "CheckRule",
-    "Checkable",
-    "Action",
-    "DataBinding",
-    "FunctionCall",
-})
-
-
-_COMMON_TYPES_REF_PREFIX = "common_types.json#/$defs/"
-
-# The catalog sections whose definitions are checked and may be ``$ref``-ed as ``#/<section>/<name>``.
-_CATALOG_SECTIONS = ("components", "functions", "$defs")
-
-# Keys whose values are annotations or literal data rather than subschemas, so a ``$ref`` inside them
-# is not a reference. Mirrors upstream ``specification/v1_0/test/run_tests.py``.
-_NON_SCHEMA_KEYS = frozenset({"metadata", "examples", "const", "default", "enum", "description"})
-
-
-def _is_allowed_catalog_reference(catalog: JsonSchema, ref: str) -> bool:
-    """Whether a v1.0 catalog may ``$ref`` ``ref`` (a2ui_protocol.md, "Restricted $ref Targets").
-
-    A local target names a component, function or leaf ``$defs`` entry the catalog declares
-    (``anyComponent`` / ``anyFunction`` excluded); an external one names a listed standard type
-    as ``common_types.json#/$defs/<TypeName>``.
-    """
-    if ref.startswith(_COMMON_TYPES_REF_PREFIX):
-        return ref.removeprefix(_COMMON_TYPES_REF_PREFIX) in _CATALOG_COMMON_TYPES
-    for section in _CATALOG_SECTIONS:
-        prefix = f"#/{section}/"
-        if ref.startswith(prefix):
-            name = _pointer_key(ref.removeprefix(prefix))
-            if section == "$defs" and name in ("anyComponent", "anyFunction"):
-                return False
-            return name in _as_object(catalog.get(section))
-    return False
-
-
-def _check_catalog_references(catalog: JsonSchema) -> None:
-    """Reject a v1.0 catalog with a ``$ref`` the spec does not allow.
-
-    The spec makes such a catalog invalid and requires reporting it at load time, not fetching the target.
-    """
-    for section in _CATALOG_SECTIONS:
-        for name, definition in _as_object(catalog.get(section)).items():
-            _check_definition_references(catalog, definition, f"/{section}/{_pointer_token(name)}")
-
-
-def _check_definition_references(catalog: JsonSchema, schema: JsonValue, pointer: str) -> None:
-    if isinstance(schema, list):
-        for index, item in enumerate(schema):
-            _check_definition_references(catalog, item, f"{pointer}/{index}")
-        return
-    if not isinstance(schema, dict):
-        return
-    ref = schema.get("$ref")
-    if isinstance(ref, str) and not _is_allowed_catalog_reference(catalog, ref):
-        raise ValueError(
-            f"Unsupported $ref '{ref}' at {pointer}/$ref: a v1.0 catalog may only reference the components, "
-            "functions and leaf $defs it declares (#/components/..., #/functions/..., #/$defs/...) "
-            f"and the standard types in {_COMMON_TYPES_REF_PREFIX}..."
-        )
-    for key, value in schema.items():
-        if key == "properties" and isinstance(value, dict):
-            # Declared properties are subschemas whatever they are named.
-            for name, subschema in value.items():
-                _check_definition_references(catalog, subschema, f"{pointer}/properties/{_pointer_token(name)}")
-        elif key not in _NON_SCHEMA_KEYS:
-            _check_definition_references(catalog, value, f"{pointer}/{_pointer_token(key)}")
 
 
 _COMPONENT_CATALOG_KEY = "@catalogId"
@@ -387,239 +256,11 @@ def _registry_for_unknown_catalog(registry: Registry, schema_base_uri: str) -> R
     return registry.with_resources([(f"{schema_base_uri}catalog.json", _resource(_OPEN_CATALOG))])
 
 
-_RESERVED_COMPONENT_NAME = "Surface"
-"""The canonical container ``createSurface`` instantiates; no catalog may define a component by that name."""
-
-
-def _check_entity_names(catalog: JsonSchema) -> None:
-    """Reject a v1.0 catalog whose component, function, property or argument names are not UAX #31 identifiers.
-
-    Like the official SDK, a component's names are its key and its own ``properties``; a function's are its key
-    and the properties of its ``args``.
-    """
-    for name, definition in _as_object(catalog.get("components")).items():
-        if name == _RESERVED_COMPONENT_NAME:
-            raise ValueError(
-                f"Invalid custom catalog: component name {name!r} is reserved for the surface container "
-                "that createSurface creates"
-            )
-        _check_entity_name("component name", name)
-        for prop in _as_object(_as_object(definition).get("properties")):
-            _check_entity_name("property name", prop, owner=f"component {name!r}")
-    for name, definition in _as_object(catalog.get("functions")).items():
-        _check_entity_name("function name", name)
-        args = _as_object(_as_object(_as_object(definition).get("properties")).get("args"))
-        for argument in _as_object(args.get("properties")):
-            _check_entity_name("argument name", argument, owner=f"function {name!r}")
-
-
-def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
-    if not _is_identifier_key(name):
-        of_owner = f" of {owner}" if owner else ""
-        raise ValueError(f"Invalid custom catalog: {kind} {name!r}{of_owner} is not a {UAX31_IDENTIFIER}")
-
-
 def _with_identifier_component_ids(common_types: JsonSchema) -> JsonSchema:
     """``ComponentId`` (so every id and every reference to one) checked as a UAX #31 identifier."""
     definitions = dict(_as_object(common_types.get("$defs")))
     definitions["ComponentId"] = {**_as_object(definitions.get("ComponentId")), "format": COMPONENT_ID_FORMAT}
     return {**common_types, "$defs": definitions}
-
-
-def _load_json(path: Path) -> JsonValue:
-    """Load a JSON file, raising a clear error on a missing or malformed one."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            result: JsonValue = json.load(f)
-    except FileNotFoundError as e:
-        raise FileNotFoundError(f"A2UI file not found: {path}") from e
-    except json.JSONDecodeError as e:
-        raise ValueError(f"A2UI file {path} is not valid JSON: {e}") from e
-    return result
-
-
-def _load_object(path: Path) -> JsonSchema:
-    data = _load_json(path)
-    if not isinstance(data, dict):
-        raise ValueError(f"A2UI file {path} must be a JSON object")
-    return data
-
-
-def _accept_wire_versions(schema: JsonValue, versions: tuple[str, ...]) -> JsonValue:
-    """Widen every message's ``version: {const}`` to ``{enum: versions}``.
-
-    v0.9.1 reuses the v0.9 spec files, whose messages pin ``"v0.9"``; v0.9.1 also accepts ``"v0.9.1"``.
-    """
-    if isinstance(schema, list):
-        return [_accept_wire_versions(item, versions) for item in schema]
-    if not isinstance(schema, dict):
-        return schema
-    result = {key: _accept_wire_versions(value, versions) for key, value in schema.items()}
-    version = _as_object(_as_object(result.get("properties")).get("version"))
-    if "const" in version:
-        widened = {key: value for key, value in version.items() if key != "const"}
-        widened["enum"] = list(versions)
-        result["properties"] = {**_as_object(result["properties"]), "version": widened}
-    return result
-
-
-@dataclass(frozen=True, slots=True)
-class _VendoredSpec:
-    """One protocol version's vendored files, read once per process; each schema manager works on a deep copy."""
-
-    server_to_client: JsonSchema
-    common_types: JsonSchema
-    basic_catalog: JsonSchema
-    catalog_rules: str
-    prompt_example: JsonValue
-    prompt_message_types: str
-
-
-@cache
-def _vendored_spec(protocol: A2UIProtocol) -> _VendoredSpec:
-    version_dir = _PACKAGE_DIR / protocol.package_dir
-    spec_dir = version_dir / "spec"
-    server_to_client = _load_object(spec_dir / protocol.server_to_client_file)
-    if len(protocol.accepted_wire_versions) > 1:
-        server_to_client = _as_object(_accept_wire_versions(server_to_client, protocol.accepted_wire_versions))
-    basic_catalog = _load_object(spec_dir / "basic_catalog.json")
-    rules = (
-        (spec_dir / protocol.rules_file).read_text(encoding="utf-8").strip()
-        if protocol.rules_file
-        else _instructions_of(basic_catalog)
-    )
-    return _VendoredSpec(
-        server_to_client=server_to_client,
-        common_types=_load_object(spec_dir / "common_types.json"),
-        basic_catalog=basic_catalog,
-        catalog_rules=rules,
-        prompt_example=_load_json(version_dir / "prompt_example.json"),
-        prompt_message_types=(version_dir / "prompt_message_types.md").read_text(encoding="utf-8").strip(),
-    )
-
-
-def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", protocol: A2UIProtocol) -> JsonSchema:
-    """The custom catalog, checked against the served version's catalog rules, with ``$id`` set to its ``catalogId``.
-
-    Internally a catalog is keyed by ``$id``, the name its ``$ref``s resolve against; the spec asks for both fields
-    "set to the same URI", so a catalog that omits ``$id`` is given its ``catalogId``.
-    """
-    if isinstance(custom_catalog, dict):
-        catalog = custom_catalog
-    else:
-        path = Path(custom_catalog)
-        if not path.exists():
-            raise FileNotFoundError(f"Custom catalog file not found: {path}")
-        catalog = _load_object(path)
-    catalog_id = _checked_catalog_id(catalog)
-    _check_catalog_protocol_version(catalog, protocol)
-    if protocol.entity_naming_rules:
-        # Before the full schema, for clearer messages on the rules a catalog author most often breaks.
-        _check_entity_names(catalog)
-    if protocol.catalog_definition_file is not None:
-        _check_catalog_definition(catalog, protocol)
-    if protocol.restricted_catalog_refs:
-        _check_catalog_references(catalog)
-    return {**catalog, "$id": catalog_id}
-
-
-def _checked_catalog_id(catalog: JsonSchema) -> str:
-    """The catalog's ``catalogId``, which identifies it (v0_9 a2ui_protocol.md L317, v1_0 L543); ``$id`` must match.
-
-    The spec says both "should" be set "to the same URI"; ag2 requires it, since ``$ref``s resolve against ``$id``
-    and the catalog is served under its ``catalogId`` (ADR 0040). The official SDK also takes the id from
-    ``catalogId`` only (its ``_settle_catalog_id``).
-    """
-    catalog_id = catalog.get("catalogId")
-    if not isinstance(catalog_id, str) or not catalog_id:
-        raise ValueError(
-            "Custom catalog must include a non-empty string 'catalogId': it identifies the catalog in "
-            "createSurface, supportedCatalogIds and catalog negotiation. "
-            'Example: {"catalogId": "https://mycompany.com/my_catalog.json", ...}'
-        )
-    if "$id" in catalog and catalog["$id"] != catalog_id:
-        raise ValueError(
-            f"Custom catalog '$id' {catalog['$id']!r} differs from its 'catalogId' {catalog_id!r}; set both to the "
-            "same URI (or leave '$id' out)."
-        )
-    return catalog_id
-
-
-_SEMVER_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)"
-_CATALOG_PROTOCOL_VERSION = re.compile(
-    r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))?"
-    rf"(?:-{_SEMVER_IDENTIFIER}(?:\.{_SEMVER_IDENTIFIER})*)?"
-    r"(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?",
-    re.ASCII,
-)
-"""``protocolVersion``'s ``pattern`` in v1.0 ``catalog_definition.json``, plus the ``v`` prefix the official SDK
-accepts (``'v0.9'``); v0.9 has no catalog definition schema, so this is the only check there."""
-
-
-def _check_catalog_protocol_version(catalog: JsonSchema, protocol: A2UIProtocol) -> None:
-    """Reject a catalog written against another protocol version than the one served.
-
-    ``protocolVersion`` "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond" (v1_0
-    a2ui_protocol.md L635). Its major.minor must be the served version's. The official SDK rejects a mismatch too
-    and is stricter: it matches the patch number against its known versions as well, so its v0.9.1 provider rejects
-    a ``"0.9"`` catalog. ag2 serves the same ``"0.9"`` catalogs on v0.9 and v0.9.1.
-    """
-    declared = catalog.get("protocolVersion", "0.9")
-    match = _CATALOG_PROTOCOL_VERSION.fullmatch(declared) if isinstance(declared, str) else None
-    if match is None:
-        raise ValueError(f"Custom catalog 'protocolVersion' {declared!r} is not a version such as '1.0'")
-    major_minor = f"{match[1]}.{match[2]}"
-    if major_minor != protocol.catalog_protocol_version:
-        stated = f"declares protocolVersion {declared!r}" if "protocolVersion" in catalog else "has no protocolVersion"
-        raise ValueError(
-            f"Custom catalog {stated}, so it is written for A2UI {major_minor}, but this agent serves "
-            f'{protocol.version}: set "protocolVersion": "{protocol.catalog_protocol_version}"'
-        )
-
-
-_MAX_SCHEMA_MESSAGE = 300
-"""Longer messages are cut: a failed ``oneOf`` prints the whole instance."""
-
-
-def _check_catalog_definition(catalog: JsonSchema, protocol: A2UIProtocol) -> None:
-    """Reject a catalog that does not satisfy the version's vendored ``catalog_definition.json``."""
-    errors = list(_catalog_definition_validator(protocol).iter_errors(catalog))
-    # A failing subschema yields no annotations, so alongside another error "unevaluated properties" lists
-    # properties that are in fact allowed (``allowedCallers`` beside a bad ``allowedCallers`` value).
-    error = best_match([e for e in errors if e.validator != "unevaluatedProperties"] or errors)
-    if error is None:
-        return
-    pointer = "".join(f"/{_pointer_token(str(part))}" for part in error.absolute_path) or "/"
-    message = error.message
-    if len(message) > _MAX_SCHEMA_MESSAGE:
-        message = f"{message[:_MAX_SCHEMA_MESSAGE]}..."
-    raise ValueError(f"Invalid custom catalog at {pointer} ({protocol.catalog_definition_file}): {message}")
-
-
-def _is_identifier_key(instance: object) -> bool:
-    """Whether ``instance`` is a UAX #31 identifier; a non-string passes, as a JSON Schema ``format`` does.
-
-    ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
-    """
-    return not isinstance(instance, str) or instance.isidentifier()
-
-
-@cache
-def _catalog_definition_validator(protocol: A2UIProtocol) -> Draft202012Validator:
-    """A validator for the version's ``catalog_definition.json``, with ``common_types.json`` in its registry.
-
-    Both files key extensions by a ``\\p{XID_Start}`` pattern Python's ``re`` cannot compile, so those objects are
-    checked with the :data:`XID_FORMAT` format instead (see :func:`_xid_property_names`).
-    """
-    spec_dir = _PACKAGE_DIR / protocol.package_dir / "spec"
-    definition = _as_object(_xid_property_names(_load_object(spec_dir / str(protocol.catalog_definition_file))))
-    common_types = _as_object(_xid_property_names(_load_object(spec_dir / "common_types.json")))
-    registry: Registry = Registry().with_resources(
-        (str(schema["$id"]), _resource(schema)) for schema in (definition, common_types)
-    )
-    formats = FormatChecker(formats=())
-    formats.checks(XID_FORMAT)(_is_identifier_key)
-    return Draft202012Validator(definition, registry=registry, format_checker=formats)
 
 
 @dataclass(frozen=True, slots=True)
@@ -755,10 +396,6 @@ def _with_catalog_component_selection(server_to_client: JsonSchema, catalogs: di
         },
     }
     return {**server_to_client, "$defs": definitions}
-
-
-def _resource(contents: JsonSchema) -> Resource:
-    return Resource.from_contents(contents, default_specification=DRAFT202012)
 
 
 class A2UISchemaManager:
