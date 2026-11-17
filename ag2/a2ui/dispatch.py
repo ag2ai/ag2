@@ -8,6 +8,7 @@ followed by one :class:`A2UIMessageFrame` per A2UI message. Shared core under
 the SSE / NDJSON wire encoders.
 """
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -33,12 +34,14 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
-from ._runtime import _A2UIRuntime, collect_a2ui_messages
+from ._runtime import A2UIMessageCollector, _A2UIRuntime
 from ._types import ServerToClientMessage
 from .data_model import data_model_to_prompt
 from .events import A2UIMessageEvent
 from .request import A2UIServerRequest
 from .server_action import run_client_interactions
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -117,6 +120,8 @@ class _A2UITurnCore:
                 LLM client.
         """
         agent, runtime = self.agent, self.runtime
+        # Only the catalogs the renderer supports are offered; with none in common the turn has no A2UI.
+        offer = runtime.offer_for(request.client_capabilities)
         # Answer the interactions the server handles itself (registered clicks and
         # callAgentFunction calls) and emit their messages. These never reach the
         # agent (the prompt rewriter already skipped them).
@@ -124,6 +129,7 @@ class _A2UITurnCore:
             request.client_interactions,
             runtime,
             agent,
+            offer=offer,
             variables=request.variables,
         )
         for message in server_messages:
@@ -147,7 +153,7 @@ class _A2UITurnCore:
         # message onto this turn's stream. Collect them as the single source of UI
         # content (the event seam) — consistent with the A2A executor.
         a2ui_messages: list[ServerToClientMessage] = []
-        stream.where(A2UIMessageEvent).subscribe(collect_a2ui_messages(a2ui_messages))
+        stream.where(A2UIMessageEvent).subscribe(A2UIMessageCollector(a2ui_messages))
 
         if usage_records is not None:
             stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
@@ -159,13 +165,12 @@ class _A2UITurnCore:
             stream.where(ToolResultEvent).subscribe(on_tool_result)
 
         # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
-        # prompt section, fold in negotiated client capabilities so the LLM only
-        # targets components the client can render, add the client's data model, and inject the validation
+        # prompt section for the catalogs this renderer supports, add the client's data model, and inject the validation
         # middleware that emits the A2UIMessageEvents collected above.
-        caps_prompt = runtime.capabilities_prompt(request.client_capabilities)
+        caps_prompt = runtime.capabilities_prompt(request.client_capabilities, offer)
         data_model_prompt = data_model_to_prompt(request.client_data_model)
         extra_prompt = [
-            runtime.system_prompt_section,
+            *([offer.system_prompt_section] if offer.system_prompt_section else []),
             *([caps_prompt] if caps_prompt else []),
             *([data_model_prompt] if data_model_prompt else []),
         ]
@@ -185,7 +190,7 @@ class _A2UITurnCore:
         # Surface each incoming client→server interaction as an A2UIClientEvent on
         # the turn's stream (alongside the validation middleware), so observers see
         # client clicks/responses — not just the LLM via the rewritten prompt.
-        extra_middleware = runtime.turn_middleware(request.client_interactions)
+        extra_middleware = runtime.turn_middleware(request.client_interactions, offer)
 
         initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
         with ExitStack() as stack:
@@ -203,6 +208,9 @@ class _A2UITurnCore:
         prose = response.message.content if response.message else ""
         if prose:
             yield A2UIProseFrame(prose)
+        if a2ui_messages and not offer.sends_ui:
+            logger.warning("The renderer offers no A2UI this turn; dropping %d A2UI message(s).", len(a2ui_messages))
+            return
         for message in a2ui_messages:
             yield A2UIMessageFrame(message)
 

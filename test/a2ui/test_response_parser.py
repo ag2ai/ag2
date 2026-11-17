@@ -2,9 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import Any
+
 import pytest
 
-from ag2.a2ui._types import JsonObject
 from ag2.a2ui.parser import (
     A2UIResponseParser,
     strip_markdown_fences,
@@ -16,8 +17,8 @@ from ._helpers import extracting_parser, validating_parser
 _BASIC_V1_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 
 
-def _text_with_nested_format_string(depth: int, leaf: JsonObject | str) -> JsonObject:
-    value: JsonObject | str = leaf
+def _text_with_nested_format_string(depth: int, leaf: dict[str, Any] | str) -> dict[str, Any]:
+    value: dict[str, Any] | str = leaf
     for _ in range(depth):
         value = {"@call": "formatString", "args": {"value": value}}
     return {
@@ -26,11 +27,11 @@ def _text_with_nested_format_string(depth: int, leaf: JsonObject | str) -> JsonO
     }
 
 
-def _parser_with_functions(functions: JsonObject) -> A2UIResponseParser:
+def _parser_with_functions(functions: dict[str, Any]) -> A2UIResponseParser:
     return validating_parser("v1.0", {"$id": "https://mycompany.com/cat.json", "functions": functions})
 
 
-def _create_surface_with_extension(key: str) -> JsonObject:
+def _create_surface_with_extension(key: str) -> dict[str, Any]:
     return {
         "version": "1.0",
         "createSurface": {
@@ -311,7 +312,7 @@ class TestA2UIResponseParserV1Validation:
     ) -> None:
         # The envelope's ``oneOf`` alone only says "no branch matched"; the LLM needs the property.
         slider = {"id": "root", "component": "Slider", "min": 1, "max": 3, "step": 1, "value": {"@path": "/n"}}
-        payload: JsonObject = {"surfaceId": "s", "components": [slider]}
+        payload: dict[str, Any] = {"surfaceId": "s", "components": [slider]}
         if message_key == "createSurface":
             payload["catalogId"] = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
         ops = [{"version": "1.0", message_key: payload}]
@@ -484,7 +485,7 @@ class TestA2UIResponseParserV1Validation:
         ],
     )
     def test_function_call_keeps_its_property_set_closed(
-        self, parser_v1: A2UIResponseParser, call: JsonObject, valid: bool
+        self, parser_v1: A2UIResponseParser, call: dict[str, Any], valid: bool
     ) -> None:
         assert parser_v1.validate([_text_with_nested_format_string(0, call)]).is_valid is valid
 
@@ -600,10 +601,10 @@ class TestSurfaceCatalogValidation:
             "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
             "custom": "https://example.com/catalog.json",
         }
-        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        call: dict[str, Any] = {"@call": "openUrl", "args": {"url": "https://example.com"}}
         if call_catalog is not None:
             call["catalogId"] = catalogs[call_catalog]
-        components: list[JsonObject] = [
+        components: list[dict[str, Any]] = [
             {
                 "id": "root",
                 "component": "Button",
@@ -613,7 +614,7 @@ class TestSurfaceCatalogValidation:
             },
             {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Open"},
         ]
-        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        create: dict[str, Any] = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
         if message_key == "createSurface":
             create["components"] = components
             operations = [{"version": "1.0", "createSurface": create}]
@@ -639,7 +640,7 @@ class TestSurfaceCatalogValidation:
         assert parser.validate([
             {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": custom_id}}
         ]).is_valid
-        call: JsonObject = {"@call": "openUrl", "args": {"url": "https://example.com"}}
+        call: dict[str, Any] = {"@call": "openUrl", "args": {"url": "https://example.com"}}
         if call_catalog is not None:
             call["catalogId"] = basic_id if call_catalog == "basic" else custom_id
         operations = [
@@ -813,10 +814,10 @@ class TestComponentCatalogValidation:
             "custom": "https://example.com/catalog.json",
             "unknown": "https://unknown.example/catalog.json",
         }
-        component: JsonObject = {"id": "root", "component": "Text", text_field: "Hello"}
+        component: dict[str, Any] = {"id": "root", "component": "Text", text_field: "Hello"}
         if component_catalog is not None:
             component["@catalogId"] = catalogs[component_catalog]
-        create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
+        create: dict[str, Any] = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
         if message_key == "createSurface":
             create["components"] = [component]
             operations = [{"version": "1.0", "createSurface": create}]
@@ -857,7 +858,7 @@ class TestComponentCatalogValidation:
 
 class TestCatalogFunctionDefinitions:
     @pytest.fixture()
-    def function_schema(self) -> JsonObject:
+    def function_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "returnType": "string",
@@ -876,7 +877,7 @@ class TestCatalogFunctionDefinitions:
     @pytest.mark.parametrize("call_kind", ["rpc", "binding"])
     @pytest.mark.parametrize("allowed_callers", [None, "rendererOnly", "agentOnly", "rendererOrAgent"])
     def test_callers_use_function_definitions_independently_of_schema_keys(
-        self, function_schema: JsonObject, call_kind: str, allowed_callers: str | None
+        self, function_schema: dict[str, Any], call_kind: str, allowed_callers: str | None
     ) -> None:
         if allowed_callers is not None:
             function_schema["allowedCallers"] = allowed_callers
@@ -892,7 +893,7 @@ class TestCatalogFunctionDefinitions:
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
         )
-        call: JsonObject = {"@call": "lookup", "catalogId": "https://example.com/catalog.json", "args": {"id": "x"}}
+        call: dict[str, Any] = {"@call": "lookup", "catalogId": "https://example.com/catalog.json", "args": {"id": "x"}}
         if call_kind == "rpc":
             operation = {"version": "1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
         else:
@@ -931,7 +932,7 @@ class TestCatalogFunctionDefinitions:
         ],
     )
     def test_definition_keys_do_not_obscure_function_validation_errors(
-        self, function_schema: JsonObject, call: JsonObject, expected_error: str
+        self, function_schema: dict[str, Any], call: dict[str, Any], expected_error: str
     ) -> None:
         function_schema["allowedCallers"] = "agentOnly"
         manager = A2UISchemaManager(

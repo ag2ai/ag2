@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Public A2UI surface: the :class:`A2UIServer` ASGI app, the ``@a2ui_action``
-decorator, client capabilities, and stream events. Pick a wire transport from
+decorator, client capabilities, protocol versions and stream events. Pick a wire transport from
 the ``transports`` submodule (or use the ``a2a`` submodule for A2A).
 """
 
-from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
+from ag2.exceptions import missing_optional_dependency
+
+from ._types import A2UIVersion
 
 try:
     from .actions import A2UIAction, a2ui_action
@@ -25,7 +27,7 @@ try:
     # Serving needs Starlette (and a transport); a missing install surfaces here.
     from .server import A2UIServer
 except ImportError as e:  # pragma: no cover - exercised only without starlette
-    A2UIServer = missing_additional_dependency("A2UIServer", "starlette>=0.40,<1", e)  # type: ignore[misc]
+    A2UIServer = missing_optional_dependency("A2UIServer", "a2ui", e)  # type: ignore[misc]
 
 __all__ = (
     "A2UIAction",
@@ -34,5 +36,6 @@ __all__ = (
     "A2UIMessageEvent",
     "A2UIServer",
     "A2UIValidationFailedEvent",
+    "A2UIVersion",
     "a2ui_action",
 )

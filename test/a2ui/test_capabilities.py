@@ -37,22 +37,15 @@ class TestCapabilitiesToPrompt:
         assert _AGENT_CATALOG in prompt
         assert any("did not advertise" in r.message for r in caplog.records)
 
-    def test_inline_catalogs_are_summarized(self) -> None:
+    def test_inline_catalogs_are_not_offered(self) -> None:
+        # The agent does not declare acceptsInlineCatalogs, so it cannot render with them: they stay out of the prompt.
         caps = A2UIClientCapabilities(
             supported_catalog_ids=[_AGENT_CATALOG],
-            inline_catalogs=[
-                {
-                    "catalogId": "https://acme.example/cat.json",
-                    "components": {"Gauge": {}, "Chart": {}},
-                    "functions": {"refresh": {}},
-                }
-            ],
+            inline_catalogs=[{"catalogId": "https://acme.example/cat.json", "components": {"Gauge": {}}}],
         )
         prompt = capabilities_to_prompt(caps, catalog_id=_AGENT_CATALOG)
-        assert "inline catalog" in prompt
-        assert "https://acme.example/cat.json" in prompt
-        assert "components: Chart, Gauge" in prompt  # sorted
-        assert "functions: refresh" in prompt
+        assert "acme" not in prompt
+        assert "Gauge" not in prompt
 
     def test_inline_catalog_without_defs_is_dropped(self) -> None:
         # An inline catalog with neither components nor functions yields no line,

@@ -66,9 +66,12 @@ def try_activate_a2ui_extension(
     """Activate the A2UI extension if the client requested it.
 
     Call this in an ``AgentExecutor`` to negotiate A2UI support. If the
-    client's request includes the A2UI extension URI for ``version``, it is
-    recorded under ``context.call_context.state[ACTIVATED_EXTENSIONS_KEY]``
-    and the function returns True.
+    client's request includes the A2UI extension URI for ``version`` (in the
+    ``X-A2A-Extensions`` header, or in ``message.extensions`` as the official
+    SDK also reads), it is recorded under
+    ``context.call_context.state[ACTIVATED_EXTENSIONS_KEY]`` and the function
+    returns True. Activation alone offers no catalogs: in v1.0 the renderer's
+    capabilities on each message decide whether a turn has A2UI.
 
     The record lives on the ``ServerCallContext`` rather than
     ``RequestContext.metadata``: the latter is a read-only property
@@ -78,7 +81,10 @@ def try_activate_a2ui_extension(
     activations from several extensions accumulate in one list.
     """
     extension_uri = get_protocol(version).extension_uri
-    requested = getattr(context, "requested_extensions", None) or []
+    requested = list(getattr(context, "requested_extensions", None) or [])
+    message = getattr(context, "message", None)
+    if message is not None:
+        requested.extend(message.extensions)
     if extension_uri not in requested:
         return False
     activated = context.call_context.state.setdefault(ACTIVATED_EXTENSIONS_KEY, [])

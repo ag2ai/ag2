@@ -328,15 +328,21 @@ class TestFunctionResponseToPrompt:
 class TestIncomingPrompts:
     def test_function_call_is_never_a_prompt(self) -> None:
         envelopes = [
-            {"callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}}},
+            {
+                "version": "1.0",
+                "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}},
+            },
         ]
-        assert list(incoming_prompts(decode_envelopes(envelopes, function_rpc=True), lambda name: None)) == []
+        assert list(incoming_prompts(decode_envelopes(envelopes, protocol_version="v1.0"), lambda name: None)) == []
 
     def test_function_response_without_id_is_dropped(self) -> None:
         assert (
             list(
                 incoming_prompts(
-                    decode_envelopes([{"rendererFunctionResponse": {"value": 1}}], function_rpc=True), lambda name: None
+                    decode_envelopes(
+                        [{"version": "1.0", "rendererFunctionResponse": {"value": 1}}], protocol_version="v1.0"
+                    ),
+                    lambda name: None,
                 )
             )
             == []
@@ -346,7 +352,8 @@ class TestIncomingPrompts:
         prompts = list(
             incoming_prompts(
                 decode_envelopes(
-                    [{"rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}], function_rpc=True
+                    [{"version": "1.0", "rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}],
+                    protocol_version="v1.0",
                 ),
                 lambda n: None,
             )

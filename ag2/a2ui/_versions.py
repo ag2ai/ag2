@@ -71,6 +71,10 @@ class A2UIProtocol:
     """Component ids and a catalog's component, function, property and argument names are UAX #31 identifiers,
     and ``Surface`` is a reserved component name (v1_0 a2ui_protocol.md, "Catalog Entity Naming Rules")."""
 
+    a2a_turn_scoped_capabilities: bool
+    """Over A2A, a message without this version's capabilities offers no A2UI, so the agent sends none in reply
+    (v1_0 A2A extension, "Capability scoping"). Before v1.0 the capabilities are optional."""
+
     @property
     def server_to_client_keys(self) -> frozenset[str]:
         """The payload key of each message kind an agent may stream in this version."""
@@ -107,6 +111,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         restricted_catalog_refs=False,
         function_rpc=False,
         entity_naming_rules=False,
+        a2a_turn_scoped_capabilities=False,
     ),
     "v0.9.1": A2UIProtocol(
         version="v0.9.1",
@@ -125,6 +130,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         restricted_catalog_refs=False,
         function_rpc=False,
         entity_naming_rules=False,
+        a2a_turn_scoped_capabilities=False,
     ),
     "v1.0": A2UIProtocol(
         version="v1.0",
@@ -143,6 +149,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         restricted_catalog_refs=True,
         function_rpc=True,
         entity_naming_rules=True,
+        a2a_turn_scoped_capabilities=True,
     ),
 }
 
@@ -151,10 +158,9 @@ DEFAULT_PROTOCOL = PROTOCOLS["v0.9"]
 
 def get_protocol(version: str) -> A2UIProtocol:
     """The descriptor for ``version``; raises ``ValueError`` for an unsupported one."""
-    for protocol in PROTOCOLS.values():
-        if protocol.version == version:
-            return protocol
-    raise ValueError(f"Unsupported A2UI protocol version: {version!r}. Supported versions: {', '.join(PROTOCOLS)}")
+    if version not in PROTOCOLS:
+        raise ValueError(f"Unsupported A2UI protocol version: {version!r}. Supported versions: {', '.join(PROTOCOLS)}")
+    return PROTOCOLS[version]
 
 
 __all__ = (

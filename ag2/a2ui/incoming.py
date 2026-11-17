@@ -9,8 +9,10 @@ from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import assert_never
 
+from ._formats import is_date_time
 from ._messages import CLIENT_TO_SERVER_KEYS
-from ._types import JsonValue
+from ._types import A2UIVersion, JsonObject, JsonValue
+from ._versions import A2UIProtocol, get_protocol
 from .actions import A2UIEventAction
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 
@@ -162,6 +164,19 @@ class A2UIIncomingFunctionResponseResult:
 
 
 @dataclass(slots=True, frozen=True)
+class A2UIIncomingInvalidFunctionCallResult:
+    """A malformed ``callAgentFunction`` (v1.0) that still carries a ``functionCallId`` to answer.
+
+    The renderer is waiting on that id, and "if parameter validation fails on the server, the agent MUST return an
+    ``agentFunctionResponse`` message containing an ``error`` payload" (v1.0 a2ui_protocol.md, "callAgentFunction"),
+    so the server answers it with ``INVALID_FUNCTION_CALL`` instead of dropping it. ``reason`` says what is wrong.
+    """
+
+    function_call_id: str
+    reason: str
+
+
+@dataclass(slots=True, frozen=True)
 class A2UIIncomingUnknownResult:
     """An envelope that could not be classified; ``parse_error`` says why."""
 
@@ -175,6 +190,7 @@ class A2UIIncomingUnknownResult:
 A2UIIncomingParseResult = (
     A2UIIncomingActionResult
     | A2UIIncomingFunctionCallResult
+    | A2UIIncomingInvalidFunctionCallResult
     | A2UIIncomingErrorResult
     | A2UIIncomingFunctionResponseResult
     | A2UIIncomingUnknownResult
@@ -250,8 +266,7 @@ def parse_incoming_message(data: JsonValue) -> A2UIIncomingParseResult:
     Parsing is structural and version-neutral — v1.0-only arms
     (``callAgentFunction``, ``rendererFunctionResponse``, ``action.userMessage``,
     ``error.functionCallId``) decode when present; :func:`decode_envelopes` drops
-    the v1.0-only envelopes for an older protocol. The envelope is not validated
-    against the vendored renderer→agent JSON schema.
+    the envelopes that do not conform to the served protocol (see :func:`envelope_problem`).
     """
     if not isinstance(data, dict):
         return A2UIIncomingUnknownResult(parse_error="envelope is not a JSON object")
@@ -438,38 +453,188 @@ def function_response_to_prompt(fr: A2UIIncomingFunctionResponse) -> str:
     )
 
 
-_FUNCTION_RPC_ENVELOPES: dict[type, str] = {
-    A2UIIncomingFunctionCallResult: "callAgentFunction",
-    A2UIIncomingFunctionResponseResult: "rendererFunctionResponse",
-}
-"""The envelope kind of each decoded result that exists only with function RPC (v1.0)."""
+_FUNCTION_RPC_ENVELOPES = frozenset({"callAgentFunction", "rendererFunctionResponse"})
+"""The envelope kinds that exist only with function RPC (v1.0)."""
+
+_SURFACE_ERROR_CODES_V1 = frozenset({"VALIDATION_FAILED", "UNALLOWED_PARENT", "UNALLOWED_CHILD"})
+"""v1.0 error codes that point at a component on a surface, so they carry its ``path`` (``renderer_to_agent.json``)."""
 
 
-def _function_rpc_kind(result: A2UIIncomingParseResult) -> str | None:
-    return next((kind for cls, kind in _FUNCTION_RPC_ENVELOPES.items() if isinstance(result, cls)), None)
+def _missing_strings(obj: JsonObject, *keys: str) -> list[str]:
+    return [key for key in keys if not isinstance(obj.get(key), str)]
 
 
-def decode_envelopes(envelopes: Iterable[JsonValue], *, function_rpc: bool) -> list[A2UIIncomingParseResult]:
-    """Decode client→server envelopes once per request, dropping (with a warning) those of no known kind.
+def _action_problem(action: JsonObject, protocol: A2UIProtocol) -> str | None:
+    missing = _missing_strings(action, "name", "surfaceId", "sourceComponentId", "timestamp")
+    if missing:
+        return f"'action' needs string {', '.join(map(repr, missing))}"
+    if not isinstance(action.get("context"), dict):
+        return "'action' needs a 'context' object"
+    if not is_date_time(str(action["timestamp"])):
+        return f"'action.timestamp' {action['timestamp']!r} is not an RFC 3339 date-time"
+    if protocol.function_rpc:
+        if "userMessage" in action and not isinstance(action["userMessage"], str):
+            return "'action.userMessage' must be a string"
+        if "metadata" in action:
+            return _action_metadata_problem(action["metadata"])
+    return None
+
+
+def _action_metadata_problem(metadata: JsonValue) -> str | None:
+    """``action.metadata`` (v1.0) holds only ``extensions``, whose keys "MUST be Unicode identifiers (UAX #31)"."""
+    if not isinstance(metadata, dict):
+        return "'action.metadata' must be an object"
+    extra = sorted(metadata.keys() - {"extensions"})
+    if extra:
+        return f"'action.metadata' has unknown properties {', '.join(map(repr, extra))}"
+    extensions = metadata.get("extensions", {})
+    if not isinstance(extensions, dict):
+        return "'action.metadata.extensions' must be an object"
+    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    invalid = sorted(key for key in extensions if not key.isidentifier())
+    if invalid:
+        return f"'action.metadata.extensions' keys must be UAX #31 identifiers: {', '.join(map(repr, invalid))}"
+    return None
+
+
+def _function_call_problem(call: JsonObject) -> str | None:
+    extra = sorted(call.keys() - {"surfaceId", "functionCallId", "callFunction"})
+    if extra:
+        return f"'callAgentFunction' has unknown properties {', '.join(map(repr, extra))}"
+    if not isinstance(call.get("functionCallId"), str):
+        return "'callAgentFunction' needs a string 'functionCallId'"
+    if not isinstance(call.get("surfaceId"), str) or not call["surfaceId"]:
+        return "'callAgentFunction' needs a non-empty string 'surfaceId'"
+    function = call.get("callFunction")
+    if not isinstance(function, dict):
+        return "'callAgentFunction' needs a 'callFunction' object"
+    name = function.get("@call")
+    if not isinstance(name, str) or not name:
+        return "'callAgentFunction.callFunction' needs a non-empty string '@call'"
+    if "catalogId" in function and not isinstance(function["catalogId"], str):
+        return f"'catalogId' of function {name!r} must be a string"
+    if "args" in function and not isinstance(function["args"], dict):
+        return f"'args' of function {name!r} must be an object"
+    return None
+
+
+def _function_response_problem(response: JsonObject) -> str | None:
+    if not isinstance(response.get("functionCallId"), str):
+        return "'rendererFunctionResponse' needs a string 'functionCallId'"
+    extra = sorted(response.keys() - {"functionCallId", "value", "error"})
+    if extra:
+        return f"'rendererFunctionResponse' has unknown properties {', '.join(map(repr, extra))}"
+    if ("value" in response) == ("error" in response):
+        return "'rendererFunctionResponse' must carry exactly one of 'value' or 'error'"
+    error = response.get("error")
+    if "error" in response and (
+        not isinstance(error, dict) or _missing_strings(error, "code", "message") or error.keys() - {"code", "message"}
+    ):
+        return "'rendererFunctionResponse.error' must be an object with exactly string 'code' and 'message'"
+    return None
+
+
+def _error_problem(error: JsonObject, protocol: A2UIProtocol) -> str | None:
+    code = error.get("code")
+    surface_codes = _SURFACE_ERROR_CODES_V1 if protocol.function_rpc else frozenset({"VALIDATION_FAILED"})
+    if code in surface_codes:
+        missing = _missing_strings(error, "code", "path", "message", "surfaceId")
+        extra = sorted(error.keys() - {"code", "path", "message", "surfaceId"})
+        if missing or extra:
+            return f"a {code} 'error' carries exactly string 'code', 'path', 'message' and 'surfaceId'"
+        return None
+    if "code" not in error:
+        return "'error' needs a 'code'"
+    if not isinstance(error.get("message"), str):
+        return "'error' needs a string 'message'"
+    if not protocol.function_rpc:
+        return None if isinstance(error.get("surfaceId"), str) else "'error' needs a string 'surfaceId'"
+    if not isinstance(code, str):
+        return "'error' needs a string 'code'"
+    has_surface, has_call = "surfaceId" in error, "functionCallId" in error
+    if has_surface == has_call:
+        return "'error' must carry exactly one of 'surfaceId' or 'functionCallId'"
+    if _missing_strings(error, "surfaceId" if has_surface else "functionCallId"):
+        return "'error.surfaceId' / 'error.functionCallId' must be a string"
+    return None
+
+
+def envelope_problem(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:
+    """Why ``envelope`` is not a renderer→agent message of ``protocol``, or ``None`` when it is one.
+
+    Checks what the vendored ``client_to_server.json`` (``renderer_to_agent.json`` in v1.0) requires: exactly
+    ``version`` and one payload, the version's ``version`` value, the payload kinds the version has, and each
+    payload's required fields, types and arms. The function a ``callAgentFunction`` names is not checked against a
+    catalog here: an ``@a2ui_action`` handler is not a catalog function.
+    """
+    if not isinstance(envelope, dict):
+        return "envelope is not a JSON object"
+    present = [key for key in CLIENT_TO_SERVER_KEYS if key in envelope]
+    if len(present) != 1:
+        found = ", ".join(map(repr, present)) or "none"
+        return f"envelope must carry exactly one of {', '.join(map(repr, CLIENT_TO_SERVER_KEYS))}; it carries {found}"
+    kind = present[0]
+    if kind in _FUNCTION_RPC_ENVELOPES and not protocol.function_rpc:
+        return f"'{kind}' exists only in protocol v1.0"
+    extra = sorted(envelope.keys() - {"version", kind})
+    if extra:
+        return f"envelope has properties besides 'version' and '{kind}': {', '.join(map(repr, extra))}"
+    version = envelope.get("version")
+    if version not in protocol.accepted_wire_versions:
+        accepted = " or ".join(map(repr, protocol.accepted_wire_versions))
+        return f"envelope 'version' is {version!r}; this server speaks {accepted}"
+    payload = envelope[kind]
+    if not isinstance(payload, dict):
+        return f"'{kind}' is not an object"
+    if kind == "action":
+        return _action_problem(payload, protocol)
+    if kind == "callAgentFunction":
+        return _function_call_problem(payload)
+    if kind == "rendererFunctionResponse":
+        return _function_response_problem(payload)
+    return _error_problem(payload, protocol)
+
+
+def _answerable_call_id(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:
+    """The ``functionCallId`` a malformed v1.0 ``callAgentFunction`` can still be answered on, if it has one."""
+    if not protocol.function_rpc or not isinstance(envelope, dict):
+        return None
+    if envelope.get("version") not in protocol.accepted_wire_versions:
+        return None
+    call = envelope.get("callAgentFunction")
+    call_id = call.get("functionCallId") if isinstance(call, dict) else None
+    # An empty id cannot be correlated, as the official SDK also refuses to answer one.
+    return call_id if isinstance(call_id, str) and call_id else None
+
+
+def decode_envelopes(envelopes: Iterable[JsonValue], *, protocol_version: A2UIVersion) -> list[A2UIIncomingParseResult]:
+    """Decode client→server envelopes once per request, dropping (with a warning) those the protocol does not allow.
 
     Both the agent's prompts (:func:`incoming_prompts`) and the
     :class:`~ag2.a2ui.A2UIClientEvent`\\s observers see come from this decode.
 
+    Each envelope must conform to the served protocol (see :func:`envelope_problem`). A malformed v1.0
+    ``callAgentFunction`` with a ``functionCallId`` is kept as an
+    :class:`A2UIIncomingInvalidFunctionCallResult`, which the server answers with ``INVALID_FUNCTION_CALL``;
+    any other malformed envelope is dropped with a warning.
+
     Args:
         envelopes: The raw envelopes the request carried.
-        function_rpc: Whether the served protocol has function RPC (v1.0). Without
-            it, ``callAgentFunction`` and ``rendererFunctionResponse`` are dropped
-            with a warning: v0.9's ``client_to_server.json`` has only ``action``
-            and ``error``.
+        protocol_version: The served protocol version.
     """
+    protocol = get_protocol(protocol_version)
     results: list[A2UIIncomingParseResult] = []
     for envelope in envelopes:
+        problem = envelope_problem(envelope, protocol)
+        if problem is not None:
+            if (call_id := _answerable_call_id(envelope, protocol)) is not None:
+                results.append(A2UIIncomingInvalidFunctionCallResult(function_call_id=call_id, reason=problem))
+                continue
+            logger.warning("Skipping A2UI envelope that does not conform to protocol %s: %s", protocol.version, problem)
+            continue
         result = parse_incoming_message(envelope)
         if isinstance(result, A2UIIncomingUnknownResult):
             logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
-            continue
-        if not function_rpc and (kind := _function_rpc_kind(result)) is not None:
-            logger.warning("Skipping A2UI envelope '%s': it exists only in protocol v1.0.", kind)
             continue
         results.append(result)
     return results
@@ -485,7 +650,7 @@ def incoming_prompts(
     handling lives in one place. The server answers some interactions itself, so
     they yield no prompt: a click on a **registered** action (``resolve_action``
     returns its declaration) runs via ``run_server_action``, and every
-    ``callAgentFunction`` is answered via ``run_agent_function``. A nameless
+    ``callAgentFunction``, malformed or not, is answered via ``run_client_interactions``. A nameless
     ``action`` is dropped with a warning.
     """
     for result in interactions:
@@ -497,7 +662,7 @@ def incoming_prompts(
                 logger.warning("Dropping A2UI action with no name.")
                 continue
             yield prompt
-        elif isinstance(result, A2UIIncomingFunctionCallResult):
+        elif isinstance(result, (A2UIIncomingFunctionCallResult, A2UIIncomingInvalidFunctionCallResult)):
             continue
         elif isinstance(result, A2UIIncomingFunctionResponseResult):
             yield function_response_to_prompt(result.function_response)
@@ -520,11 +685,13 @@ __all__ = (
     "A2UIIncomingFunctionError",
     "A2UIIncomingFunctionResponse",
     "A2UIIncomingFunctionResponseResult",
+    "A2UIIncomingInvalidFunctionCallResult",
     "A2UIIncomingParseResult",
     "A2UIIncomingSurfaceError",
     "A2UIIncomingUnknownResult",
     "action_to_prompt",
     "decode_envelopes",
+    "envelope_problem",
     "error_to_prompt",
     "function_response_to_prompt",
     "incoming_prompts",

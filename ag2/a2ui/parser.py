@@ -13,7 +13,7 @@ from typing import Literal, cast
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
-from ._graph import ComponentReferences, component_graph_errors, is_json_pointer, surface_lifecycle_errors
+from ._graph import ComponentTypes, component_graph_errors, is_json_pointer, surface_lifecycle_errors
 from ._messages import is_server_message
 from ._types import (
     JsonObject,
@@ -247,7 +247,7 @@ class A2UIResponseParser:
         protocol: A2UIProtocol,
         server_to_client_schema: JsonSchema | None = None,
         schema_registry: Registry | None = None,
-        component_references: ComponentReferences | None = None,
+        component_types: ComponentTypes | None = None,
         catalog_ids: Collection[str] | None = None,
     ) -> None:
         self._checker = (
@@ -256,7 +256,7 @@ class A2UIResponseParser:
         self._protocol = protocol
         self._schema = server_to_client_schema
         self._registry = schema_registry
-        self._component_references = component_references
+        self._component_types = component_types
         self._catalog_ids = catalog_ids
 
     @property
@@ -384,8 +384,8 @@ class A2UIResponseParser:
         if self._catalog_ids is not None:
             errors.extend(_unknown_catalog_error(unknown, self._catalog_ids) for unknown in unknown_catalogs)
             checkable = [message for message in objects if not _targets_surface(message, uncheckable)]
-        if self._component_references is not None:
-            errors.extend(component_graph_errors(checkable, self._component_references))
+        if self._component_types is not None:
+            errors.extend(component_graph_errors(checkable, self._component_types))
 
         errors.extend(_missing_root_errors(checkable))
 

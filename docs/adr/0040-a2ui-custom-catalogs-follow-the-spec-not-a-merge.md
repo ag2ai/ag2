@@ -28,8 +28,10 @@ Each catalog is validated as written; nothing is merged.
   whose components the catalog has.
 - v1.0: the basic and the custom catalog are both served. The basic catalog is the surface default in the prompt,
   and the prompt tells the model to give custom components `@catalogId` and custom function calls `catalogId`.
-- A `callAgentFunction` may name any catalog the server has (L1495: the renderer sets the catalog the call resolved
-  to).
+- A `callAgentFunction` is matched to an `@a2ui_action` handler by its `@call` name. Its `catalogId`, which the
+  renderer MUST set to the catalog the call resolved to (L1495), may be absent or any catalog the turn offers
+  (ADR 0041). This is ag2's choice: an `@a2ui_action` handler is not declared in any catalog, and the renderer
+  routes undeclared functions to the agent (L1484), so the spec ties the handler to no catalog.
 
 ## Consequences
 

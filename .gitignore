@@ -218,3 +218,5 @@ notebook/mcp/wikipedia_articles/
 notebook/mcp/arxiv_papers/
 
 remote-examples
+demo*.py
+.scratch/

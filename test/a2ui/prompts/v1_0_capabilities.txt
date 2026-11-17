@@ -173,11 +173,7 @@ Example 2: Dynamic list with templates
 
 The connected client renderer supports these component/function catalogs:
 - https://example.com/other.json
-
-Note: the client did NOT list this agent's catalog ('https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'). Prefer components and functions the client supports; it may be unable to render others.
-
-The client also provided inline catalog definitions you may target:
-- catalog 'inline': components: Chip
+- https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json
 
 =====
 

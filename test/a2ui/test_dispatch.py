@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import logging
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -67,13 +68,27 @@ class TestStreamTurn:
 
     async def test_client_capabilities_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
-        body = {**_HI, "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        supported = ["https://other.example/c.json", "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+        body = {**_HI, "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": supported}}}
 
         await _serve(body, config, validate_responses=False)
 
         joined = "\n".join(config.calls[0].prompt)
         assert "## A2UI Client Capabilities" in joined
-        assert "did NOT list" in joined
+        assert "did NOT list" not in joined
+
+    async def test_client_without_the_agents_catalog_gets_no_a2ui(self, caplog: pytest.LogCaptureFixture) -> None:
+        # As the official SDK's resolve_catalogs: no catalog in common, nothing to render with.
+        config = TrackingConfig(TestConfig("ok"))
+        body = {**_HI, "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+
+        with caplog.at_level(logging.WARNING):
+            await _serve(body, config, validate_responses=False)
+
+        joined = "\n".join(config.calls[0].prompt)
+        assert "A2UI Response Format" not in joined
+        assert "## A2UI Client Capabilities" not in joined
+        assert any("supports none of the agent's catalogs" in r.message for r in caplog.records)
 
     async def test_no_capabilities_no_negotiation_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))

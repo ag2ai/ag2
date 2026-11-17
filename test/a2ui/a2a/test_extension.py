@@ -4,9 +4,10 @@
 
 import pytest
 from a2a.server.context import ServerCallContext
+from a2a.types import Message
 from google.protobuf.json_format import MessageToDict
 
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.extension import ACTIVATED_EXTENSIONS_KEY, try_activate_a2ui_extension
 
@@ -39,8 +40,9 @@ class _StubContext:
     ``test_extension_e2e.py`` for the round-trip that pins it.
     """
 
-    def __init__(self, requested_extensions: list[str] | None = None) -> None:
+    def __init__(self, requested_extensions: list[str] | None = None, message: Message | None = None) -> None:
         self.requested_extensions = requested_extensions or []
+        self.message = message
         self.call_context = ServerCallContext()
 
     @property
@@ -99,6 +101,12 @@ class TestAgentExtension:
 class TestTryActivateExtension:
     def test_activates_when_client_requests_uri(self) -> None:
         ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
+        assert try_activate_a2ui_extension(ctx) is True  # type: ignore[arg-type]
+        assert ctx.activated == [A2UI_EXTENSION_URI]
+
+    def test_activates_when_the_message_lists_the_uri(self) -> None:
+        # The official SDK also reads ``message.extensions``, not only the X-A2A-Extensions header.
+        ctx = _StubContext(message=Message(extensions=[A2UI_EXTENSION_URI]))
         assert try_activate_a2ui_extension(ctx) is True  # type: ignore[arg-type]
         assert ctx.activated == [A2UI_EXTENSION_URI]
 

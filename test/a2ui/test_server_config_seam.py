@@ -138,6 +138,41 @@ def test_v1_custom_catalog_names_must_follow_the_entity_naming_rules(catalog: di
         _server(protocol_version="v1.0", custom_catalog={"$id": _CATALOG_ID, **catalog})
 
 
+@pytest.mark.parametrize(
+    ("catalog", "error"),
+    [
+        pytest.param(
+            {"components": {"Card": {**_component("Card"), "allowedParents": "Surface"}}},
+            "allowedParents of component 'Card' must be an array of strings",
+            id="parents-not-an-array",
+        ),
+        pytest.param(
+            {"components": {"Card": {**_component("Card"), "allowedChildren": [1]}}},
+            "allowedChildren of component 'Card' must be an array of strings",
+            id="children-not-strings",
+        ),
+        pytest.param(
+            {"functions": {"lookup": {**_function("lookup"), "allowedCallers": "anyone"}}},
+            "allowedCallers of function 'lookup' must be one of 'rendererOnly', 'agentOnly', 'rendererOrAgent'",
+            id="unknown-callers",
+        ),
+        pytest.param(
+            {
+                "functions": {
+                    "lookup": {**_function("lookup"), "allowedCallers": "agentOnly", "requiresUserActivation": True}
+                }
+            },
+            "function 'lookup' requires user activation, so its allowedCallers must be 'rendererOnly'",
+            id="activation-not-renderer-only",
+        ),
+    ],
+)
+def test_v1_custom_catalog_constraints_follow_the_catalog_definition(catalog: dict[str, Any], error: str) -> None:
+    # v1_0 catalog_definition.json; upstream composition_constraints.json and function_definitions.json.
+    with pytest.raises(ValueError, match=re.escape(error)):
+        _server(protocol_version="v1.0", custom_catalog={"$id": _CATALOG_ID, **catalog})
+
+
 def test_v09_custom_catalog_names_are_not_restricted() -> None:
     # The v0.9 spec sets no naming rule for catalog entities.
     _server(custom_catalog={"$id": _CATALOG_ID, "components": {"my-widget": _component("my-widget")}})

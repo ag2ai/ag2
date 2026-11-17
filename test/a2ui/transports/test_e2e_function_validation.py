@@ -41,7 +41,8 @@ async def _post(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 @pytest.mark.asyncio
-async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
+async def test_empty_function_name_receives_an_invalid_function_call_reply() -> None:
+    # As the official SDK does: an empty '@call' is a malformed call, not a call to an unknown function.
     tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -69,7 +70,12 @@ async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function ''."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": (
+                        "Malformed callAgentFunction: 'callAgentFunction.callFunction' needs a non-empty string '@call'."
+                    ),
+                },
             },
         }
     ]
@@ -182,7 +188,10 @@ async def test_non_object_function_arguments_do_not_execute_handler(args: Any) -
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'submit'."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": "Malformed callAgentFunction: 'args' of function 'submit' must be an object.",
+                },
             },
         }
     ]
@@ -400,7 +409,10 @@ async def test_invalid_catalog_override_does_not_execute_handler(catalog_id: Any
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid catalogId for function 'lookup'."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": "Malformed callAgentFunction: 'catalogId' of function 'lookup' must be a string.",
+                },
             },
         }
     ]

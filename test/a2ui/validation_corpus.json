@@ -294,6 +294,67 @@
      ]
     }
    }
+  },
+  "composition_v10": {
+   "$id": "https://example.com/composition.json",
+   "components": {
+    "Text": {
+     "type": "object",
+     "allowedParents": [
+      "Column"
+     ],
+     "properties": {
+      "component": {
+       "const": "Text"
+      },
+      "text": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    },
+    "Column": {
+     "type": "object",
+     "allowedParents": [
+      "Surface",
+      "Column"
+     ],
+     "allowedChildren": [
+      "Text",
+      "Column"
+     ],
+     "properties": {
+      "component": {
+       "const": "Column"
+      },
+      "children": {
+       "$ref": "common_types.json#/$defs/ChildList"
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    },
+    "Badge": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Badge"
+      },
+      "label": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "label"
+     ]
+    }
+   }
   }
  },
  "cases": [
@@ -1585,7 +1646,7 @@
    "version": "v0.9",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9",
@@ -3279,7 +3340,7 @@
    "version": "v0.9.1",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9.1",
@@ -4969,7 +5030,7 @@
    "version": "v1.0",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",
@@ -5152,7 +5213,7 @@
    "version": "v1.0",
    "note": "component ids MUST be UAX #31 identifiers (v1_0 a2ui_protocol.md, Catalog Entity Naming Rules)",
    "expect": "retry",
-   "error": "Operation 1: Component 'user-card' (Text): 'user-card' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits or '_')",
+   "error": "Operation 1: Component 'user-card' (Text): 'user-card' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_')",
    "messages": [
     {
      "version": "1.0",
@@ -5188,7 +5249,7 @@
    "version": "v1.0",
    "note": "a reference is a ComponentId too",
    "expect": "retry",
-   "error": "Operation 1: Component 'root' (Card): '1st_item' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits or '_')",
+   "error": "Operation 1: Component 'root' (Card): '1st_item' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_')",
    "messages": [
     {
      "version": "1.0",
@@ -5234,11 +5295,11 @@
         "id": "root",
         "component": "Column",
         "children": [
-         "ünïcödé_1"
+         "\u00fcn\u00efc\u00f6d\u00e9_1"
         ]
        },
        {
-        "id": "ünïcödé_1",
+        "id": "\u00fcn\u00efc\u00f6d\u00e9_1",
         "component": "Text",
         "text": "hi"
        }
@@ -5636,7 +5697,7 @@
    "version": "v1.0",
    "note": "inline components without root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",
@@ -5805,7 +5866,7 @@
    "version": "v1.0",
    "note": "metadata.extensions key '1x'",
    "expect": "retry",
-   "error": "Operation 0: '1x' is not a UAX #31 identifier (a letter or '_', then letters, digits or '_') (at /createSurface/metadata/extensions)",
+   "error": "Operation 0: '1x' is not a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_') (at /createSurface/metadata/extensions)",
    "messages": [
     {
      "version": "1.0",
@@ -7292,6 +7353,695 @@
         "id": "root",
         "component": "Label",
         "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:button_fn_openUrl_not_a_uri",
+   "version": "v0.9",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_leap_day",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_time",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_not_a_date",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_non_leap_day",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:button_fn_openUrl_not_a_uri",
+   "version": "v0.9.1",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_leap_day",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_time",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_not_a_date",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_non_leap_day",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:button_fn_openUrl_not_a_uri",
+   "version": "v1.0",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "@call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_leap_day",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_time",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_not_a_date",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_non_leap_day",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_ok",
+   "version": "v1.0",
+   "note": "allowedParents/allowedChildren satisfied (after upstream conformance composition_catalog_v1_0.json)",
+   "expect": "frames",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "t",
+         "inner"
+        ]
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "a"
+       },
+       {
+        "id": "inner",
+        "component": "Column",
+        "children": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_unconstrained_root",
+   "version": "v1.0",
+   "note": "a type with no allowedParents may be root",
+   "expect": "frames",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Badge",
+        "label": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_root_not_allowed_under_surface",
+   "version": "v1.0",
+   "note": "root mounts under Surface; Text allows only Column (UNALLOWED_PARENT)",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Text) cannot be placed in 'Surface' (Surface): its allowedParents are 'Column'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_root_not_allowed_under_surface_on_update",
+   "version": "v1.0",
+   "note": "root mounts under Surface on any updateComponents, not only a new surface",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Text) cannot be placed in 'Surface' (Surface): its allowedParents are 'Column'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_child_not_allowed",
+   "version": "v1.0",
+   "note": "Column allows only Text and Column children (UNALLOWED_CHILD)",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Column) cannot contain 'b' (Badge): its allowedChildren are 'Column', 'Text'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "b"
+        ]
+       },
+       {
+        "id": "b",
+        "component": "Badge",
+        "label": "x"
        }
       ]
      }

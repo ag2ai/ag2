@@ -33,7 +33,7 @@ from a2a.types import AgentCard
 from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.extension import EXTENSION_URI
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
 from ag2.testing import TestConfig

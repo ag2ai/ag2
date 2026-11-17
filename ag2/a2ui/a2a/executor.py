@@ -23,8 +23,8 @@ from ag2.context import strip_reserved_variables
 from ag2.stream import MemoryStream
 
 from .._messages import is_client_envelope
-from .._runtime import build_runtime, collect_a2ui_messages
-from .._types import A2UIVersion, JsonObject, JsonSchema, ServerToClientMessage
+from .._runtime import A2UIMessageCollector, A2UIOffer, build_runtime
+from .._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage
 from ..actions import A2UIAction
 from ..capabilities import (
     A2UIClientCapabilities,
@@ -48,6 +48,8 @@ logger = logging.getLogger(__name__)
 class _IncomingRequest:
     interactions: tuple[A2UIIncomingParseResult, ...]
     awaiting_input: bool
+    offer: A2UIOffer
+    capabilities: A2UIClientCapabilities | None
 
 
 # Per-request carrier for the client→server interactions parsed in ``execute``
@@ -65,10 +67,11 @@ class A2UIAgentExecutor(AgentExecutor):
 
     Extends :class:`ag2.a2a.AgentExecutor` to:
 
-    1. Negotiate the A2UI extension when the client requests it.
-    2. Read ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) from the request message metadata and
-       fold catalog negotiation into the turn's system prompt
-       (:meth:`_extra_system_prompt`).
+    1. Negotiate the A2UI extension when the client requests it (``X-A2A-Extensions`` or ``message.extensions``).
+    2. Read ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) from the request message metadata,
+       then from each DataPart's metadata, and offer only the agent's catalogs the renderer names. In v1.0 a
+       message without capabilities offers no A2UI: the turn runs without the A2UI prompt and its reply carries
+       no A2UI DataPart (A2A extension v1.0, "Capability scoping").
     3. Detect incoming A2UI DataParts on the request message:
        - an ``action`` envelope for a **registered** action runs that action's
          handler on the server (the agent is not invoked); its messages lead the
@@ -131,12 +134,19 @@ class A2UIAgentExecutor(AgentExecutor):
         token: contextvars.Token[_IncomingRequest | None] | None = None
         if request_context.message is not None:
             try_activate_a2ui_extension(request_context, version=self.protocol_version)
+            # Read before the A2UI DataParts are consumed: their metadata may carry the capabilities.
+            caps = self._client_capabilities(request_context)
+            offer = self._runtime.offer_for(
+                caps, capabilities_required=self._runtime.protocol.a2a_turn_scoped_capabilities
+            )
             interactions = self._rewrite_incoming_a2ui_parts(request_context)
             task = request_context.current_task
             token = _INCOMING_REQUEST.set(
                 _IncomingRequest(
                     interactions=tuple(interactions),
                     awaiting_input=task is not None and task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED,
+                    offer=offer,
+                    capabilities=caps,
                 )
             )
         try:
@@ -168,14 +178,14 @@ class A2UIAgentExecutor(AgentExecutor):
         interactions: list[A2UIIncomingParseResult] = []
         for part in msg.parts:
             envelopes = _extract_a2ui_envelopes(part)
-            if not envelopes:
+            if envelopes is None:
                 new_parts.append(part)
                 continue
 
             # An A2UI DataPart is always consumed (never forwarded raw); a
             # registered action simply produces no replacement prompt.
             consumed_a2ui = True
-            decoded = decode_envelopes(envelopes, function_rpc=self._runtime.protocol.function_rpc)
+            decoded = decode_envelopes(envelopes, protocol_version=self._runtime.protocol.version)
             interactions.extend(decoded)
             new_parts.extend(Part(text=prompt) for prompt in incoming_prompts(decoded, self._runtime.get_action))
 
@@ -186,20 +196,20 @@ class A2UIAgentExecutor(AgentExecutor):
         return interactions
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
-        """Apply the A2UI prompt to the plain agent and fold in client capabilities.
+        """Apply the turn's A2UI prompt to the plain agent and fold in client capabilities.
 
         The agent is a plain ``Agent`` with no A2UI prompt baked in, so the
-        runtime's system-prompt section is prepended here. Negotiated
-        ``a2uiClientCapabilities`` / ``a2uiRendererCapabilities`` (read off the incoming message metadata) are
-        appended as a per-turn fragment so the LLM only targets components the
-        client can render; so is the renderer's data model (``a2uiRendererDataModel``).
+        prompt section of the turn's offer (the catalogs the renderer supports) is
+        prepended here; a turn that offers no A2UI gets none. The renderer's
+        capabilities and data model (``a2uiRendererDataModel``) are appended as
+        per-turn fragments.
         """
-        prompts: list[str] = [self._runtime.system_prompt_section]
-        caps = self._client_capabilities(request_context)
-        if caps is not None:
-            fragment = self._runtime.capabilities_prompt(caps)
-            if fragment:
-                prompts.append(fragment)
+        incoming = _INCOMING_REQUEST.get()
+        offer = incoming.offer if incoming is not None else self._runtime.full_offer
+        caps = incoming.capabilities if incoming is not None else None
+        prompts: list[str] = [offer.system_prompt_section] if offer.system_prompt_section else []
+        if fragment := self._runtime.capabilities_prompt(caps, offer):
+            prompts.append(fragment)
         msg = request_context.message
         if msg is not None and msg.metadata:
             surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.protocol.version)
@@ -208,17 +218,22 @@ class A2UIAgentExecutor(AgentExecutor):
         return tuple(prompts)
 
     def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
-        """Decode ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) from the request message metadata.
+        """Decode ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) for the served version.
 
-        ``RequestContext.metadata`` is a read-only copy, so the capabilities are
-        read from their source — ``message.metadata`` — converting the protobuf
-        ``Struct`` to a plain dict first.
+        As the A2A extension says, ``Message.metadata`` is read first and then each
+        DataPart's metadata in order; the first entry for the served version wins.
+        ``RequestContext.metadata`` is a read-only copy, so the capabilities are read
+        from their source, converting each protobuf ``Struct`` to a plain dict.
         """
         msg = request_context.message
-        if msg is None or not msg.metadata:
+        if msg is None:
             return None
         version_key = self._runtime.protocol.version
-        return parse_client_capabilities(struct_to_dict(msg.metadata), version_key=version_key)
+        sources = [msg.metadata, *(part.metadata for part in msg.parts if part.HasField("data"))]
+        for metadata in sources:
+            if metadata and (caps := parse_client_capabilities(struct_to_dict(metadata), version_key=version_key)):
+                return caps
+        return None
 
     async def _run_one_turn(
         self,
@@ -236,14 +251,15 @@ class A2UIAgentExecutor(AgentExecutor):
         # A2UI message onto this turn's stream. Collect them as the single
         # source of UI content (the event seam) instead of re-parsing text.
         a2ui_messages: list[ServerToClientMessage] = []
-        stream.where(A2UIMessageEvent).subscribe(collect_a2ui_messages(a2ui_messages))
+        stream.where(A2UIMessageEvent).subscribe(A2UIMessageCollector(a2ui_messages))
 
         # Surface each incoming client→server interaction (captured in execute,
         # before the A2UI DataParts were rewritten to text) as an A2UIClientEvent
         # on the turn's stream, alongside the validation middleware.
         incoming = _INCOMING_REQUEST.get()
         interactions = incoming.interactions if incoming is not None else ()
-        extra_middleware = self._runtime.turn_middleware(interactions)
+        offer = incoming.offer if incoming is not None else self._runtime.full_offer
+        extra_middleware = self._runtime.turn_middleware(interactions, offer)
 
         # Answer the interactions the server handles itself — registered clicks and
         # callAgentFunction calls (the prompt rewriter already skipped these, so the
@@ -254,6 +270,7 @@ class A2UIAgentExecutor(AgentExecutor):
             interactions,
             self._runtime,
             self._agent,
+            offer=offer,
             variables=parsed.context_update,
         )
         a2ui_messages.extend(server_messages)
@@ -277,6 +294,11 @@ class A2UIAgentExecutor(AgentExecutor):
                 additional_middleware=extra_middleware,
             )
             prose_text = response.message.content if response.message else ""
+            if a2ui_messages and not offer.sends_ui:
+                logger.warning(
+                    "The renderer offers no A2UI this turn; not sending %d A2UI message(s).", len(a2ui_messages)
+                )
+                a2ui_messages.clear()
             agent_msg = self._build_a2ui_message(writer, prose_text or "", a2ui_messages, final_variables)
             has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
 
@@ -337,26 +359,22 @@ class A2UIAgentExecutor(AgentExecutor):
         return writer.new_agent_message(parts=parts, metadata=metadata)
 
 
-def _extract_a2ui_envelopes(part: Part) -> list[JsonObject]:
-    """Return the A2UI envelope dicts the renderer sends the agent from an A2A ``Part``.
+def _extract_a2ui_envelopes(part: Part) -> list[JsonValue] | None:
+    """The envelopes an A2UI DataPart carries for the agent, or ``None`` when ``part`` carries none to consume.
 
-    Those carry ``action``, ``callAgentFunction``, ``rendererFunctionResponse`` or ``error``.
+    Those carry ``action``, ``callAgentFunction``, ``rendererFunctionResponse`` or ``error``. The A2A extension
+    says ``data`` "MUST be an array of messages", so a DataPart meant for the agent whose ``data`` is a single
+    envelope (or a ``{"messages": [...]}`` wrapper) is consumed with a warning and yields none.
     """
     data = get_a2ui_data(part)
     if data is None:
-        return []
-
-    raw_entries: list[JsonObject] = []
-    if isinstance(data, list):
-        raw_entries.extend(d for d in data if isinstance(d, dict))
-    elif isinstance(data, dict):
-        messages = data.get("messages")
-        if isinstance(messages, list):
-            raw_entries.extend(m for m in messages if isinstance(m, dict))
-        else:
-            raw_entries.append(data)
-
-    return [e for e in raw_entries if is_client_envelope(e)]
+        return None
+    if not isinstance(data, list):
+        if is_client_envelope(data) or "messages" in data:
+            logger.warning("Dropping an A2UI DataPart whose 'data' is not an array of messages.")
+            return []
+        return None
+    return [entry for entry in data if is_client_envelope(entry)] or None
 
 
 __all__ = ("A2UIAgentExecutor",)

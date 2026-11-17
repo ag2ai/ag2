@@ -24,7 +24,7 @@ from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.events import A2ATaskStatusUpdate
 from ag2.a2a.testing import make_test_client_factory
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
 from ag2.config import LLMClient, ModelConfig
@@ -116,6 +116,9 @@ class CallRendererFunctionThenCompleteClient(LLMClient):
         return ModelResponse(msg)
 
 
+V1_BASIC_CATALOG_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+
+
 class MetadataInterceptor(ClientCallInterceptor):
     """Splices ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) onto the outgoing message metadata.
 
@@ -168,6 +171,7 @@ def client_for(
     validate_responses: bool = True,
     actions: Sequence[Any] = (),
     custom_catalog: dict[str, Any] | None = None,
+    renderer_capabilities: bool = True,
 ) -> Agent:
     """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
 
@@ -175,6 +179,10 @@ def client_for(
     validation) lives on the :class:`A2UIAgentExecutor`. Clickable buttons
     (``@a2ui_action`` tools) are declared via ``actions=`` on the executor — the
     same way they are on :class:`A2UIServer` — so the agent stays plain.
+
+    With ``renderer_capabilities`` a v1.0 client advertises every catalog the
+    executor serves on each message, as a v1.0 renderer must for its turn to have
+    A2UI at all. A later ``MetadataInterceptor`` can override it.
     """
     executor = A2UIAgentExecutor(
         agent,
@@ -184,6 +192,10 @@ def client_for(
         custom_catalog=custom_catalog,
     )
     a2a_server = A2AServer(agent, executor=executor)
+    if renderer_capabilities and protocol_version == "v1.0":
+        catalogs = [V1_BASIC_CATALOG_ID, *([custom_catalog["$id"]] if custom_catalog else [])]
+        supported = {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": catalogs}}}
+        interceptors = [MetadataInterceptor(supported), *interceptors]
     factory = make_test_client_factory(a2a_server, url="http://test")
     kwargs: dict[str, Any] = {}
     if hitl_hook is not None:

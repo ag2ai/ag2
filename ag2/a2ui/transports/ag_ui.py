@@ -21,7 +21,7 @@ text. Importing this module requires Starlette and ``ag2[ag-ui]``.
 import functools
 import logging
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -65,6 +65,8 @@ from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
 from .._messages import is_client_envelope
 from .._types import JsonObject, JsonValue, ServerToClientMessage
+from ..capabilities import parse_client_capabilities
+from ..data_model import parse_client_data_model
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
 from ..incoming import decode_envelopes, incoming_prompts
 from ..request import A2UIServerRequest
@@ -154,7 +156,7 @@ async def _endpoint(turns: ServedTurns, core: "_A2UITurnCore", request: Request)
     )
 
 
-def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
+def _client_envelopes(forwarded_props: JsonValue, *, version: str) -> list[JsonObject]:
     """Extract A2UI client→server envelopes from a run's ``forwardedProps``.
 
     Three shapes are read, in this order:
@@ -163,8 +165,8 @@ def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
       sourceComponentId?, context?, timestamp?, dataContextPath?}}`` — how
       CopilotKit's ``@copilotkit/a2ui-renderer`` relays a button click and re-runs
       the agent (verified against CopilotKit ``react-core`` ``A2UIMessageRenderer``
-      and their server examples), mapped to the ``{"action": {...}}`` envelope the
-      A2UI incoming pipeline already parses;
+      and their server examples), mapped to the ``{"version": ..., "action": {...}}``
+      envelope of the served ``version``, stamped with the current time when it has none;
     - ``forwardedProps.a2uiAction`` carrying an envelope itself (``callAgentFunction``,
       ``rendererFunctionResponse``, ``action`` or ``error``), passed through as is;
     - ``forwardedProps.a2ui``, a list of such envelopes — the same array REST reads
@@ -181,11 +183,13 @@ def _client_envelopes(forwarded_props: JsonValue) -> list[JsonObject]:
         if isinstance(user_action, dict) and user_action.get("name"):
             context = user_action.get("context")
             envelopes.append({
+                "version": version,
                 "action": {
                     "name": user_action["name"],
                     "surfaceId": user_action.get("surfaceId", ""),
                     "sourceComponentId": user_action.get("sourceComponentId", ""),
-                    "timestamp": user_action.get("timestamp", ""),
+                    # The click arrives now; a renderer that omits the time still sends a well-formed action.
+                    "timestamp": user_action.get("timestamp") or datetime.now(UTC).isoformat(),
                     "context": context if isinstance(context, dict) else {},
                 },
             })
@@ -206,7 +210,9 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     ``forwardedProps.a2uiAction`` and re-runs the agent (no new chat message), so
     the click is rewritten into the current turn and surfaced as a client
     interaction — mirroring the REST transport's handling of inbound ``a2ui``
-    envelopes.
+    envelopes. The renderer's capabilities and data model are read from
+    ``forwardedProps`` under the REST body's keys (``a2uiClientCapabilities`` /
+    ``a2uiRendererCapabilities``, ``a2uiClientDataModel`` / ``a2uiRendererDataModel``).
     """
     variables = incoming.state if isinstance(incoming.state, dict) else {}
     prompt, history, current_inputs = map_agui_messages_to_events(
@@ -216,16 +222,21 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     )
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
+    protocol = core.runtime.protocol
     interactions = decode_envelopes(
-        _client_envelopes(incoming.forwarded_props), function_rpc=core.runtime.protocol.function_rpc
+        _client_envelopes(incoming.forwarded_props, version=protocol.wire_version), protocol_version=protocol.version
     )
     current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, core.runtime.get_action))
+    # AG-UI has no metadata of its own for these, so they ride ``forwardedProps`` under the keys the REST body uses.
+    forwarded = incoming.forwarded_props if isinstance(incoming.forwarded_props, dict) else None
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,
         prompt=prompt,
         variables=variables,
+        client_capabilities=parse_client_capabilities(forwarded, version_key=protocol.version),
         client_interactions=interactions,
+        client_data_model=parse_client_data_model(forwarded, version_key=protocol.version),
     )
 
 

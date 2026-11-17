@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from ._graph import ComponentReferences, component_references
+from ._graph import ComponentTypes, component_types
 from ._types import A2UIVersion, JsonObject, JsonSchema, JsonValue
 from ._versions import A2UIProtocol, get_protocol
 from .actions import A2UIEventAction
@@ -410,6 +410,35 @@ def _check_entity_names(catalog: JsonSchema) -> None:
             _check_entity_name("argument name", argument, owner=f"function {name!r}")
 
 
+_ALLOWED_CALLERS = ("rendererOnly", "agentOnly", "rendererOrAgent")
+
+
+def _check_definition_metadata(catalog: JsonSchema) -> None:
+    """Reject a v1.0 catalog whose composition constraints or function callers ``catalog_definition.json`` forbids.
+
+    ``allowedParents`` / ``allowedChildren`` are arrays of component type names; ``allowedCallers`` is one of
+    :data:`_ALLOWED_CALLERS`, and a function that ``requiresUserActivation`` is ``rendererOnly``. Without this, a
+    malformed constraint would silently allow everything.
+    """
+    for name, component in _as_object(catalog.get("components")).items():
+        definition = _as_object(component)
+        for key in ("allowedParents", "allowedChildren"):
+            names = definition.get(key, [])
+            if not isinstance(names, list) or not all(isinstance(item, str) for item in names):
+                raise ValueError(f"Invalid custom catalog: {key} of component {name!r} must be an array of strings")
+    for name, function in _as_object(catalog.get("functions")).items():
+        definition = _as_object(function)
+        callers = definition.get("allowedCallers", "rendererOnly")
+        if callers not in _ALLOWED_CALLERS:
+            allowed = ", ".join(map(repr, _ALLOWED_CALLERS))
+            raise ValueError(f"Invalid custom catalog: allowedCallers of function {name!r} must be one of {allowed}")
+        if definition.get("requiresUserActivation") is True and callers != "rendererOnly":
+            raise ValueError(
+                f"Invalid custom catalog: function {name!r} requires user activation, so its allowedCallers must be "
+                "'rendererOnly'"
+            )
+
+
 def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
     # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
     if not name.isidentifier():
@@ -508,6 +537,7 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
         _check_catalog_references(catalog)
     if protocol.entity_naming_rules:
         _check_entity_names(catalog)
+        _check_definition_metadata(catalog)
     if "$id" not in catalog:
         raise ValueError(
             "Custom catalog must include a '$id' field. "
@@ -527,23 +557,29 @@ class _AgentCatalogs:
     """The catalogs the agent serves, each as written; none is merged into another.
 
     v1.0 catalogs are mixable (a2ui_protocol.md, "Mixable catalogs and component resolution logic"): the basic and
-    the custom catalog are both served, a surface defaults to the basic one, and a custom component or function
-    names its catalog. Before v1.0 a surface has one catalog and a custom catalog is used "in place of the basic
-    catalog" (v0_9 a2ui_protocol.md, "Swappable Catalogs & Validation"); it may still ``$ref`` basic definitions.
+    the custom catalog are both served, the prompt's ``createSurface`` names the basic one as the surface default,
+    and a custom component or function names its catalog. Before v1.0 a surface has one catalog and a custom
+    catalog is used "in place of the basic catalog" (v0_9 a2ui_protocol.md, "Swappable Catalogs & Validation"); it
+    may still ``$ref`` basic definitions. ``basic`` is ``None`` only for a v1.0 turn whose renderer does not support
+    the basic catalog (see :meth:`A2UISchemaManager.restricted_to`).
     """
 
-    basic: JsonSchema
+    basic: JsonSchema | None
     custom: JsonSchema | None
     mixable: bool
 
     @property
-    def default(self) -> JsonSchema:
-        """The catalog ``createSurface`` names in the prompt."""
-        return self.custom if self.custom is not None and not self.mixable else self.basic
+    def surface_catalog(self) -> JsonSchema:
+        """The catalog the prompt's ``createSurface`` names as the surface default."""
+        if self.custom is not None and (not self.mixable or self.basic is None):
+            return self.custom
+        if self.basic is None:
+            raise ValueError("an agent serves at least one catalog")
+        return self.basic
 
     @property
     def id(self) -> str:
-        return str(self.default["$id"])
+        return str(self.surface_catalog["$id"])
 
     @property
     def custom_components(self) -> JsonObject:
@@ -552,11 +588,9 @@ class _AgentCatalogs:
     @property
     def by_id(self) -> dict[str, JsonSchema]:
         """Every catalog a surface may name, by ``$id``."""
-        if self.custom is None:
-            return {str(self.basic["$id"]): self.basic}
         if not self.mixable:
-            return {str(self.custom["$id"]): self.custom}
-        return {str(self.basic["$id"]): self.basic, str(self.custom["$id"]): self.custom}
+            return {str(self.surface_catalog["$id"]): self.surface_catalog}
+        return {str(catalog["$id"]): catalog for catalog in (self.basic, self.custom) if catalog is not None}
 
 
 def _with_any_definitions(catalog: JsonSchema) -> JsonSchema:
@@ -661,9 +695,10 @@ class A2UISchemaManager:
     """Loads vendored A2UI schemas for a protocol version and builds the
     system-prompt section that instructs an LLM to emit valid A2UI output.
 
-    A custom catalog (file path or dict) extends the basic catalog; its
-    components are merged into the schema registry and listed in the prompt.
-    In v1.0 the custom catalog's own ``$ref``s may target only what it declares
+    No catalog is merged into another. Before v1.0 a custom catalog (file path
+    or dict) is served in place of the basic catalog; in v1.0 both are served
+    and a custom component or function names its catalog (see ADR 0040). In
+    v1.0 the custom catalog's own ``$ref``s may target only what it declares
     and the standard types in ``common_types.json`` (a2ui_protocol.md,
     "Restricted $ref Targets"), not the basic catalog's components.
     """
@@ -678,17 +713,39 @@ class A2UISchemaManager:
 
         Args:
             protocol_version: The A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
-            custom_catalog: A custom catalog that extends the basic catalog. Can be:
+            custom_catalog: A custom catalog, served in place of the basic one before
+                v1.0 and beside it in v1.0. Can be:
                 - A file path (str or PathLike) to a JSON catalog file
                 - A dict with the catalog schema directly
                 Must include a ``$id`` field (used as the catalogId in A2UI messages).
-            custom_catalog_rules: Plain-text rules for the custom catalog components,
-                appended to the basic catalog rules in the system prompt.
+            custom_catalog_rules: Plain-text rules for the custom catalog components. In
+                v1.0 they follow the basic catalog's rules in the system prompt; before
+                v1.0 they replace them, as the custom catalog replaces the basic one.
         """
         self._protocol = get_protocol(protocol_version)
         self._custom_catalog_input = custom_catalog
         self._custom_catalog_rules = custom_catalog_rules or ""
+        self._served: frozenset[str] | None = None
         self._loaded = False
+
+    def restricted_to(self, catalog_ids: Collection[str]) -> "A2UISchemaManager | None":
+        """This agent's catalogs that ``catalog_ids`` names, as a manager serving only those; ``None`` if none.
+
+        A renderer advertises the catalogs it supports, and only those become active for its turn, as the
+        official SDK's ``resolve_catalogs`` does. Returns ``self`` when every catalog is named.
+        """
+        served = frozenset(catalog_ids).intersection(self.catalog_ids)
+        if not served:
+            return None
+        if len(served) == len(self.catalog_ids):
+            return self
+        restricted = A2UISchemaManager(
+            protocol_version=self._protocol.version,
+            custom_catalog=self._custom_catalog_input,
+            custom_catalog_rules=self._custom_catalog_rules,
+        )
+        restricted._served = served
+        return restricted
 
     def _ensure_loaded(self) -> None:
         """Read the vendored specs and the custom catalog on first use, and derive the validation schemas."""
@@ -712,13 +769,17 @@ class A2UISchemaManager:
         if protocol.per_surface_catalogs:
             # A closed function lets each call be checked against one definition (see ``_closed_objects``).
             basic = {**basic, "functions": _closed_objects(basic.get("functions"))}
-        catalog = _AgentCatalogs(
-            basic=basic,
-            custom=_with_any_definitions(custom) if custom is not None else None,
-            mixable=protocol.per_surface_catalogs,
-        )
+        served_basic: JsonSchema | None = basic
+        served_custom = _with_any_definitions(custom) if custom is not None else None
+        if self._served is not None:
+            # Only a v1.0 agent serves more than one catalog, so only there can a renderer leave one out.
+            if str(basic["$id"]) not in self._served:
+                served_basic = None
+            if served_custom is not None and str(served_custom["$id"]) not in self._served:
+                served_custom = None
+        catalog = _AgentCatalogs(basic=served_basic, custom=served_custom, mixable=protocol.per_surface_catalogs)
         if protocol.per_surface_catalogs:
-            common_types = _with_catalog_function_dispatch(common_types, catalog.by_id, catalog.default)
+            common_types = _with_catalog_function_dispatch(common_types, catalog.by_id, catalog.surface_catalog)
             server_to_client = _with_catalog_component_selection(server_to_client, catalog.by_id)
         self._catalog = catalog
         self._common_types = common_types
@@ -736,7 +797,7 @@ class A2UISchemaManager:
 
     @property
     def catalog_ids(self) -> tuple[str, ...]:
-        """Every catalog a surface may name: the basic one, and the agent's merged one when it differs."""
+        """Every catalog a surface may name: in v1.0 the basic one and any custom one; before, the one in use."""
         self._ensure_loaded()
         return tuple(self._catalog.by_id)
 
@@ -746,10 +807,10 @@ class A2UISchemaManager:
         self._ensure_loaded()
         return self._validation_schema
 
-    def component_references(self) -> ComponentReferences:
-        """Where each component type of the merged catalog references other components."""
+    def component_types(self) -> ComponentTypes:
+        """How each component type of the served catalogs references and nests other components."""
         self._ensure_loaded()
-        return component_references(
+        return component_types(
             *self._catalog.by_id.values(), documents={"basic_catalog.json": self._spec.basic_catalog}
         )
 
@@ -767,7 +828,7 @@ class A2UISchemaManager:
             str(self._common_types["$id"]): common_types,
             **{catalog_id: _resource(catalog) for catalog_id, catalog in catalogs.items()},
             # Aliases. ``catalog.json`` next to the message schema names the agent's catalog.
-            f"{base}catalog.json": _resource(self._catalog.default),
+            f"{base}catalog.json": _resource(self._catalog.surface_catalog),
             # Before v1.0 a custom catalog may reach the basic one as ``basic_catalog.json``, resolved
             # against ``catalog.json`` above.
             f"{base}basic_catalog.json": _resource(self._spec.basic_catalog),
@@ -800,7 +861,7 @@ class A2UISchemaManager:
         the example shows only the messages that carry no components.
         """
         example = self._spec.prompt_example
-        available = _as_object(self._catalog.default.get("components"))
+        available = _as_object(self._catalog.surface_catalog.get("components"))
         if isinstance(example, list) and not _example_component_types(example) <= available.keys():
             example = [message for message in example if not _example_component_types([message])]
         raw = json.dumps(example, separators=(",", ": "))
@@ -858,13 +919,14 @@ class A2UISchemaManager:
         # (``id`` in every version, then v0.9 ``accessibility`` or v1.0 ``@catalogId``, ...).
         common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
         envelope = frozenset({"component", *_as_object(common.get("properties"))})
-        default_components = _as_object(catalog.default.get("components"))
-        mixed_in = catalog.custom_components if catalog.mixable else {}
+        default_components = _as_object(catalog.surface_catalog.get("components"))
+        mixes_catalogs = catalog.mixable and catalog.basic is not None and catalog.custom is not None
+        mixed_in = catalog.custom_components if mixes_catalogs else {}
         if default_components or mixed_in:
             comp_section = "\n\n## Available Components\n\n"
             if catalog.custom is None:
                 comp_section += f"**Basic catalog:** {', '.join(sorted(default_components))}\n\n"
-            elif catalog.mixable:
+            elif mixes_catalogs and catalog.custom is not None:
                 comp_section += f"**Basic catalog** (the surface default): {', '.join(sorted(default_components))}\n\n"
                 if mixed_in:
                     custom_id = str(catalog.custom["$id"])
@@ -889,7 +951,7 @@ class A2UISchemaManager:
         if include_rules:
             rules_parts: list[str] = []
             # A catalog used in place of the basic one replaces its rules too.
-            if self._spec.catalog_rules and catalog.default is catalog.basic:
+            if self._spec.catalog_rules and catalog.surface_catalog is catalog.basic:
                 rules_parts.append(self._spec.catalog_rules)
             if self._custom_catalog_rules:
                 rules_parts.append(self._custom_catalog_rules)

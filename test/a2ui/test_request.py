@@ -149,7 +149,13 @@ class TestParseRequestActions:
                 "a2ui": [
                     {
                         "version": "v0.9",
-                        "action": {"name": "ghost", "surfaceId": "", "sourceComponentId": "", "timestamp": ""},
+                        "action": {
+                            "name": "ghost",
+                            "surfaceId": "s1",
+                            "sourceComponentId": "b1",
+                            "timestamp": "2026-01-01T00:00:00Z",
+                            "context": {},
+                        },
                     }
                 ],
             },
@@ -184,7 +190,13 @@ class TestParseRequestActions:
                 "a2ui": [
                     {
                         "version": "v0.9",
-                        "action": {"name": "go", "surfaceId": "", "sourceComponentId": "", "timestamp": ""},
+                        "action": {
+                            "name": "go",
+                            "surfaceId": "s1",
+                            "sourceComponentId": "b1",
+                            "timestamp": "2026-01-01T00:00:00Z",
+                            "context": {},
+                        },
                     }
                 ],
             },

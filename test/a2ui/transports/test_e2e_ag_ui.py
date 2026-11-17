@@ -514,3 +514,33 @@ async def test_client_context_reaches_the_prompt() -> None:
     [prompt] = seen
     assert prompt[0] == "Be helpful."
     assert prompt[-1] == "## Context from the application\n\n- The user's locale: en-GB"
+
+
+@pytest.mark.asyncio
+async def test_renderer_capabilities_and_data_model_ride_forwarded_props() -> None:
+    tracking = TrackingConfig(TestConfig("ok"))
+    server = A2UIServer(Agent("ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.forwarded_props = {
+        "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": [_CATALOG]}},
+        "a2uiClientDataModel": {"surfaces": {"s1": {"name": "Ada"}}},
+    }
+
+    await _dispatch_events(server, incoming)
+
+    prompt = "\n".join(tracking.calls[0].prompt)
+    assert "## A2UI Client Capabilities" in prompt
+    assert '"name": "Ada"' in prompt
+
+
+@pytest.mark.asyncio
+async def test_renderer_without_the_agents_catalog_gets_no_a2ui_over_ag_ui() -> None:
+    tracking = TrackingConfig(TestConfig(_A2UI_RESPONSE))
+    server = A2UIServer(Agent("ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.forwarded_props = {"a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["https://x.example/c"]}}}
+
+    events = await _dispatch_events(server, incoming)
+
+    assert [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"] == []
+    assert _CATALOG not in "\n".join(tracking.calls[0].prompt)

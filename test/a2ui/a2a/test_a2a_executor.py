@@ -30,6 +30,7 @@ from ag2.tools.final.function_tool import FunctionToolSchema
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
+    V1_BASIC_CATALOG_ID,
     CallRendererFunctionThenComplete,
     CapturingConfig,
     DropEmptyTextInterceptor,
@@ -44,6 +45,7 @@ CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
 DELETE_SURFACE_MSG = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
 CREATE_SURFACE_MSG = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
+V1_CREATE_SURFACE = {"version": "1.0", "createSurface": {"surfaceId": "s1", "catalogId": V1_BASIC_CATALOG_ID}}
 
 ACTION_ENVELOPE = {
     "version": VERSION,
@@ -90,6 +92,8 @@ _CALL_RENDERER_FUNCTION_BLOCK = (
 
 
 async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
+    """Send ``message`` from a v1.0 renderer, which advertises its catalogs on every message."""
+    message.metadata.update({"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": [V1_BASIC_CATALOG_ID]}}})
     response = await http.post(
         "/",
         json={
@@ -159,16 +163,20 @@ class _FunctionRoundTrip(ClientCallInterceptor):
 class TestExtractA2UIEnvelopes:
     """Envelope decode — the three on-the-wire shapes from get_a2ui_data."""
 
-    def test_returns_empty_for_text_part(self) -> None:
-        assert _extract_a2ui_envelopes(Part(text="hello")) == []
+    def test_returns_none_for_text_part(self) -> None:
+        assert _extract_a2ui_envelopes(Part(text="hello")) is None
 
     def test_canonical_list_payload(self) -> None:
         [part] = create_a2ui_parts([ACTION_ENVELOPE])
         assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
 
-    def test_legacy_single_dict_payload(self) -> None:
-        [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+    def test_single_object_payload_is_consumed_without_envelopes(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The A2A extension: a DataPart's data "MUST be an array of messages".
+        with pytest.warns(DeprecationWarning):
+            [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
+        with caplog.at_level("WARNING"):
+            assert _extract_a2ui_envelopes(part) == []
+        assert "not an array of messages" in caplog.text
 
     def test_filters_entries_the_renderer_does_not_send(self) -> None:
         [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
@@ -331,7 +339,7 @@ async def test_malformed_envelope_is_dropped_with_a_warning(caplog: pytest.LogCa
     with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
         await client.ask("go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([malformed])})
 
-    assert "Skipping A2UI envelope of unrecognized kind" in caplog.text
+    assert "does not conform to protocol v0.9" in caplog.text
     assert "submit" not in synthesized_text(config.messages[-1])
 
 
@@ -645,14 +653,15 @@ class TestCapabilitiesNegotiation:
     async def test_client_caps_injected_into_prompt(self) -> None:
         config = CapturingConfig()
         agent = Agent(name="ui_agent", config=config)
-        caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        supported = ["https://other.example/c.json", "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+        caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": supported}}}
         client = client_for(agent, interceptors=[MetadataInterceptor(caps)], validate_responses=False)
 
         await client.ask("hi")
 
         prompt = "\n".join(config.prompts[-1])
         assert "## A2UI Client Capabilities" in prompt
-        assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
+        assert "https://other.example/c.json" in prompt
 
     async def test_v0_9_1_client_caps_are_read_under_the_v0_9_key(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
@@ -664,21 +673,55 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
+        # Read and acted on: the renderer supports none of the agent's catalogs, so the turn has no A2UI.
         [record] = config.calls
-        assert "did NOT list" in "\n".join(record.prompt)
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
 
-    async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
-        config = TrackingConfig(TestConfig("ok"))
+    async def test_v1_0_renderer_without_the_agents_catalog_gets_no_a2ui(self) -> None:
+        response = f"Here.\n<a2ui-json>\n[{json.dumps(V1_CREATE_SURFACE)}]\n</a2ui-json>"
+        config = TrackingConfig(TestConfig(response))
         agent = Agent(name="ui_agent", config=config)
         caps = {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
-        client = client_for(
-            agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0", validate_responses=False
-        )
+        client = client_for(agent, streaming=True, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
 
-        await client.ask("hi")
+        await client.ask("hi", stream=stream)
 
         [record] = config.calls
-        assert "did NOT list" in "\n".join(record.prompt)
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
+        assert payloads == []
+
+    async def test_v1_0_message_without_capabilities_gets_no_a2ui(self) -> None:
+        # A2A extension v1.0, "Capability scoping": no a2uiRendererCapabilities entry, no A2UI in reply.
+        response = f"Here.\n<a2ui-json>\n[{json.dumps(V1_CREATE_SURFACE)}]\n</a2ui-json>"
+        config = TrackingConfig(TestConfig(response))
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, streaming=True, protocol_version="v1.0", renderer_capabilities=False)
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
+
+        reply = await client.ask("hi", stream=stream)
+
+        [record] = config.calls
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
+        assert payloads == []
+        assert reply.response.content == "Here."
+
+    async def test_v1_0_capabilities_on_a_data_part_count(self) -> None:
+        # The lookup reads Message.metadata first and then each DataPart's metadata.
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version="v1.0", renderer_capabilities=False, validate_responses=False)
+        [part] = create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])
+        part.metadata.update({
+            "a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": [V1_BASIC_CATALOG_ID]}},
+        })
+
+        await client.ask("hi", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [part]})
+
+        [record] = config.calls
+        assert "A2UI Response Format (v1.0)" in "\n".join(record.prompt)
 
     async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))

@@ -27,27 +27,53 @@ class _Reference:
     kind: _Kind
 
 
-ComponentReferences: TypeAlias = Mapping[str, tuple[_Reference, ...]]
-"""Where each component type holds references to other components, by component type."""
+@dataclass(frozen=True, slots=True)
+class ComponentType:
+    """What the component-tree checks need to know about one component type of a catalog."""
+
+    references: tuple[_Reference, ...]
+    """Where the type holds references to other components."""
+    allowed_parents: frozenset[str] | None = None
+    """The component types that may contain it (``Surface`` for a surface's ``root``); ``None`` allows any."""
+    allowed_children: frozenset[str] | None = None
+    """The component types it may contain; ``None`` allows any."""
 
 
-def component_references(
-    *catalogs: JsonObject, documents: Mapping[str, JsonObject] | None = None
-) -> ComponentReferences:
-    """Read, from catalogs, where each of their component types references other components.
+ComponentTypes: TypeAlias = Mapping[str, ComponentType]
+"""Each component type the catalogs define, by component type."""
+
+_SURFACE = "Surface"
+"""The reserved container ``createSurface`` creates; a surface's ``root`` is always its child (v1.0)."""
+
+
+def component_types(*catalogs: JsonObject, documents: Mapping[str, JsonObject] | None = None) -> ComponentTypes:
+    """Read, from catalogs, where each of their component types references other components, and how it nests.
 
     As the spec says, only a property whose schema ``$ref``s ``ComponentId``, ``Child`` or ``ChildList`` is a
     reference; a plain string is static text. Like the official SDK, an inline object schema with ``componentId``
     and ``path`` (or ``dataBinding``) also counts, as a template child list. A later catalog's component wins over
     an earlier one's of the same type. ``documents`` resolves a ``$ref`` into another file (``basic_catalog.json``).
+    ``allowedParents`` / ``allowedChildren`` are the v1.0 composition constraints (a2ui_protocol.md, "Composition
+    validation rules").
     """
-    references: dict[str, tuple[_Reference, ...]] = {}
+    types: dict[str, ComponentType] = {}
     for catalog in catalogs:
         components = catalog.get("components")
         for key, definition in components.items() if isinstance(components, dict) else ():
             found = dict.fromkeys(_references_in(definition, (), catalog, frozenset(), documents or {}))
-            references[_component_type(definition) or key] = tuple(found)
-    return references
+            types[_component_type(definition) or key] = ComponentType(
+                references=tuple(found),
+                allowed_parents=_names(definition, "allowedParents"),
+                allowed_children=_names(definition, "allowedChildren"),
+            )
+    return types
+
+
+def _names(definition: JsonValue, key: str) -> frozenset[str] | None:
+    names = definition.get(key) if isinstance(definition, dict) else None
+    if not isinstance(names, list):
+        return None
+    return frozenset(name for name in names if isinstance(name, str))
 
 
 def _component_type(definition: JsonValue) -> str | None:
@@ -103,12 +129,15 @@ def _resolve_local(catalog: JsonObject, ref: str) -> JsonValue:
     return node
 
 
-def component_graph_errors(messages: Sequence[JsonObject], references: ComponentReferences) -> list[str]:
+def component_graph_errors(messages: Sequence[JsonObject], types: ComponentTypes) -> list[str]:
     """Check each surface's components in ``messages`` as a tree.
 
     For a surface this response creates: every reference resolves, every component is reachable from
     ``root``, there are no cycles and no id appears twice in one message. A surface created earlier may be
     updated partially, so only duplicate ids and cycles among this response's own components are checked.
+    Wherever both ends of a reference are in this response, the composition constraints apply, and a ``root`` sits
+    under ``Surface``, on any surface: "the component with ``"id": "root"`` mounts as the child of the surface's
+    canonical ``Surface`` container" (v1.0 a2ui_protocol.md, ``updateComponents``).
     """
     created: set[str] = set()
     surfaces: dict[str, list[list[JsonObject]]] = {}
@@ -125,16 +154,17 @@ def component_graph_errors(messages: Sequence[JsonObject], references: Component
             ])
     errors: list[str] = []
     for surface_id, components in surfaces.items():
-        errors.extend(_surface_errors(surface_id, components, references, complete=surface_id in created))
+        errors.extend(_surface_errors(surface_id, components, types, complete=surface_id in created))
     return errors
 
 
 def _surface_errors(
-    surface_id: str, batches: list[list[JsonObject]], references: ComponentReferences, *, complete: bool
+    surface_id: str, batches: list[list[JsonObject]], types: ComponentTypes, *, complete: bool
 ) -> Iterator[str]:
     """``batches`` holds each message's components; a later message may update an earlier one's by id."""
     prefix = f"Surface '{surface_id}':"
     edges: dict[str, list[str]] = {}
+    kinds: dict[str, str] = {}
     for components in batches:
         in_message: set[str] = set()
         for component in components:
@@ -146,8 +176,10 @@ def _surface_errors(
                 continue
             in_message.add(component_id)
             component_type = component.get("component")
-            refs = references.get(component_type, ()) if isinstance(component_type, str) else ()
-            edges[component_id] = list(_referenced_ids(component, refs))
+            known = types.get(component_type) if isinstance(component_type, str) else None
+            if isinstance(component_type, str):
+                kinds[component_id] = component_type
+            edges[component_id] = list(_referenced_ids(component, known.references if known else ()))
 
     if complete:
         for component_id, targets in edges.items():
@@ -163,6 +195,46 @@ def _surface_errors(
         for component_id in edges:
             if component_id not in reachable:
                 yield f"{prefix} component '{component_id}' is not reachable from 'root'"
+
+    yield from _composition_errors(prefix, edges, kinds, types)
+
+
+def _composition_errors(
+    prefix: str,
+    edges: Mapping[str, list[str]],
+    kinds: Mapping[str, str],
+    types: ComponentTypes,
+) -> Iterator[str]:
+    """Each parent and child whose types the catalog's ``allowedParents`` / ``allowedChildren`` do not let nest.
+
+    The renderer rejects these with ``UNALLOWED_PARENT`` / ``UNALLOWED_CHILD``. ``root`` is the child of the
+    surface's ``Surface`` container.
+    """
+    pairs: list[tuple[str, str, str]] = []
+    if "root" in kinds:
+        pairs.append((_SURFACE, _SURFACE, "root"))
+    for parent_id, targets in edges.items():
+        parent_type = kinds.get(parent_id)
+        if parent_type is not None:
+            pairs.extend((parent_id, parent_type, target) for target in targets)
+    for parent_id, parent_type, child_id in pairs:
+        child_type = kinds.get(child_id)
+        if child_type is None:
+            continue
+        child = types.get(child_type)
+        if child is not None and child.allowed_parents is not None and parent_type not in child.allowed_parents:
+            allowed = ", ".join(map(repr, sorted(child.allowed_parents))) or "none"
+            yield (
+                f"{prefix} component '{child_id}' ({child_type}) cannot be placed in '{parent_id}' ({parent_type}): "
+                f"its allowedParents are {allowed}"
+            )
+        parent = types.get(parent_type)
+        if parent is not None and parent.allowed_children is not None and child_type not in parent.allowed_children:
+            allowed = ", ".join(map(repr, sorted(parent.allowed_children))) or "none"
+            yield (
+                f"{prefix} component '{parent_id}' ({parent_type}) cannot contain '{child_id}' ({child_type}): "
+                f"its allowedChildren are {allowed}"
+            )
 
 
 def _referenced_ids(component: JsonObject, references: tuple[_Reference, ...]) -> Iterator[str]:
@@ -274,9 +346,10 @@ def is_json_pointer(path: str) -> bool:
 
 
 __all__ = (
-    "ComponentReferences",
+    "ComponentType",
+    "ComponentTypes",
     "component_graph_errors",
-    "component_references",
+    "component_types",
     "is_json_pointer",
     "surface_lifecycle_errors",
 )

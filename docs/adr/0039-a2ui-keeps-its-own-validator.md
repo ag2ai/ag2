@@ -91,3 +91,28 @@ in these places; line numbers are at that commit.
   `@catalogId` against its surface's `catalogId`. The server keeps no state between responses, so for a surface
   created in an earlier response it accepts an implicit component or call if any configured catalog defines it. With
   one catalog this is exact; with several, an explicit `@catalogId` / `catalogId` selects the definition.
+- **`agentFunctionResponse` from the model.** v1.0 `agent_to_renderer.json` allows an `agentFunctionResponse`
+  message from the agent. ag2 sends it itself, in reply to a `callAgentFunction` (L1486), so one the model writes
+  would answer a call the model never saw; the validator asks for a retry instead.
+- **Surfaces on a catalog the turn does not offer.** The schemas take any string as `createSurface.catalogId`. ag2
+  asks for a retry when a surface names a catalog the turn does not offer (ADR 0041): the renderer has nothing to
+  resolve its components against (L519).
+- **Components and calls with no catalog to resolve against.** v1.0 L519 makes a component without `@catalogId` on
+  a surface without `catalogId` a resolution error. The schemas accept it, and so do upstream cases
+  `dynamic_value_validation.json#0-6,9,10`, which check message shape only; ag2 follows the prose and asks for a
+  retry.
+- **`callRendererFunction` and `allowedCallers`.** L302 says only `agentOnly` or `rendererOrAgent` functions can be
+  called by the agent, and `openUrl` is `rendererOnly`. Upstream cases `call_function_message.json#0-2` call `openUrl`
+  and are marked valid, because they check message shape only; `#3` calls `pingAgent`, which the basic catalog does
+  not define. ag2 follows the prose and rejects all four.
+- **Custom catalog definitions.** ag2 checks a v1.0 custom catalog for the rules that change what it accepts: entity
+  names (L548-555, including the reserved `Surface`), `$ref` targets, `allowedParents` / `allowedChildren` as string
+  arrays, and `allowedCallers` with `requiresUserActivation`. It does not validate the whole catalog against
+  `catalog_definition.json`: that schema requires `catalogId`, while ag2 reads the id from `$id`, and it rejects the
+  extra root keys and `$defs` layouts that the catalogs in ag2's tests and docs use. Upstream cases
+  `catalog_schema_relaxation.json#1-6` therefore load.
+- **A2A DataParts with a single object.** The A2A extension (v1.0 `a2ui_extension_specification.md` L183, v0.9
+  L178) says a DataPart's `data` "MUST be an array of messages". The reference SDK `a2ui_a2a` writes and reads one
+  object per DataPart. ag2 follows the spec: `A2UIAgentExecutor` consumes a renderer DataPart whose `data` is a single
+  envelope with a warning and acts on none of it, and `create_a2ui_parts(legacy_split=True)`, which writes that shape,
+  is deprecated (removed in 1.4.0).

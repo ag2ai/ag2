@@ -87,7 +87,10 @@ _CAPABILITIES_BODY = {
     "messages": [{"role": "user", "content": "show ui"}],
     "a2uiRendererCapabilities": {
         "1.0": {
-            "supportedCatalogIds": ["https://example.com/other.json"],
+            "supportedCatalogIds": [
+                "https://example.com/other.json",
+                "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            ],
             "inlineCatalogs": [{"catalogId": "inline", "components": {"Chip": {}}}],
         }
     },

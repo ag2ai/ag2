@@ -4,7 +4,7 @@
 
 from typing import Any
 
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.parser import A2UIResponseParser
 from ag2.a2ui.schema_manager import A2UISchemaManager
 
@@ -18,7 +18,7 @@ def validating_parser(
         protocol=manager.protocol,
         server_to_client_schema=manager.server_to_client_schema,
         schema_registry=manager.build_schema_registry(),
-        component_references=manager.component_references(),
+        component_types=manager.component_types(),
         catalog_ids=manager.catalog_ids,
     )
 

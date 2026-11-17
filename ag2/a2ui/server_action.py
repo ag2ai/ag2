@@ -48,6 +48,7 @@ from .incoming import (
     A2UIIncomingActionResult,
     A2UIIncomingFunctionCall,
     A2UIIncomingFunctionCallResult,
+    A2UIIncomingInvalidFunctionCallResult,
     A2UIIncomingParseResult,
 )
 from .parser import A2UIResponseParser
@@ -55,7 +56,7 @@ from .parser import A2UIResponseParser
 if TYPE_CHECKING:
     from ag2.agent import Agent
 
-    from ._runtime import _A2UIRuntime
+    from ._runtime import A2UIOffer, _A2UIRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,22 @@ def _function_response(
     return message  # type: ignore[return-value]
 
 
+def invalid_function_call(
+    invalid: A2UIIncomingInvalidFunctionCallResult, protocol: A2UIProtocol
+) -> list[ServerToClientMessage]:
+    """Answer a malformed ``callAgentFunction`` with ``INVALID_FUNCTION_CALL``, as v1.0 requires; nothing before v1.0."""
+    if not protocol.function_rpc:
+        return []
+    logger.warning("A2UI callAgentFunction %r is malformed: %s", invalid.function_call_id, invalid.reason)
+    return [
+        _function_response(
+            invalid.function_call_id,
+            protocol.wire_version,
+            error={"code": "INVALID_FUNCTION_CALL", "message": f"Malformed callAgentFunction: {invalid.reason}."},
+        )
+    ]
+
+
 def _invalid_function_arguments(call: A2UIIncomingFunctionCall, version: A2UIWireVersion) -> ServerToClientMessage:
     return _function_response(
         call.function_call_id,
@@ -98,7 +115,7 @@ def _has_unknown_arguments(action: A2UIAction, arguments: JsonObject) -> bool:
 def build_server_action_context(
     agent: "Agent",
     *,
-    variables: dict[str, Any] | None = None,
+    variables: dict[str, JsonValue] | None = None,
 ) -> ConversationContext:
     """Build the :class:`ConversationContext` a server action runs against.
 
@@ -244,13 +261,22 @@ async def run_client_interactions(
     runtime: "_A2UIRuntime",
     agent: "Agent",
     *,
-    variables: dict[str, Any] | None,
+    offer: "A2UIOffer",
+    variables: dict[str, JsonValue] | None,
 ) -> tuple[list[ServerToClientMessage], bool]:
     """Run the interactions the server answers itself, without invoking the agent.
 
     That is every click on a registered action, and every ``callAgentFunction``
     (answered even when nothing is registered, since the renderer is waiting).
     Shared by every transport so they agree on what is handled where.
+
+    Args:
+        interactions: The request's decoded client→server envelopes.
+        runtime: The deployment's A2UI runtime.
+        agent: The agent whose dependencies and variables the handlers resolve against.
+        offer: What this turn offers the renderer. Handlers' messages are checked against its catalogs; on a turn
+            that offers no A2UI the handlers still run, but their messages are dropped with a warning.
+        variables: The variables the request carried.
 
     Returns:
         The messages to emit, and whether any interaction was handled here — a turn
@@ -260,37 +286,48 @@ async def run_client_interactions(
     handled = False
     context: ConversationContext | None = None
     for interaction in interactions:
+        if isinstance(interaction, A2UIIncomingInvalidFunctionCallResult):
+            answer = invalid_function_call(interaction, runtime.protocol)
+            handled = handled or bool(answer)
+            messages.extend(answer)
+            continue
         if isinstance(interaction, A2UIIncomingActionResult):
             action = runtime.server_actions.get(interaction.action.name)
             if action is None:
                 continue
             handled = True
-            if context is None:
-                context = build_server_action_context(agent, variables=variables)
+            # A click and a function call run against the same context, built once per request.
+            context = context or build_server_action_context(agent, variables=variables)
             messages.extend(
                 await run_server_action(
                     action,
                     interaction.action,
                     version=runtime.protocol.wire_version,
                     context=context,
-                    validator=runtime.message_validator,
+                    validator=offer.message_validator,
                 )
             )
-        elif isinstance(interaction, A2UIIncomingFunctionCallResult):
-            call = interaction.function_call
-            if context is None:
-                context = build_server_action_context(agent, variables=variables)
-            answer = await run_agent_function(
-                runtime.server_actions.get(call.call),
-                call,
-                protocol=runtime.protocol,
-                catalog_ids=runtime.catalog_ids,
-                context=context,
-                validator=runtime.message_validator,
-            )
-            # Before v1.0 there is no reply to send: leave the turn to the agent.
-            handled = handled or bool(answer)
-            messages.extend(answer)
+            continue
+        if not isinstance(interaction, A2UIIncomingFunctionCallResult):
+            continue
+        context = context or build_server_action_context(agent, variables=variables)
+        call = interaction.function_call
+        answer = await run_agent_function(
+            runtime.server_actions.get(call.call),
+            call,
+            protocol=runtime.protocol,
+            catalog_ids=offer.catalog_ids,
+            context=context,
+            validator=offer.message_validator,
+        )
+        # Before v1.0 there is no reply to send: leave the turn to the agent.
+        handled = handled or bool(answer)
+        messages.extend(answer)
+    if messages and not offer.sends_ui:
+        logger.warning(
+            "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from handlers.", len(messages)
+        )
+        return [], handled
     return messages, handled
 
 

@@ -19,8 +19,10 @@ from typing import Any, TypeAlias
 
 import jsonschema
 from jsonschema import FormatChecker
+from jsonschema.protocols import Validator
 from referencing import Registry
 
+from ._formats import SCHEMA_FORMATS
 from ._types import JsonObject, JsonSchema, JsonValue, server_to_client_payload_keys
 
 # ``jsonschema`` ships no type information, so its error objects are opaque to mypy.
@@ -67,7 +69,7 @@ class _Leaf:
 XID_FORMAT = "xid-identifier"
 COMPONENT_ID_FORMAT = "a2ui-component-id"
 """A component id, or a reference to one, that must be a UAX #31 identifier (v1.0)."""
-UAX31_IDENTIFIER = "UAX #31 identifier (a letter or '_', then letters, digits or '_')"
+UAX31_IDENTIFIER = "UAX #31 identifier (a letter or '_', then letters, digits, marks or '_')"
 
 # Formats no value has. A derived schema puts one where the instance is known to be wrong for a reason the JSON
 # schema cannot word, and the diagnostics replace jsonschema's text with that reason.
@@ -126,6 +128,16 @@ def _check_identifier(instance: object) -> bool:
     return not isinstance(instance, str) or _is_identifier(instance)
 
 
+class _StringFormat:
+    """A ``format`` check that, as JSON Schema says, applies only to strings."""
+
+    def __init__(self, check: Callable[[str], bool]) -> None:
+        self._check = check
+
+    def __call__(self, instance: object) -> bool:
+        return not isinstance(instance, str) or self._check(instance)
+
+
 class MessageChecker:
     """Check A2UI messages against a message schema and report where they are wrong.
 
@@ -137,11 +149,13 @@ class MessageChecker:
     def __init__(self, schema: JsonSchema, registry: Registry | None = None) -> None:
         validator_cls = jsonschema.validators.validator_for(schema)
         formats = FormatChecker(formats=())
+        for name, check in SCHEMA_FORMATS.items():
+            formats.checks(name)(_StringFormat(check))
         formats.checks(XID_FORMAT)(_check_identifier)
         formats.checks(COMPONENT_ID_FORMAT)(_check_identifier)
         for rejecting in _REJECTING_FORMATS:
             formats.checks(rejecting)(_never)
-        self._validators: dict[str, Any] = {}
+        self._validators: dict[str, Validator] = {}
         defs = schema.get("$defs")
         branches = schema.get("oneOf")
         base = {key: value for key, value in schema.items() if key != "oneOf"}
