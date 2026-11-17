@@ -7,6 +7,7 @@
 from .._sanitize import sanitize_for_prompt
 from ._decode import decode_envelopes, parse_incoming_message
 from ._prompts import action_to_prompt, error_to_prompt, function_response_to_prompt, incoming_prompts
+from ._renderer import A2UIRendererInput, read_renderer_input
 from ._results import (
     A2UIFunctionError,
     A2UIIncomingAction,
@@ -40,6 +41,7 @@ __all__ = (
     "A2UIIncomingParseResult",
     "A2UIIncomingSurfaceError",
     "A2UIIncomingUnknownResult",
+    "A2UIRendererInput",
     "action_to_prompt",
     "decode_envelopes",
     "envelope_problem",
@@ -47,5 +49,6 @@ __all__ = (
     "function_response_to_prompt",
     "incoming_prompts",
     "parse_incoming_message",
+    "read_renderer_input",
     "sanitize_for_prompt",
 )

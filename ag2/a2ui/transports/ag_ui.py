@@ -65,10 +65,8 @@ from ag2.events import TextInput, ToolCallEvent, ToolResultEvent
 
 from .._messages import is_client_envelope
 from .._types import JsonObject, JsonValue, ServerToClientMessage
-from ..capabilities import parse_client_capabilities
-from ..data_model import parse_client_data_model
 from ..dispatch import A2UIMessageFrame, A2UIProseFrame, TaskEvent
-from ..incoming import decode_envelopes, incoming_prompts
+from ..incoming import read_renderer_input
 from ..request import A2UIServerRequest
 
 if TYPE_CHECKING:
@@ -223,20 +221,24 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
     if shared := client_context_prompt(incoming.context or []):
         prompt.append(shared)
     protocol = core.runtime.protocol
-    interactions = decode_envelopes(
-        _client_envelopes(incoming.forwarded_props, version=protocol.wire_version), protocol_version=protocol.version
-    )
-    current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, core.runtime.get_action))
     # AG-UI has no metadata of its own for these, so they ride ``forwardedProps`` under the keys the REST body uses.
     forwarded = incoming.forwarded_props if isinstance(incoming.forwarded_props, dict) else None
+    renderer = read_renderer_input(
+        protocol.version,
+        core.runtime.get_action,
+        envelope_groups=[_client_envelopes(incoming.forwarded_props, version=protocol.wire_version)],
+        capability_sources=[forwarded],
+        data_model_source=forwarded,
+    )
+    current_inputs.extend(TextInput(p) for p in renderer.prompts[0])
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,
         prompt=prompt,
         variables=variables,
-        client_capabilities=parse_client_capabilities(forwarded, version_key=protocol.version),
-        client_interactions=interactions,
-        client_data_model=parse_client_data_model(forwarded, version_key=protocol.version),
+        client_capabilities=renderer.capabilities,
+        client_interactions=list(renderer.interactions),
+        client_data_model=renderer.data_model,
     )
 
 

@@ -18,9 +18,8 @@ from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelRespon
 
 from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
-from .capabilities import A2UIClientCapabilities, parse_client_capabilities
-from .data_model import parse_client_data_model
-from .incoming import A2UIIncomingParseResult, decode_envelopes, incoming_prompts
+from .capabilities import A2UIClientCapabilities
+from .incoming import A2UIIncomingParseResult, read_renderer_input
 
 logger = logging.getLogger(__name__)
 
@@ -104,17 +103,19 @@ def parse_request(
     prompt, history, current_inputs = _map_messages(raw_messages)
     # The server is stateless: a v1.0 ``rendererFunctionResponse`` (the reply to an earlier
     # ``callRendererFunction``) simply arrives in the next request and becomes a continuation prompt.
-    interactions = decode_envelopes(raw_a2ui, protocol_version=version_key)
-    current_inputs.extend(TextInput(p) for p in incoming_prompts(interactions, resolve_action))
+    renderer = read_renderer_input(
+        version_key, resolve_action, envelope_groups=[raw_a2ui], capability_sources=[data], data_model_source=data
+    )
+    current_inputs.extend(TextInput(p) for p in renderer.prompts[0])
 
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,
         prompt=prompt,
         variables=dict(raw_variables),
-        client_capabilities=parse_client_capabilities(data, version_key=version_key),
-        client_interactions=interactions,
-        client_data_model=parse_client_data_model(data, version_key=version_key),
+        client_capabilities=renderer.capabilities,
+        client_interactions=list(renderer.interactions),
+        client_data_model=renderer.data_model,
     )
 
 
