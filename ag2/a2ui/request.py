@@ -19,7 +19,7 @@ from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelRespon
 from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
 from .capabilities import A2UIClientCapabilities
-from .incoming import A2UIIncomingParseResult, read_renderer_input
+from .incoming import A2UIIncomingParseResult, A2UIRendererInput, read_renderer_input
 
 logger = logging.getLogger(__name__)
 
@@ -37,21 +37,28 @@ class A2UIServerRequest:
     trailing user message(s) plus any prompts synthesized from client→server
     ``a2ui`` action/error envelopes. ``prompt`` carries system/developer
     messages; ``history`` carries the prior conversation turns.
-    ``client_capabilities`` carries the decoded ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0), if
-    present, so the dispatcher can fold catalog negotiation into the prompt.
-    ``client_data_model`` carries the decoded ``a2uiRendererDataModel`` (per-surface
-    data models a ``sendDataModel`` surface attaches), if present.
-    ``client_interactions`` carries the typed client→server envelopes so the
-    dispatcher can surface each as an ``A2UIClientEvent`` on the turn's stream.
+    ``renderer`` carries what the renderer sent (:func:`~ag2.a2ui.incoming.read_renderer_input`): its typed
+    client→server envelopes, ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) and
+    ``a2uiRendererDataModel``, from which the turn negotiates its offer and prompt.
     """
 
     current_inputs: list[Input] = field(default_factory=list)
     history: list[BaseEvent] = field(default_factory=list)
     prompt: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
-    client_capabilities: A2UIClientCapabilities | None = None
-    client_interactions: list[A2UIIncomingParseResult] = field(default_factory=list)
-    client_data_model: dict[str, JsonObject] | None = None
+    renderer: A2UIRendererInput = field(default_factory=A2UIRendererInput)
+
+    @property
+    def client_capabilities(self) -> A2UIClientCapabilities | None:
+        return self.renderer.capabilities
+
+    @property
+    def client_interactions(self) -> tuple[A2UIIncomingParseResult, ...]:
+        return self.renderer.interactions
+
+    @property
+    def client_data_model(self) -> dict[str, JsonObject] | None:
+        return self.renderer.data_model
 
 
 def parse_request(
@@ -113,9 +120,7 @@ def parse_request(
         history=history,
         prompt=prompt,
         variables=dict(raw_variables),
-        client_capabilities=renderer.capabilities,
-        client_interactions=list(renderer.interactions),
-        client_data_model=renderer.data_model,
+        renderer=renderer,
     )
 
 

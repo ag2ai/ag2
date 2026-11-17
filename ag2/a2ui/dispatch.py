@@ -34,12 +34,10 @@ from ag2.events import (
 from ag2.stream import MemoryStream
 from ag2.usage import collect_usage_events
 
-from ._runtime import A2UIMessageCollector, _A2UIRuntime
+from ._runtime import _A2UIRuntime
+from ._turn import open_turn
 from ._types import ServerToClientMessage
-from .data_model import data_model_to_prompt
-from .events import A2UIMessageEvent
 from .request import A2UIServerRequest
-from .server_action import run_client_interactions
 
 logger = logging.getLogger(__name__)
 
@@ -119,26 +117,20 @@ class _A2UITurnCore:
             RuntimeError: If the agent must run but has no ``config`` to create an
                 LLM client.
         """
-        agent, runtime = self.agent, self.runtime
+        agent = self.agent
         # Only the catalogs the renderer supports are offered; with none in common the turn has no A2UI.
-        offer = runtime.offer_for(request.client_capabilities)
+        turn = open_turn(self.runtime, request.renderer)
         # Answer the interactions the server handles itself (registered clicks and
         # callAgentFunction calls) and emit their messages. These never reach the
         # agent (the prompt rewriter already skipped them).
-        server_messages, handled_server = await run_client_interactions(
-            request.client_interactions,
-            runtime,
-            agent,
-            offer=offer,
-            variables=request.variables,
-        )
-        for message in server_messages:
+        answers = await turn.answer_interactions(agent, request.variables)
+        for message in answers.messages:
             yield A2UIMessageFrame(message)
 
         # Run the agent only when the turn has real input for it. A turn whose only
         # content was server-side clicks is complete already; don't fabricate a
         # blank agent turn for it (but keep the blank-turn fallback otherwise).
-        if not request.current_inputs and handled_server:
+        if answers.complete_without_agent(has_input=bool(request.current_inputs)):
             return
 
         if agent.config is None:
@@ -152,8 +144,7 @@ class _A2UITurnCore:
         # The validation middleware emits one A2UIMessageEvent per validated A2UI
         # message onto this turn's stream. Collect them as the single source of UI
         # content (the event seam) — consistent with the A2A executor.
-        a2ui_messages: list[ServerToClientMessage] = []
-        stream.where(A2UIMessageEvent).subscribe(A2UIMessageCollector(a2ui_messages))
+        a2ui_messages = turn.collect(stream)
 
         if usage_records is not None:
             stream.where(UsageEvent).subscribe(collect_usage_events(usage_records))
@@ -164,33 +155,21 @@ class _A2UITurnCore:
         if on_tool_result is not None:
             stream.where(ToolResultEvent).subscribe(on_tool_result)
 
-        # Apply A2UI behaviour to the plain agent for this turn: prepend the A2UI
-        # prompt section for the catalogs this renderer supports, add the client's data model, and inject the validation
-        # middleware that emits the A2UIMessageEvents collected above.
-        caps_prompt = runtime.capabilities_prompt(request.client_capabilities, offer)
-        data_model_prompt = data_model_to_prompt(request.client_data_model)
-        extra_prompt = [
-            *([offer.system_prompt_section] if offer.system_prompt_section else []),
-            *([caps_prompt] if caps_prompt else []),
-            *([data_model_prompt] if data_model_prompt else []),
-        ]
-
         merged_variables = {
             **dict(agent._agent_variables),
             **strip_reserved_variables(request.variables, source="an inbound A2UI request"),
         }
+        # Apply A2UI behaviour to the plain agent for this turn: the turn's A2UI prompt
+        # fragments follow the agent's own prompt, and its middleware validates the A2UI
+        # output (emitting the A2UIMessageEvents collected above) and surfaces each
+        # incoming client→server interaction as an A2UIClientEvent.
         ctx = ConversationContext(
             stream,
-            prompt=[*agent._system_prompt, *extra_prompt, *request.prompt],
+            prompt=[*agent._system_prompt, *turn.system_prompt, *request.prompt],
             dependencies=dict(agent._agent_dependencies),
             variables=merged_variables,
             dependency_provider=agent.dependency_provider,
         )
-
-        # Surface each incoming client→server interaction as an A2UIClientEvent on
-        # the turn's stream (alongside the validation middleware), so observers see
-        # client clicks/responses — not just the LLM via the rewritten prompt.
-        extra_middleware = runtime.turn_middleware(request.client_interactions, offer)
 
         initial_event: BaseEvent = ModelRequest(request.current_inputs or [TextInput("")])
         with ExitStack() as stack:
@@ -201,14 +180,14 @@ class _A2UITurnCore:
                 initial_event,
                 context=ctx,
                 client=client,
-                additional_middleware=extra_middleware,
+                additional_middleware=turn.middleware,
             )
 
         response = reply.response
         prose = response.message.content if response.message else ""
         if prose:
             yield A2UIProseFrame(prose)
-        for message in offer.deliverable(a2ui_messages, source="the agent"):
+        for message in turn.deliverable(a2ui_messages):
             yield A2UIMessageFrame(message)
 
 

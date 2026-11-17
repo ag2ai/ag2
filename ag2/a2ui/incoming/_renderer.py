@@ -18,15 +18,15 @@ from ._results import A2UIIncomingParseResult
 
 @dataclass(frozen=True, slots=True)
 class A2UIRendererInput:
-    """What the renderer sent with one request: its interactions, capabilities and data model."""
+    """What the renderer sent with one request: its interactions, capabilities and data model; empty by default."""
 
-    interactions: tuple[A2UIIncomingParseResult, ...]
+    interactions: tuple[A2UIIncomingParseResult, ...] = ()
     """Every decoded client→server envelope, in the order the request carried them."""
-    prompts: tuple[tuple[str, ...], ...]
+    prompts: tuple[tuple[str, ...], ...] = ()
     """The agent prompts those interactions rewrite to, one tuple per envelope group passed in."""
-    capabilities: A2UIClientCapabilities | None
+    capabilities: A2UIClientCapabilities | None = None
     """``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0); ``None`` when the request has none."""
-    data_model: dict[str, JsonObject] | None
+    data_model: dict[str, JsonObject] | None = None
     """``a2uiClientDataModel`` (``a2uiRendererDataModel`` in v1.0) surfaces; ``None`` when absent."""
 
 

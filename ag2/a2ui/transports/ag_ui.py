@@ -236,9 +236,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
         history=history,
         prompt=prompt,
         variables=variables,
-        client_capabilities=renderer.capabilities,
-        client_interactions=list(renderer.interactions),
-        client_data_model=renderer.data_model,
+        renderer=renderer,
     )
 
 
