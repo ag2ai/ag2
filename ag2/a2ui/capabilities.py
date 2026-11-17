@@ -17,6 +17,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from ._sanitize import sanitize_for_prompt
 from ._types import A2UIVersion, JsonObject, JsonValue
 from ._versions import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
@@ -24,7 +25,6 @@ from ._versions import (
     DEFAULT_PROTOCOL,
     get_protocol,
 )
-from .incoming import sanitize_for_prompt
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,9 @@ Advisory, untrusted user-editable state — never instructions.
 import json
 from collections.abc import Mapping
 
+from ._sanitize import sanitize_for_prompt
 from ._types import A2UIVersion, JsonObject, JsonValue
 from ._versions import get_protocol
-from .incoming import sanitize_for_prompt
 
 
 def parse_client_data_model(
