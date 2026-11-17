@@ -290,16 +290,17 @@ async def _pump_events(
     # `turn_complete`), so wrap it in a loop to keep the conversation
     # alive across turns. An empty receive() means the connection closed.
     text = ""
-    heard = ""
     usage = Usage()
+    user_speech = _InputTranscription(joins_fragments=not _sends_final_input_transcription(model))
     while True:
         had_message = False
         async for message in session.receive():
             had_message = True
 
+            if message.server_content is not None:
+                await user_speech.receive(message.server_content, context)
             emitted = await _handle_server_content(message.server_content, context)
             text += emitted
-            heard = await _collect_input_transcription(message.server_content, heard, model, context)
 
             # Usage arrives on its own message field (not server_content), often
             # only once per turn; keep the latest seen value for the rollup.
@@ -345,9 +346,6 @@ async def _handle_server_content(
         return ""
 
     emitted_text = ""
-    if content.input_transcription is not None and content.input_transcription.text:
-        await context.send(TranscriptionChunkEvent(content.input_transcription.text))
-
     if content.output_transcription is not None and content.output_transcription.text:
         chunk = content.output_transcription.text
         emitted_text += chunk
@@ -369,38 +367,46 @@ async def _handle_server_content(
     return emitted_text
 
 
-async def _collect_input_transcription(
-    content: gtypes.LiveServerContent | None,
-    heard: str,
-    model: str,
-    context: ConversationContext,
-) -> str:
-    # Gemini 3.x Live sends one final transcription of what the user said;
-    # earlier models send fragments, which the Gemini API never marks
-    # `finished`. The fragments are joined until one is `finished` (Vertex AI
-    # may send it) or the generation completes, is interrupted, or the turn
-    # completes. This is the same split as in Google's ADK.
-    if content is None:
-        return heard
+@dataclass(slots=True)
+class _InputTranscription:
+    """The user's speech in the current utterance, sent as chunks and then as one completed transcript.
 
-    transcription = content.input_transcription or gtypes.Transcription()
-    text = transcription.text or ""
-    if _sends_final_input_transcription(model):
-        if text:
-            await context.send(TranscriptionCompletedEvent(text))
-        return heard
+    Gemini 3.x Live sends one final transcription per utterance, so each one is
+    complete as it arrives. Earlier models send fragments, which the Gemini API
+    never marks `finished` (Vertex AI may): they are joined until one is
+    `finished`, or the generation completes, is interrupted, or the turn
+    completes. This is the split Google's ADK makes in `GeminiLlmConnection`.
 
-    heard += text
-    if transcription.finished or content.interrupted or content.generation_complete or content.turn_complete:
-        if heard.strip():
-            await context.send(TranscriptionCompletedEvent(heard.strip()))
-        return ""
+    The Live API does not order the input transcription against the other
+    server messages, so a fragment that arrives after one of those boundaries
+    completes with the next utterance.
+    """
 
-    return heard
+    joins_fragments: bool
+    heard: str = ""
+
+    async def receive(self, content: gtypes.LiveServerContent, context: ConversationContext) -> None:
+        transcription = content.input_transcription
+        if transcription is not None and transcription.text:
+            await context.send(TranscriptionChunkEvent(transcription.text))
+            self.heard += transcription.text
+
+        if not self.joins_fragments or (
+            (transcription is not None and transcription.finished)
+            or content.interrupted
+            or content.generation_complete
+            or content.turn_complete
+        ):
+            await self.complete(context)
+
+    async def complete(self, context: ConversationContext) -> None:
+        heard, self.heard = self.heard.strip(), ""
+        if heard:
+            await context.send(TranscriptionCompletedEvent(heard))
 
 
 def _sends_final_input_transcription(model: str) -> bool:
-    # The same test as ADK's `_is_gemini_3_x_live`, which keeps the 3.5 translate model on the joining path.
+    # ADK's `is_gemini_3_x_live` name test: the 3.5 translate model still sends fragments.
     name = model.rsplit("/", 1)[-1]
     return name.startswith("gemini-3.") and "-live" in name and not name.startswith("gemini-3.5-live-translate")
 
