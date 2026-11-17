@@ -23,13 +23,11 @@ from ag2.context import strip_reserved_variables
 from ag2.stream import MemoryStream
 
 from .._messages import is_client_envelope
-from .._runtime import A2UIMessageCollector, A2UIOffer, build_runtime
+from .._runtime import build_runtime
+from .._turn import A2UITurn, open_turn
 from .._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage
 from ..actions import A2UIAction
-from ..data_model import data_model_to_prompt
-from ..events import A2UIMessageEvent
 from ..incoming import A2UIRendererInput, read_renderer_input
-from ..server_action import run_client_interactions
 from .extension import try_activate_a2ui_extension
 from .parts import create_a2ui_parts, get_a2ui_data
 
@@ -38,9 +36,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(slots=True, frozen=True)
 class _IncomingRequest:
-    renderer: A2UIRendererInput
+    turn: A2UITurn
     awaiting_input: bool
-    offer: A2UIOffer
 
 
 # Per-request carrier for the client→server interactions parsed in ``execute``
@@ -129,9 +126,8 @@ class A2UIAgentExecutor(AgentExecutor):
             task = request_context.current_task
             token = _INCOMING_REQUEST.set(
                 _IncomingRequest(
-                    renderer=renderer,
+                    turn=open_turn(self._runtime, renderer),
                     awaiting_input=task is not None and task.status.state == TaskState.TASK_STATE_INPUT_REQUIRED,
-                    offer=self._runtime.offer_for(renderer.capabilities),
                 )
             )
         try:
@@ -182,28 +178,14 @@ class A2UIAgentExecutor(AgentExecutor):
         return renderer
 
     def _extra_system_prompt(self, request_context: RequestContext) -> Sequence[str]:
-        """Apply the turn's A2UI prompt to the plain agent and fold in client capabilities.
+        """Apply the turn's A2UI prompt to the plain agent: the offer's A2UI section (the catalogs the renderer
+        supports; none when the turn offers no A2UI), then the renderer's capabilities and data model."""
+        return self._turn_of(_INCOMING_REQUEST.get()).system_prompt
 
-        The agent is a plain ``Agent`` with no A2UI prompt baked in, so the
-        prompt section of the turn's offer (the catalogs the renderer supports) is
-        prepended here; a turn that offers no A2UI gets none. The renderer's
-        capabilities and data model (``a2uiRendererDataModel``) are appended as
-        per-turn fragments.
-        """
-        incoming = _INCOMING_REQUEST.get()
-        offer = self._turn_offer(incoming)
-        caps = incoming.renderer.capabilities if incoming is not None else None
-        prompts: list[str] = [offer.system_prompt_section] if offer.system_prompt_section else []
-        if fragment := self._runtime.capabilities_prompt(caps, offer):
-            prompts.append(fragment)
-        if data_model_fragment := data_model_to_prompt(incoming.renderer.data_model if incoming is not None else None):
-            prompts.append(data_model_fragment)
-        return tuple(prompts)
-
-    def _turn_offer(self, incoming: _IncomingRequest | None) -> A2UIOffer:
-        """The turn's negotiated offer; with no request captured (no message to read), that of a request without
-        capabilities, which in v1.0 withdraws A2UI (a2ui_protocol.md L1630)."""
-        return incoming.offer if incoming is not None else self._runtime.offer_for(None)
+    def _turn_of(self, incoming: _IncomingRequest | None) -> A2UITurn:
+        """The request's turn; with no request captured (no message to read), that of a request without
+        capabilities, which in v1.0 withdraws A2UI (a2ui_protocol.md, "Renderer capabilities")."""
+        return incoming.turn if incoming is not None else open_turn(self._runtime, A2UIRendererInput())
 
     async def _run_one_turn(
         self,
@@ -217,39 +199,28 @@ class A2UIAgentExecutor(AgentExecutor):
         client_tools = [self._make_client_tool(s) for s in parsed.tool_schemas]
         initial_event = self._build_initial_event(parsed)
 
+        # The interactions were captured in execute, before the A2UI DataParts were rewritten to text.
+        incoming = _INCOMING_REQUEST.get()
+        turn = self._turn_of(incoming)
         # The validation middleware emits one A2UIMessageEvent per validated
         # A2UI message onto this turn's stream. Collect them as the single
         # source of UI content (the event seam) instead of re-parsing text.
-        a2ui_messages: list[ServerToClientMessage] = []
-        stream.where(A2UIMessageEvent).subscribe(A2UIMessageCollector(a2ui_messages))
-
-        # Surface each incoming client→server interaction (captured in execute,
-        # before the A2UI DataParts were rewritten to text) as an A2UIClientEvent
-        # on the turn's stream, alongside the validation middleware.
-        incoming = _INCOMING_REQUEST.get()
-        interactions = incoming.renderer.interactions if incoming is not None else ()
-        offer = self._turn_offer(incoming)
-        extra_middleware = self._runtime.turn_middleware(interactions, offer)
+        agent_messages = turn.collect(stream)
 
         # Answer the interactions the server handles itself — registered clicks and
         # callAgentFunction calls (the prompt rewriter already skipped these, so the
         # agent never sees them). Their messages lead the finalization DataPart,
         # ahead of the agent's own. Handlers resolve their dependencies against the
         # agent's DI surface, exactly like the agent's own tools (and the REST path).
-        server_messages, handled_server = await run_client_interactions(
-            interactions,
-            self._runtime,
-            self._agent,
-            offer=offer,
-            variables=parsed.context_update,
-        )
-        a2ui_messages.extend(server_messages)
+        answers = await turn.answer_interactions(self._agent, parsed.context_update)
 
         # Pure server interactions skip the agent, but their messages still go
         # through the shared finalization below: a handler can itself request a
         # renderer function and must leave the task open for its response.
-        server_only = handled_server and not parsed.inputs and not parsed.tool_results
+        server_only = answers.complete_without_agent(has_input=bool(parsed.inputs or parsed.tool_results))
+        a2ui_messages: list[ServerToClientMessage]
         if server_only:
+            a2ui_messages = answers.messages
             agent_msg = self._build_a2ui_message(writer, "", a2ui_messages, {})
             # An unrelated server RPC does not answer the renderer function or
             # client tool that left this task awaiting input on an earlier turn.
@@ -261,10 +232,11 @@ class A2UIAgentExecutor(AgentExecutor):
                 client_tools,
                 incoming_variables=parsed.context_update,
                 extra_prompt=extra_prompt,
-                additional_middleware=extra_middleware,
+                # Validates the A2UI output and surfaces each incoming interaction as an A2UIClientEvent.
+                additional_middleware=turn.middleware,
             )
             prose_text = response.message.content if response.message else ""
-            a2ui_messages = offer.deliverable(a2ui_messages, source="the agent")
+            a2ui_messages = [*answers.messages, *turn.deliverable(agent_messages)]
             agent_msg = self._build_a2ui_message(writer, prose_text or "", a2ui_messages, final_variables)
             has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
 

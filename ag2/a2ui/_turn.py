@@ -16,11 +16,13 @@ from typing import TYPE_CHECKING
 from ag2.context import Stream
 from ag2.middleware.base import Middleware
 
-from ._runtime import A2UIMessageCollector, A2UIOffer, _A2UIRuntime
+from ._runtime import A2UIOffer, _A2UIRuntime
 from ._types import JsonValue, ServerToClientMessage
+from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
 from .data_model import data_model_to_prompt
 from .events import A2UIMessageEvent
 from .incoming import A2UIRendererInput
+from .middleware import A2UIInboundMiddleware
 from .server_action import run_client_interactions
 
 if TYPE_CHECKING:
@@ -53,7 +55,7 @@ class A2UITurn:
         """The A2UI section of the turn's offer, the renderer's capabilities and its data model, in that order."""
         fragments = (
             self.offer.system_prompt_section,
-            self.runtime.capabilities_prompt(self.renderer.capabilities, self.offer),
+            _capabilities_prompt(self.renderer.capabilities, self.offer),
             data_model_to_prompt(self.renderer.data_model),
         )
         return tuple(fragment for fragment in fragments if fragment)
@@ -61,7 +63,9 @@ class A2UITurn:
     @property
     def middleware(self) -> list[Middleware]:
         """The offer's extraction / validation middleware, plus one surfacing the renderer's interactions."""
-        return self.runtime.turn_middleware(self.renderer.interactions, self.offer)
+        if not self.renderer.interactions:
+            return [self.offer.middleware]
+        return [self.offer.middleware, Middleware(A2UIInboundMiddleware, interactions=self.renderer.interactions)]
 
     async def answer_interactions(self, agent: "Agent", variables: dict[str, JsonValue] | None) -> A2UIServerAnswers:
         """Run the interactions the server answers itself (registered clicks, ``callAgentFunction``)."""
@@ -83,6 +87,23 @@ class A2UITurn:
     def deliverable(self, messages: list[ServerToClientMessage]) -> list[ServerToClientMessage]:
         """The agent's ``messages`` this turn may send; the rest are dropped with a warning."""
         return self.offer.deliverable(messages, source="the agent")
+
+
+def _capabilities_prompt(caps: A2UIClientCapabilities | None, offer: A2UIOffer) -> str:
+    """Render negotiated client capabilities as a per-turn prompt fragment."""
+    if not offer.sends_ui or offer.catalog_id is None:
+        return ""
+    return capabilities_to_prompt(caps, catalog_id=offer.catalog_id)
+
+
+class A2UIMessageCollector:
+    """Appends each ``A2UIMessageEvent``'s message to ``into``; subscribe it to a turn's stream."""
+
+    def __init__(self, into: list[ServerToClientMessage]) -> None:
+        self.into = into
+
+    async def __call__(self, event: A2UIMessageEvent) -> None:
+        self.into.append(event.message)
 
 
 def open_turn(runtime: _A2UIRuntime, renderer: A2UIRendererInput) -> A2UITurn:

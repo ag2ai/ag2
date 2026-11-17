@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""The A2UI configuration a transport serves with, built once from the flat A2UI kwargs, and the
-per-turn wiring every transport shares (middleware list, message collection). Not exported."""
+"""The A2UI configuration a transport serves with, built once from the flat A2UI kwargs, and the offers it
+negotiates per turn (``A2UIOffer``). Not exported; ``_turn`` applies an offer to one turn."""
 
 import logging
 import os
@@ -16,10 +16,8 @@ from ag2.middleware.base import Middleware
 from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
 from ._versions import A2UIProtocol
 from .actions import A2UIAction, A2UIEventAction, collect_action_declarations, collect_server_actions
-from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
-from .events import A2UIMessageEvent
-from .incoming import A2UIIncomingParseResult
-from .middleware import A2UIExtractionMiddleware, A2UIInboundMiddleware, A2UIValidationMiddleware
+from .capabilities import A2UIClientCapabilities
+from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 from .parser import A2UIResponseParser
 from .schema_manager import A2UISchemaManager
 
@@ -139,29 +137,6 @@ class _A2UIRuntime:
         if served not in self._offers:
             self._offers[served] = _build_offer(restricted, self.actions, self._settings)
         return self._offers[served]
-
-    def capabilities_prompt(self, caps: A2UIClientCapabilities | None, offer: A2UIOffer) -> str:
-        """Render negotiated client capabilities as a per-turn prompt fragment."""
-        if not offer.sends_ui or offer.catalog_id is None:
-            return ""
-        return capabilities_to_prompt(caps, catalog_id=offer.catalog_id)
-
-    def turn_middleware(self, interactions: Sequence[A2UIIncomingParseResult], offer: A2UIOffer) -> list[Middleware]:
-        """The middleware one turn runs with: the offer's own, plus one surfacing the client's interactions."""
-        middleware = offer.middleware
-        if not interactions:
-            return [middleware]
-        return [middleware, Middleware(A2UIInboundMiddleware, interactions=interactions)]
-
-
-class A2UIMessageCollector:
-    """Appends each ``A2UIMessageEvent``'s message to ``into``; subscribe it to a turn's stream."""
-
-    def __init__(self, into: list[ServerToClientMessage]) -> None:
-        self.into = into
-
-    async def __call__(self, event: A2UIMessageEvent) -> None:
-        self.into.append(event.message)
 
 
 @dataclass(frozen=True, slots=True)
