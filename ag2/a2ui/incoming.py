@@ -507,9 +507,11 @@ _FUNCTION_CALL_KEYS = frozenset({"@call", "catalogId", "args"})
 """``FunctionCall`` is ``unevaluatedProperties: false`` over ``FunctionCommon`` and the function's own definition
 (``common_types.json``); an agent function's definition is its handler, whose arguments sit under ``args``."""
 _FUNCTION_RESPONSE_KEYS = frozenset({"functionCallId", "value", "error"})
+_FUNCTION_RESPONSE_ERROR_KEYS = frozenset({"code", "message"})
+_SURFACE_ERROR_KEYS = frozenset({"code", "path", "message", "surfaceId"})
 
 
-def _function_call_problem(call: JsonObject, protocol: A2UIProtocol) -> str | None:
+def _function_call_problem(call: JsonObject) -> str | None:
     if problem := _unknown_properties(call, "'callAgentFunction'", _CALL_AGENT_FUNCTION_KEYS):
         return problem
     if not isinstance(call.get("functionCallId"), str):
@@ -532,7 +534,7 @@ def _function_call_problem(call: JsonObject, protocol: A2UIProtocol) -> str | No
     return None
 
 
-def _function_response_problem(response: JsonObject, protocol: A2UIProtocol) -> str | None:
+def _function_response_problem(response: JsonObject) -> str | None:
     if not isinstance(response.get("functionCallId"), str):
         return "'rendererFunctionResponse' needs a string 'functionCallId'"
     if problem := _unknown_properties(response, "'rendererFunctionResponse'", _FUNCTION_RESPONSE_KEYS):
@@ -541,7 +543,9 @@ def _function_response_problem(response: JsonObject, protocol: A2UIProtocol) -> 
         return "'rendererFunctionResponse' must carry exactly one of 'value' or 'error'"
     error = response.get("error")
     if "error" in response and (
-        not isinstance(error, dict) or _missing_strings(error, "code", "message") or error.keys() - {"code", "message"}
+        not isinstance(error, dict)
+        or _missing_strings(error, *_FUNCTION_RESPONSE_ERROR_KEYS)
+        or error.keys() - _FUNCTION_RESPONSE_ERROR_KEYS
     ):
         return "'rendererFunctionResponse.error' must be an object with exactly string 'code' and 'message'"
     return None
@@ -551,9 +555,7 @@ def _error_problem(error: JsonObject, protocol: A2UIProtocol) -> str | None:
     code = error.get("code")
     surface_codes = _SURFACE_ERROR_CODES_V1 if protocol.function_rpc else frozenset({"VALIDATION_FAILED"})
     if code in surface_codes:
-        missing = _missing_strings(error, "code", "path", "message", "surfaceId")
-        extra = sorted(error.keys() - {"code", "path", "message", "surfaceId"})
-        if missing or extra:
+        if _missing_strings(error, *_SURFACE_ERROR_KEYS) or error.keys() - _SURFACE_ERROR_KEYS:
             return f"a {code} 'error' carries exactly string 'code', 'path', 'message' and 'surfaceId'"
         return None
     if "code" not in error:
@@ -574,8 +576,9 @@ def _error_problem(error: JsonObject, protocol: A2UIProtocol) -> str | None:
 
 _PAYLOAD_PROBLEMS: dict[str, Callable[[JsonObject, A2UIProtocol], str | None]] = {
     "action": _action_problem,
-    "callAgentFunction": _function_call_problem,
-    "rendererFunctionResponse": _function_response_problem,
+    # Neither depends on the version: both payloads exist only in v1.0.
+    "callAgentFunction": lambda payload, _protocol: _function_call_problem(payload),
+    "rendererFunctionResponse": lambda payload, _protocol: _function_response_problem(payload),
     "error": _error_problem,
 }
 """What checks each renderer→agent payload kind (``CLIENT_TO_SERVER_KEYS``)."""
@@ -598,9 +601,8 @@ def envelope_problem(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:
     kind = present[0]
     if kind in _FUNCTION_RPC_ENVELOPES and not protocol.function_rpc:
         return f"'{kind}' exists only in protocol v1.0"
-    extra = sorted(envelope.keys() - {"version", kind})
-    if extra:
-        return f"envelope has properties besides 'version' and '{kind}': {', '.join(map(repr, extra))}"
+    if problem := _unknown_properties(envelope, "envelope", frozenset({"version", kind})):
+        return problem
     version = envelope.get("version")
     if version not in protocol.accepted_wire_versions:
         accepted = " or ".join(map(repr, protocol.accepted_wire_versions))

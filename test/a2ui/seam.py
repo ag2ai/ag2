@@ -51,7 +51,7 @@ def from_renderer(body: Mapping[str, Any], *catalog_ids: str) -> dict[str, Any]:
 def catalog_id_of(catalog: "Mapping[str, Any] | str | os.PathLike[str]") -> str:
     """The id a custom catalog (a dict or a JSON file) is served under."""
     document = catalog if isinstance(catalog, Mapping) else json.loads(Path(catalog).read_text())
-    return str(document.get("catalogId", document.get("$id")))
+    return str(document["catalogId"])
 
 
 def served_catalogs(server_kwargs: Mapping[str, Any]) -> list[str]:

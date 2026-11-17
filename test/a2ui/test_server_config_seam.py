@@ -85,6 +85,11 @@ async def test_custom_catalog_is_served_under_its_catalog_id(with_dollar_id: boo
             id="v09-declares-1.0",
         ),
         pytest.param("v1.0", {"protocolVersion": "one"}, "'protocolVersion' 'one' is not a version", id="malformed"),
+        # v0.9 has no catalog_definition.json, so only the v1.0 schema's semver pattern guards these.
+        pytest.param(
+            "v0.9", {"protocolVersion": "0.9.x"}, "'protocolVersion' '0.9.x' is not a version", id="bad-patch"
+        ),
+        pytest.param("v0.9", {"protocolVersion": "0.9-"}, "'protocolVersion' '0.9-' is not a version", id="empty-pre"),
     ],
 )
 def test_custom_catalog_protocol_version_must_match_the_served_version(
@@ -97,7 +102,16 @@ def test_custom_catalog_protocol_version_must_match_the_served_version(
 
 @pytest.mark.parametrize(
     ("version", "protocol_version"),
-    [("v0.9", None), ("v0.9", "0.9"), ("v0.9.1", "0.9.1"), ("v1.0", "1.0"), ("v1.0", "1.0.0")],
+    [
+        ("v0.9", None),
+        ("v0.9", "0.9"),
+        ("v0.9", "v0.9"),
+        ("v0.9.1", "0.9"),
+        ("v0.9.1", "0.9.1"),
+        ("v0.9.1", "0.9.1-rc.1+build.5"),
+        ("v1.0", "1.0"),
+        ("v1.0", "1.0.0"),
+    ],
 )
 def test_custom_catalog_protocol_version_is_matched_on_major_and_minor(
     version: str, protocol_version: str | None

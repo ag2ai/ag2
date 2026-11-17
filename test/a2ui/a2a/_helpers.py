@@ -31,7 +31,8 @@ from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelResponse
 from ag2.stream import MemoryStream
 
-from ..seam import BASIC_CATALOG, catalog_id_of
+from ..seam import BASIC_CATALOG, served_catalogs
+from ..seam import renderer_capabilities as capabilities_for
 
 # Marker the HITL continuation feeds back so a paused turn can complete instead
 # of pausing forever (see CallRendererFunctionThenComplete).
@@ -195,8 +196,7 @@ def client_for(
     )
     a2a_server = A2AServer(agent, executor=executor)
     if renderer_capabilities and protocol_version == "v1.0":
-        catalogs = [V1_BASIC_CATALOG_ID, *([catalog_id_of(custom_catalog)] if custom_catalog else [])]
-        supported = {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": catalogs}}}
+        supported = capabilities_for(*served_catalogs({"custom_catalog": custom_catalog}))
         interceptors = [MetadataInterceptor(supported), *interceptors]
     factory = make_test_client_factory(a2a_server, url="http://test")
     kwargs: dict[str, Any] = {}

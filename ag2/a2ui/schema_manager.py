@@ -414,8 +414,7 @@ def _check_entity_names(catalog: JsonSchema) -> None:
 
 
 def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
-    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
-    if not name.isidentifier():
+    if not _is_identifier_key(name):
         of_owner = f" of {owner}" if owner else ""
         raise ValueError(f"Invalid custom catalog: {kind} {name!r}{of_owner} is not a {UAX31_IDENTIFIER}")
 
@@ -512,7 +511,7 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
         if not path.exists():
             raise FileNotFoundError(f"Custom catalog file not found: {path}")
         catalog = _load_object(path)
-    catalog_id = _settle_catalog_id(catalog)
+    catalog_id = _checked_catalog_id(catalog)
     _check_catalog_protocol_version(catalog, protocol)
     if protocol.entity_naming_rules:
         # Before the full schema, for clearer messages on the rules a catalog author most often breaks.
@@ -524,12 +523,12 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
     return {**catalog, "$id": catalog_id}
 
 
-def _settle_catalog_id(catalog: JsonSchema) -> str:
+def _checked_catalog_id(catalog: JsonSchema) -> str:
     """The catalog's ``catalogId``, which identifies it (v0_9 a2ui_protocol.md L317, v1_0 L543); ``$id`` must match.
 
     The spec says both "should" be set "to the same URI"; ag2 requires it, since ``$ref``s resolve against ``$id``
     and the catalog is served under its ``catalogId`` (ADR 0040). The official SDK also takes the id from
-    ``catalogId`` only.
+    ``catalogId`` only (its ``_settle_catalog_id``).
     """
     catalog_id = catalog.get("catalogId")
     if not isinstance(catalog_id, str) or not catalog_id:
@@ -546,14 +545,24 @@ def _settle_catalog_id(catalog: JsonSchema) -> str:
     return catalog_id
 
 
-_CATALOG_PROTOCOL_VERSION = re.compile(r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[.+-].*)?", re.ASCII)
+_SEMVER_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)"
+_CATALOG_PROTOCOL_VERSION = re.compile(
+    r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*))?"
+    rf"(?:-{_SEMVER_IDENTIFIER}(?:\.{_SEMVER_IDENTIFIER})*)?"
+    r"(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?",
+    re.ASCII,
+)
+"""``protocolVersion``'s ``pattern`` in v1.0 ``catalog_definition.json``, plus the ``v`` prefix the official SDK
+accepts (``'v0.9'``); v0.9 has no catalog definition schema, so this is the only check there."""
 
 
 def _check_catalog_protocol_version(catalog: JsonSchema, protocol: A2UIProtocol) -> None:
     """Reject a catalog written against another protocol version than the one served.
 
     ``protocolVersion`` "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond" (v1_0
-    a2ui_protocol.md L635). Its major.minor must be the served version's, as the official SDK also requires.
+    a2ui_protocol.md L635). Its major.minor must be the served version's. The official SDK rejects a mismatch too
+    and is stricter: it matches the patch number against its known versions as well, so its v0.9.1 provider rejects
+    a ``"0.9"`` catalog. ag2 serves the same ``"0.9"`` catalogs on v0.9 and v0.9.1.
     """
     declared = catalog.get("protocolVersion", "0.9")
     match = _CATALOG_PROTOCOL_VERSION.fullmatch(declared) if isinstance(declared, str) else None
@@ -588,7 +597,10 @@ def _check_catalog_definition(catalog: JsonSchema, protocol: A2UIProtocol) -> No
 
 
 def _is_identifier_key(instance: object) -> bool:
-    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    """Whether ``instance`` is a UAX #31 identifier; a non-string passes, as a JSON Schema ``format`` does.
+
+    ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    """
     return not isinstance(instance, str) or instance.isidentifier()
 
 

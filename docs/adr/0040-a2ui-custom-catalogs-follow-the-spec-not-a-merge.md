@@ -35,7 +35,9 @@ Each catalog is validated as written; nothing is merged.
   keyed by its `catalogId`.
 - Its `protocolVersion`, `"0.9"` when absent, must have the served version's major.minor: a v1.0 agent needs
   `"protocolVersion": "1.0"`, and a v0.9 agent rejects a 1.0 catalog. The SDK rejects a mismatch too, but takes the
-  agent's version when the catalog states none; ag2 follows L635 instead (ADR 0039).
+  agent's version when the catalog states none (ag2 follows L635 instead, ADR 0039), and also matches the patch
+  number, so its v0.9.1 provider rejects a `"0.9"` catalog; ag2 serves the same `"0.9"` catalogs on v0.9 and v0.9.1.
+  The version must match `catalog_definition.json`'s semver `pattern` (plus the SDK's `v` prefix) in every version.
 - A v1.0 custom catalog must satisfy the vendored `catalog_definition.json`, resolved with `common_types.json`. Its
   `\p{XID_Start}` extension-key pattern does not compile in Python `re`, so those keys are checked with
   `str.isidentifier` instead. The UAX #31 name and reserved `Surface` checks run first, for clearer messages; a

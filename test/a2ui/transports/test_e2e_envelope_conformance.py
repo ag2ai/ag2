@@ -61,7 +61,7 @@ async def test_a_conforming_action_runs_its_handler() -> None:
         ({"action": _ACTION}, "envelope 'version' is None; this server speaks '1.0'"),
         (
             {"version": "1.0", "action": _ACTION, "extra": 1},
-            "envelope has properties besides 'version' and 'action': 'extra'",
+            "envelope has unknown properties 'extra'",
         ),
         (
             {"version": "1.0", "action": {**_ACTION, "timestamp": "yesterday"}},

@@ -216,8 +216,9 @@ class A2UIAgentExecutor(AgentExecutor):
         return tuple(prompts)
 
     def _turn_offer(self, incoming: _IncomingRequest | None) -> A2UIOffer:
-        """The turn's negotiated offer; every catalog when no request was captured (no message to read)."""
-        return incoming.offer if incoming is not None else self._runtime.full_offer
+        """The turn's negotiated offer; with no request captured (no message to read), that of a request without
+        capabilities, which in v1.0 withdraws A2UI (a2ui_protocol.md L1630)."""
+        return incoming.offer if incoming is not None else self._runtime.offer_for(None)
 
     def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
         """Decode ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) for the served version.

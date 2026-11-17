@@ -9,6 +9,7 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 
 from ag2.middleware.base import Middleware
 
@@ -32,6 +33,18 @@ DEFAULT_SYSTEM_MESSAGE = (
 )
 
 
+class A2UIDelivery(Enum):
+    """Which A2UI messages a turn may send the renderer."""
+
+    UI = "ui"
+    """Every A2UI message: the renderer shares at least one catalog with the agent."""
+    FUNCTION_RESPONSES = "function_responses"
+    """Only ``agentFunctionResponse``: the renderer shares no catalog with the agent, but a ``callAgentFunction``
+    still gets the answer the agent "MUST return" (v1_0 a2ui_protocol.md, "callAgentFunction")."""
+    NOTHING = "nothing"
+    """No A2UI message: the renderer withdrew A2UI by omitting its capabilities (v1.0)."""
+
+
 @dataclass(frozen=True, slots=True)
 class A2UIOffer:
     """What the agent offers one renderer on one turn: the catalogs both sides have, and what follows from them.
@@ -41,11 +54,7 @@ class A2UIOffer:
     A2UI: :attr:`sends_ui` is false, the prompt has no A2UI section, and the transport sends no A2UI surfaces.
     """
 
-    sends_ui: bool
-    answers_function_calls: bool
-    """Whether a ``callAgentFunction`` gets its ``agentFunctionResponse`` even without UI. The agent "MUST return"
-    one (v1_0 a2ui_protocol.md, "callAgentFunction"), so a renderer that shares no catalog with the agent still gets
-    its answer; one that withdrew A2UI by omitting its capabilities gets no A2UI message at all."""
+    delivery: A2UIDelivery
     catalog_id: str | None
     """The catalog the prompt's ``createSurface`` names; ``None`` without A2UI."""
     catalog_ids: tuple[str, ...]
@@ -56,6 +65,10 @@ class A2UIOffer:
     message_validator: A2UIResponseParser | None
     """Checks the messages server-side handlers return; ``None`` when validation is off or there is no A2UI."""
 
+    @property
+    def sends_ui(self) -> bool:
+        return self.delivery is A2UIDelivery.UI
+
     def deliverable(self, messages: list[ServerToClientMessage], *, source: str) -> list[ServerToClientMessage]:
         """The ``messages`` from ``source`` this turn may send; the rest are dropped with a warning."""
         if self.sends_ui or not messages:
@@ -63,7 +76,9 @@ class A2UIOffer:
         kept = [
             message
             for message in messages
-            if self.answers_function_calls and isinstance(message, dict) and "agentFunctionResponse" in message
+            if self.delivery is A2UIDelivery.FUNCTION_RESPONSES
+            and isinstance(message, dict)
+            and "agentFunctionResponse" in message
         ]
         logger.warning(
             "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from %s.",
@@ -184,8 +199,7 @@ def _build_offer(
         # Extraction always runs, so prose and UI travel as separate channels, never raw JSON in the text.
         middleware = Middleware(A2UIExtractionMiddleware, parser=A2UIResponseParser(protocol=schema_manager.protocol))
     return A2UIOffer(
-        sends_ui=True,
-        answers_function_calls=True,
+        delivery=A2UIDelivery.UI,
         catalog_id=schema_manager.catalog_id,
         catalog_ids=schema_manager.catalog_ids,
         system_prompt_section=f"{settings.base_prompt}\n\n{prompt_section}",
@@ -228,17 +242,17 @@ def build_runtime(
         actions=declarations,
         server_actions=collect_server_actions(actions),
         full_offer=_build_offer(schema_manager, declarations, settings),
-        no_ui_offer=_no_ui_offer(protocol, system_message, answers_function_calls=True),
-        withdrawn_offer=_no_ui_offer(protocol, system_message, answers_function_calls=False),
+        no_ui_offer=_offer_without_ui(protocol, system_message, A2UIDelivery.FUNCTION_RESPONSES),
+        withdrawn_offer=_offer_without_ui(protocol, system_message, A2UIDelivery.NOTHING),
         _schema_manager=schema_manager,
         _settings=settings,
     )
 
 
-def _no_ui_offer(protocol: A2UIProtocol, system_message: str | None, *, answers_function_calls: bool) -> A2UIOffer:
+def _offer_without_ui(protocol: A2UIProtocol, system_message: str | None, delivery: A2UIDelivery) -> A2UIOffer:
+    """An offer that sends no surfaces: one that answers function calls only, or one that sends nothing."""
     return A2UIOffer(
-        sends_ui=False,
-        answers_function_calls=answers_function_calls,
+        delivery=delivery,
         catalog_id=None,
         catalog_ids=(),
         # The default system message is about A2UI; a user's own one still applies.
