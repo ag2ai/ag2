@@ -319,10 +319,13 @@ async def test_gemini_restated_tool_call_keeps_its_signature(provider: ModelProv
     gemini = await _model_input(incoming, config=_as(provider))
     openai = await _model_input(incoming, config=_as(ModelProvider.OPENAI))
 
-    [call] = gemini.history[0].tool_calls.calls
+    gemini_response, openai_response = gemini.history[0], openai.history[0]
+    assert isinstance(gemini_response, ModelResponse)
+    assert isinstance(openai_response, ModelResponse)
+    [call] = gemini_response.tool_calls.calls
     assert isinstance(call, GeminiToolCallEvent)
     assert call.thought_signature == RAW_BYTES
-    [other] = openai.history[0].tool_calls.calls
+    [other] = openai_response.tool_calls.calls
     assert type(other) is ToolCallEvent
 
 

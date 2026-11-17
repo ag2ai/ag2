@@ -19,6 +19,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
 )
+from ag2.exceptions import FilesAPIUnsupportedError
 from ag2.files import FileContent, UploadedFile
 from ag2.tools.schemas import ToolSchema
 
@@ -163,7 +164,7 @@ class TrackingConfig(ModelConfig):
         return TrackingClient(self.config.create(), self.mock, self.calls)
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)
 
 
 class TestFilesClient:
@@ -256,5 +257,5 @@ class TestConfig(ModelConfig):
 
     def create_files_client(self) -> "FilesClient":
         if self._files is None:
-            raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+            raise FilesAPIUnsupportedError(type(self).__name__)
         return self._files

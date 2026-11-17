@@ -537,16 +537,14 @@ async def test_second_plugin_rejected_before_store_io(invocation: bool) -> None:
     assert await second.list("/") == []
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
-        {"compact": TailWindowCompact(1)},
-        {"aggregate_trigger": AggregateTrigger(on_end=True)},
-    ],
-)
-def test_strategy_without_its_counterpart_is_rejected(options: dict[str, object]) -> None:
-    with pytest.raises(ValueError, match="requires"):
-        KnowledgePlugin(MemoryKnowledgeStore(), **options)  # type: ignore[arg-type]
+def test_compact_without_a_trigger_is_rejected() -> None:
+    with pytest.raises(ValueError, match="requires compact_trigger"):
+        KnowledgePlugin(MemoryKnowledgeStore(), compact=TailWindowCompact(1))
+
+
+def test_aggregate_trigger_without_a_strategy_is_rejected() -> None:
+    with pytest.raises(ValueError, match="requires an aggregate strategy"):
+        KnowledgePlugin(MemoryKnowledgeStore(), aggregate_trigger=AggregateTrigger(on_end=True))
 
 
 @pytest.mark.asyncio

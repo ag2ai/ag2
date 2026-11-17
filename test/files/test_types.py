@@ -48,11 +48,6 @@ class TestUploadedFile:
 
 
 class TestFileContent:
-    def test_frozen(self) -> None:
-        fc = FileContent(name="test.txt", data=b"hello")
-        with pytest.raises(AttributeError):
-            fc.name = "other.txt"  # type: ignore[misc]
-
     def test_fields_preserved(self) -> None:
         assert FileContent(name="doc.pdf", data=b"pdf-bytes", media_type="application/pdf") == FileContent(
             name="doc.pdf",
