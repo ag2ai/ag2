@@ -14,13 +14,16 @@ from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
 
+from ..seam import BASIC_CATALOG, from_renderer
+
 _BASIC_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 """Basic components on a custom-catalog surface name their catalog (a2ui_protocol.md L511)."""
 
 
 def _catalog(allowed_callers: str = "agentOnly") -> dict[str, Any]:
     return {
-        "$id": "https://example.com/catalog.json",
+        "catalogId": "https://example.com/catalog.json",
+        "protocolVersion": "1.0",
         "functions": {
             "lookup": {
                 "type": "object",
@@ -34,8 +37,10 @@ def _catalog(allowed_callers: str = "agentOnly") -> dict[str, Any]:
 
 
 async def _post(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
+    """Post ``body`` from a renderer that supports the basic catalog and this module's custom one."""
+    request = from_renderer(body, BASIC_CATALOG["v1.0"], _catalog()["catalogId"])
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
-        response = await client.post("/a2ui", json=body)
+        response = await client.post("/a2ui", json=request)
     assert response.status_code == 200
     return [json.loads(line) for line in response.text.splitlines() if line]
 
@@ -440,7 +445,7 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
         components = [{"id": "root", "component": "Text", "@catalogId": _BASIC_ID, "text": value}]
     payload: dict[str, Any] = {"surfaceId": "s", "components": components}
     if message_key == "createSurface":
-        payload["catalogId"] = _catalog()["$id"]
+        payload["catalogId"] = _catalog()["catalogId"]
     operation = {"version": "1.0", message_key: payload}
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>", "Corrected."))
     app = A2UIServer(
@@ -530,7 +535,8 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
     basic_id = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
     custom_id = "https://example.com/catalog.json"
     catalog = {
-        "$id": custom_id,
+        "catalogId": custom_id,
+        "protocolVersion": "1.0",
         "functions": {
             "openUrl": {
                 "type": "object",
@@ -608,7 +614,7 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
             "version": "1.0",
             "callRendererFunction": {
                 "functionCallId": "fc-1",
-                "callFunction": {"@call": name, "catalogId": catalog["$id"]},
+                "callFunction": {"@call": name, "catalogId": catalog["catalogId"]},
             },
         }
         agent.config = TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>")

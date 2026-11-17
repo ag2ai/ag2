@@ -28,7 +28,9 @@ def _text_with_nested_format_string(depth: int, leaf: dict[str, Any] | str) -> d
 
 
 def _parser_with_functions(functions: dict[str, Any]) -> A2UIResponseParser:
-    return validating_parser("v1.0", {"$id": "https://mycompany.com/cat.json", "functions": functions})
+    return validating_parser(
+        "v1.0", {"catalogId": "https://mycompany.com/cat.json", "protocolVersion": "1.0", "functions": functions}
+    )
 
 
 def _create_surface_with_extension(key: str) -> dict[str, Any]:
@@ -274,7 +276,8 @@ class TestA2UIResponseParserV1Validation:
         manager = A2UISchemaManager(
             protocol_version="v1.0",
             custom_catalog={
-                "$id": "https://mycompany.com/cat.json",
+                "catalogId": "https://mycompany.com/cat.json",
+                "protocolVersion": "1.0",
                 "functions": {
                     "lookup": {
                         "type": "object",
@@ -489,28 +492,6 @@ class TestA2UIResponseParserV1Validation:
     ) -> None:
         assert parser_v1.validate([_text_with_nested_format_string(0, call)]).is_valid is valid
 
-    def test_function_whose_any_of_adds_properties_accepts_them(self) -> None:
-        parser = _parser_with_functions({
-            "pick": {
-                "type": "object",
-                "returnType": "string",
-                "properties": {"@call": {"const": "pick"}},
-                "required": ["@call"],
-                "anyOf": [
-                    {"properties": {"@call": {"const": "pick"}, "a": {}}, "required": ["a"]},
-                    {"properties": {"@call": {"const": "pick"}, "b": {}}, "required": ["b"]},
-                ],
-            }
-        })
-        assert parser.validate([_text_with_nested_format_string(0, {"@call": "pick", "a": 1})]).is_valid is True
-
-    def test_function_without_a_call_const_answers_to_its_catalog_key(self) -> None:
-        parser = _parser_with_functions({
-            "shout": {"type": "object", "returnType": "string", "properties": {"@call": {"type": "string"}}}
-        })
-        assert parser.validate([_text_with_nested_format_string(0, {"@call": "shout"})]).is_valid is True
-        assert parser.validate([_text_with_nested_format_string(0, {"@call": "other"})]).is_valid is False
-
     def test_custom_catalog_without_functions_leaves_the_basic_ones_working(
         self, parser_v1: A2UIResponseParser
     ) -> None:
@@ -562,7 +543,8 @@ class TestSurfaceCatalogValidation:
         manager = A2UISchemaManager(
             protocol_version="v1.0",
             custom_catalog={
-                "$id": "https://example.com/catalog.json",
+                "catalogId": "https://example.com/catalog.json",
+                "protocolVersion": "1.0",
                 "functions": {
                     "openUrl": {
                         "type": "object",
@@ -738,7 +720,8 @@ def test_component_can_select_basic_catalog_over_custom_surface() -> None:
     manager = A2UISchemaManager(
         protocol_version="v1.0",
         custom_catalog={
-            "$id": "https://example.com/catalog.json",
+            "catalogId": "https://example.com/catalog.json",
+            "protocolVersion": "1.0",
             "components": {
                 "Text": {
                     "type": "object",
@@ -781,7 +764,8 @@ class TestComponentCatalogValidation:
         manager = A2UISchemaManager(
             protocol_version="v1.0",
             custom_catalog={
-                "$id": "https://example.com/catalog.json",
+                "catalogId": "https://example.com/catalog.json",
+                "protocolVersion": "1.0",
                 "components": {
                     "Text": {
                         "type": "object",
@@ -884,7 +868,8 @@ class TestCatalogFunctionDefinitions:
         manager = A2UISchemaManager(
             protocol_version="v1.0",
             custom_catalog={
-                "$id": "https://example.com/catalog.json",
+                "catalogId": "https://example.com/catalog.json",
+                "protocolVersion": "1.0",
                 "functions": {"lookupDefinition": function_schema},
             },
         )
@@ -938,7 +923,8 @@ class TestCatalogFunctionDefinitions:
         manager = A2UISchemaManager(
             protocol_version="v1.0",
             custom_catalog={
-                "$id": "https://example.com/catalog.json",
+                "catalogId": "https://example.com/catalog.json",
+                "protocolVersion": "1.0",
                 "functions": {"lookupDefinition": function_schema},
             },
         )

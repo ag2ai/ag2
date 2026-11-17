@@ -31,6 +31,8 @@ from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, Too
 from ag2.middleware.base import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
 
+from ..seam import from_renderer
+
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 _A2UI_RESPONSE = (
     "Here is your UI.\n<a2ui-json>\n"
@@ -215,7 +217,7 @@ async def test_call_agent_function_in_forwarded_props_is_answered_by_the_server(
     )
     envelope: Any = _CALL_AGENT_FUNCTION if carrier == "a2uiAction" else [_CALL_AGENT_FUNCTION]
 
-    events = await _dispatch_events(server, _forwarded_input({carrier: envelope}))
+    events = await _dispatch_events(server, _forwarded_input(from_renderer({carrier: envelope})))
 
     assert called == ["PRV-102"]
     assert [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"] == []

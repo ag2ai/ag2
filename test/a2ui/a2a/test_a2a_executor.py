@@ -21,7 +21,6 @@ from ag2.a2a.mappers.messages import build_tool_result_message, build_user_messa
 from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts
-from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
 from ag2.a2ui.constants import A2UI_MIME_TYPE
 from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.stream import MemoryStream
@@ -113,7 +112,8 @@ async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
 
 
 DEVICE_CATALOG: dict[str, Any] = {
-    "$id": "https://example.com/device",
+    "catalogId": "https://example.com/device",
+    "protocolVersion": "1.0",
     "functions": {
         "getLocation": {
             "type": "object",
@@ -160,35 +160,43 @@ class _FunctionRoundTrip(ClientCallInterceptor):
         return None
 
 
-class TestExtractA2UIEnvelopes:
-    """Envelope decode — the three on-the-wire shapes from get_a2ui_data."""
+@pytest.mark.asyncio
+class TestIncomingA2UIDataParts:
+    """What the agent receives from the A2UI DataParts on a request (the shapes ``get_a2ui_data`` decodes)."""
 
-    def test_returns_none_for_text_part(self) -> None:
-        assert _extract_a2ui_envelopes(Part(text="hello")) is None
+    async def _ask(self, parts: list[Part], *, protocol_version: str = "v0.9") -> str:
+        config = CapturingConfig()
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version=protocol_version, validate_responses=False)
+        await client.ask("go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: parts})
+        return synthesized_text(config.messages[-1])
 
-    def test_canonical_list_payload(self) -> None:
-        [part] = create_a2ui_parts([ACTION_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+    async def test_canonical_list_payload_reaches_the_agent(self) -> None:
+        assert "user@example.com" in await self._ask(create_a2ui_parts([ACTION_ENVELOPE]))
 
-    def test_single_object_payload_is_consumed_without_envelopes(self, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_single_object_payload_is_consumed_without_envelopes(self, caplog: pytest.LogCaptureFixture) -> None:
         # The A2A extension: a DataPart's data "MUST be an array of messages".
-        with pytest.warns(DeprecationWarning):
-            [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
+        part = data_part(ACTION_ENVELOPE, media_type=A2UI_MIME_TYPE)
+
         with caplog.at_level("WARNING"):
-            assert _extract_a2ui_envelopes(part) == []
+            synthesized = await self._ask([part])
+
         assert "not an array of messages" in caplog.text
+        assert "user@example.com" not in synthesized
 
-    def test_filters_entries_the_renderer_does_not_send(self) -> None:
-        [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+    async def test_entries_the_renderer_does_not_send_are_skipped(self) -> None:
+        synthesized = await self._ask(create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE]))
 
-    def test_decodes_error_envelope(self) -> None:
-        [part] = create_a2ui_parts([ERROR_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ERROR_ENVELOPE]
+        assert "user@example.com" in synthesized
+        assert "createSurface" not in synthesized
 
-    def test_decodes_function_response_envelope(self) -> None:
-        [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
+    async def test_error_envelope_reaches_the_agent(self) -> None:
+        assert "VALIDATION_FAILED" in await self._ask(create_a2ui_parts([ERROR_ENVELOPE]))
+
+    async def test_function_response_envelope_reaches_the_agent(self) -> None:
+        synthesized = await self._ask(create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE]), protocol_version="v1.0")
+
+        assert "fc-1" in synthesized
 
 
 @pytest.mark.asyncio

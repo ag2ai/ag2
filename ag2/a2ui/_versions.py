@@ -55,6 +55,13 @@ class A2UIProtocol:
     data_model_key: str
     """The request metadata key carrying the client's per-surface data models."""
 
+    catalog_protocol_version: str
+    """The major.minor a custom catalog's ``protocolVersion`` must name; a catalog without one is ``"0.9"``
+    (v1_0 a2ui_protocol.md L635: "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond")."""
+
+    catalog_definition_file: str | None
+    """Vendored schema every custom catalog must satisfy; v0.9 publishes none."""
+
     rules_file: str | None
     """Vendored basic-catalog rules file, or ``None`` when the catalog embeds them as ``instructions``."""
 
@@ -71,9 +78,11 @@ class A2UIProtocol:
     """Component ids and a catalog's component, function, property and argument names are UAX #31 identifiers,
     and ``Surface`` is a reserved component name (v1_0 a2ui_protocol.md, "Catalog Entity Naming Rules")."""
 
-    a2a_turn_scoped_capabilities: bool
-    """Over A2A, a message without this version's capabilities offers no A2UI, so the agent sends none in reply
-    (v1_0 A2A extension, "Capability scoping"). Before v1.0 the capabilities are optional."""
+    turn_scoped_capabilities: bool
+    """A request without this version's renderer capabilities offers no A2UI, so the agent sends none in reply:
+    "Capabilities carried per message are scoped to that message's turn, and omitting them withdraws A2UI for that
+    turn" (v1_0 a2ui_protocol.md, "Renderer capabilities"; the A2A extension's "Capability scoping" states it for
+    A2A). Every ag2 transport carries them per request. Before v1.0 the capabilities are optional."""
 
     @property
     def server_to_client_keys(self) -> frozenset[str]:
@@ -106,12 +115,14 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         capabilities_key=A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
         capabilities_version_key="v0.9",
         data_model_key=A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
+        catalog_protocol_version="0.9",
+        catalog_definition_file=None,
         rules_file="basic_catalog_rules.txt",
         per_surface_catalogs=False,
         restricted_catalog_refs=False,
         function_rpc=False,
         entity_naming_rules=False,
-        a2a_turn_scoped_capabilities=False,
+        turn_scoped_capabilities=False,
     ),
     "v0.9.1": A2UIProtocol(
         version="v0.9.1",
@@ -125,12 +136,14 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         capabilities_key=A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
         capabilities_version_key="v0.9",
         data_model_key=A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
+        catalog_protocol_version="0.9",
+        catalog_definition_file=None,
         rules_file="basic_catalog_rules.txt",
         per_surface_catalogs=False,
         restricted_catalog_refs=False,
         function_rpc=False,
         entity_naming_rules=False,
-        a2a_turn_scoped_capabilities=False,
+        turn_scoped_capabilities=False,
     ),
     "v1.0": A2UIProtocol(
         version="v1.0",
@@ -144,12 +157,14 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         capabilities_key=A2UI_RENDERER_CAPABILITIES_METADATA_KEY,
         capabilities_version_key="1.0",
         data_model_key=A2UI_RENDERER_DATA_MODEL_METADATA_KEY,
+        catalog_protocol_version="1.0",
+        catalog_definition_file="catalog_definition.json",
         rules_file=None,
         per_surface_catalogs=True,
         restricted_catalog_refs=True,
         function_rpc=True,
         entity_naming_rules=True,
-        a2a_turn_scoped_capabilities=True,
+        turn_scoped_capabilities=True,
     ),
 }
 

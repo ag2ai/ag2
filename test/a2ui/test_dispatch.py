@@ -17,6 +17,8 @@ from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
 
+from .seam import from_renderer
+
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
 
@@ -293,8 +295,9 @@ async def _rpc_messages(
 
 
 async def _post_turn(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
+    """Post ``body`` from a renderer that supports the basic catalog."""
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
-        response = await client.post("/a2ui", json=body)
+        response = await client.post("/a2ui", json=from_renderer(body))
     assert response.status_code == 200
     return [json.loads(line) for line in response.text.splitlines() if line]
 

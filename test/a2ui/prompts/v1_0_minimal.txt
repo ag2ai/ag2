@@ -56,3 +56,10 @@ Each component uses a flat discriminator format:
 ```
 
 Components are referenced by `id`. Use `children` (array of ids) for layout components (Column, Row). Use `child` (single id) for wrapper components (Card, Button).
+
+=====
+
+## A2UI Client Capabilities
+
+The connected client renderer supports these component/function catalogs:
+- https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json

@@ -5,12 +5,15 @@
 import copy
 import json
 import os
+import re
 from collections.abc import Collection
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from urllib.parse import urljoin
 
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import best_match
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
@@ -410,35 +413,6 @@ def _check_entity_names(catalog: JsonSchema) -> None:
             _check_entity_name("argument name", argument, owner=f"function {name!r}")
 
 
-_ALLOWED_CALLERS = ("rendererOnly", "agentOnly", "rendererOrAgent")
-
-
-def _check_definition_metadata(catalog: JsonSchema) -> None:
-    """Reject a v1.0 catalog whose composition constraints or function callers ``catalog_definition.json`` forbids.
-
-    ``allowedParents`` / ``allowedChildren`` are arrays of component type names; ``allowedCallers`` is one of
-    :data:`_ALLOWED_CALLERS`, and a function that ``requiresUserActivation`` is ``rendererOnly``. Without this, a
-    malformed constraint would silently allow everything.
-    """
-    for name, component in _as_object(catalog.get("components")).items():
-        definition = _as_object(component)
-        for key in ("allowedParents", "allowedChildren"):
-            names = definition.get(key, [])
-            if not isinstance(names, list) or not all(isinstance(item, str) for item in names):
-                raise ValueError(f"Invalid custom catalog: {key} of component {name!r} must be an array of strings")
-    for name, function in _as_object(catalog.get("functions")).items():
-        definition = _as_object(function)
-        callers = definition.get("allowedCallers", "rendererOnly")
-        if callers not in _ALLOWED_CALLERS:
-            allowed = ", ".join(map(repr, _ALLOWED_CALLERS))
-            raise ValueError(f"Invalid custom catalog: allowedCallers of function {name!r} must be one of {allowed}")
-        if definition.get("requiresUserActivation") is True and callers != "rendererOnly":
-            raise ValueError(
-                f"Invalid custom catalog: function {name!r} requires user activation, so its allowedCallers must be "
-                "'rendererOnly'"
-            )
-
-
 def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
     # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
     if not name.isidentifier():
@@ -526,6 +500,11 @@ def _vendored_spec(protocol: A2UIProtocol) -> _VendoredSpec:
 
 
 def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", protocol: A2UIProtocol) -> JsonSchema:
+    """The custom catalog, checked against the served version's catalog rules, with ``$id`` set to its ``catalogId``.
+
+    Internally a catalog is keyed by ``$id``, the name its ``$ref``s resolve against; the spec asks for both fields
+    "set to the same URI", so a catalog that omits ``$id`` is given its ``catalogId``.
+    """
     if isinstance(custom_catalog, dict):
         catalog = custom_catalog
     else:
@@ -533,23 +512,102 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
         if not path.exists():
             raise FileNotFoundError(f"Custom catalog file not found: {path}")
         catalog = _load_object(path)
+    catalog_id = _settle_catalog_id(catalog)
+    _check_catalog_protocol_version(catalog, protocol)
+    if protocol.entity_naming_rules:
+        # Before the full schema, for clearer messages on the rules a catalog author most often breaks.
+        _check_entity_names(catalog)
+    if protocol.catalog_definition_file is not None:
+        _check_catalog_definition(catalog, protocol)
     if protocol.restricted_catalog_refs:
         _check_catalog_references(catalog)
-    if protocol.entity_naming_rules:
-        _check_entity_names(catalog)
-        _check_definition_metadata(catalog)
-    if "$id" not in catalog:
+    return {**catalog, "$id": catalog_id}
+
+
+def _settle_catalog_id(catalog: JsonSchema) -> str:
+    """The catalog's ``catalogId``, which identifies it (v0_9 a2ui_protocol.md L317, v1_0 L543); ``$id`` must match.
+
+    The spec says both "should" be set "to the same URI"; ag2 requires it, since ``$ref``s resolve against ``$id``
+    and the catalog is served under its ``catalogId`` (ADR 0040). The official SDK also takes the id from
+    ``catalogId`` only.
+    """
+    catalog_id = catalog.get("catalogId")
+    if not isinstance(catalog_id, str) or not catalog_id:
         raise ValueError(
-            "Custom catalog must include a '$id' field. "
-            "This is used as the catalogId in A2UI createSurface messages. "
-            'Example: {"$id": "https://mycompany.com/my_catalog.json", ...}'
+            "Custom catalog must include a non-empty string 'catalogId': it identifies the catalog in "
+            "createSurface, supportedCatalogIds and catalog negotiation. "
+            'Example: {"catalogId": "https://mycompany.com/my_catalog.json", ...}'
         )
-    if not isinstance(catalog["$id"], str):
+    if "$id" in catalog and catalog["$id"] != catalog_id:
         raise ValueError(
-            f"Custom catalog '$id' must be a string, got {type(catalog['$id']).__name__!r}. "
-            "It is used verbatim as the catalogId and as a schema-registry key."
+            f"Custom catalog '$id' {catalog['$id']!r} differs from its 'catalogId' {catalog_id!r}; set both to the "
+            "same URI (or leave '$id' out)."
         )
-    return catalog
+    return catalog_id
+
+
+_CATALOG_PROTOCOL_VERSION = re.compile(r"v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[.+-].*)?", re.ASCII)
+
+
+def _check_catalog_protocol_version(catalog: JsonSchema, protocol: A2UIProtocol) -> None:
+    """Reject a catalog written against another protocol version than the one served.
+
+    ``protocolVersion`` "defaults to `"0.9"` if omitted, required for catalogs targeting `1.0` and beyond" (v1_0
+    a2ui_protocol.md L635). Its major.minor must be the served version's, as the official SDK also requires.
+    """
+    declared = catalog.get("protocolVersion", "0.9")
+    match = _CATALOG_PROTOCOL_VERSION.fullmatch(declared) if isinstance(declared, str) else None
+    if match is None:
+        raise ValueError(f"Custom catalog 'protocolVersion' {declared!r} is not a version such as '1.0'")
+    major_minor = f"{match[1]}.{match[2]}"
+    if major_minor != protocol.catalog_protocol_version:
+        stated = f"declares protocolVersion {declared!r}" if "protocolVersion" in catalog else "has no protocolVersion"
+        raise ValueError(
+            f"Custom catalog {stated}, so it is written for A2UI {major_minor}, but this agent serves "
+            f'{protocol.version}: set "protocolVersion": "{protocol.catalog_protocol_version}"'
+        )
+
+
+_MAX_SCHEMA_MESSAGE = 300
+"""Longer messages are cut: a failed ``oneOf`` prints the whole instance."""
+
+
+def _check_catalog_definition(catalog: JsonSchema, protocol: A2UIProtocol) -> None:
+    """Reject a catalog that does not satisfy the version's vendored ``catalog_definition.json``."""
+    errors = list(_catalog_definition_validator(protocol).iter_errors(catalog))
+    # A failing subschema yields no annotations, so alongside another error "unevaluated properties" lists
+    # properties that are in fact allowed (``allowedCallers`` beside a bad ``allowedCallers`` value).
+    error = best_match([e for e in errors if e.validator != "unevaluatedProperties"] or errors)
+    if error is None:
+        return
+    pointer = "".join(f"/{_pointer_token(str(part))}" for part in error.absolute_path) or "/"
+    message = error.message
+    if len(message) > _MAX_SCHEMA_MESSAGE:
+        message = f"{message[:_MAX_SCHEMA_MESSAGE]}..."
+    raise ValueError(f"Invalid custom catalog at {pointer} ({protocol.catalog_definition_file}): {message}")
+
+
+def _is_identifier_key(instance: object) -> bool:
+    # ``str.isidentifier`` is defined by XID_Start (plus ``_``) and XID_Continue, the sets UAX #31 names.
+    return not isinstance(instance, str) or instance.isidentifier()
+
+
+@cache
+def _catalog_definition_validator(protocol: A2UIProtocol) -> Draft202012Validator:
+    """A validator for the version's ``catalog_definition.json``, with ``common_types.json`` in its registry.
+
+    Both files key extensions by a ``\\p{XID_Start}`` pattern Python's ``re`` cannot compile, so those objects are
+    checked with the :data:`XID_FORMAT` format instead (see :func:`_xid_property_names`).
+    """
+    spec_dir = _PACKAGE_DIR / protocol.package_dir / "spec"
+    definition = _as_object(_xid_property_names(_load_object(spec_dir / str(protocol.catalog_definition_file))))
+    common_types = _as_object(_xid_property_names(_load_object(spec_dir / "common_types.json")))
+    registry: Registry = Registry().with_resources(
+        (str(schema["$id"]), _resource(schema)) for schema in (definition, common_types)
+    )
+    formats = FormatChecker(formats=())
+    formats.checks(XID_FORMAT)(_is_identifier_key)
+    return Draft202012Validator(definition, registry=registry, format_checker=formats)
 
 
 @dataclass(frozen=True, slots=True)
@@ -717,7 +775,8 @@ class A2UISchemaManager:
                 v1.0 and beside it in v1.0. Can be:
                 - A file path (str or PathLike) to a JSON catalog file
                 - A dict with the catalog schema directly
-                Must include a ``$id`` field (used as the catalogId in A2UI messages).
+                It must declare a ``catalogId`` (its id in A2UI messages; a ``$id``, if any, must equal it) and,
+                for v1.0, ``"protocolVersion": "1.0"``; a v1.0 catalog must satisfy ``catalog_definition.json``.
             custom_catalog_rules: Plain-text rules for the custom catalog components. In
                 v1.0 they follow the basic catalog's rules in the system prompt; before
                 v1.0 they replace them, as the custom catalog replaces the basic one.

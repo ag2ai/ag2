@@ -250,7 +250,7 @@ async def test_v0_9_custom_catalog_keeps_the_basic_components_it_references() ->
     # v0.9: a custom catalog is used in place of the basic one (a2ui_protocol.md L157), and may $ref its definitions.
     custom_id = "https://example.com/cat.json"
     catalog = {
-        "$id": custom_id,
+        "catalogId": custom_id,
         "components": {
             "Column": {"$ref": "basic_catalog.json#/components/Column"},
             "Text": {"$ref": "basic_catalog.json#/components/Text"},

@@ -437,3 +437,10 @@ Example 2: Dynamic list with templates
   }
 }
 ```
+
+=====
+
+## A2UI Client Capabilities
+
+The connected client renderer supports these component/function catalogs:
+- https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json

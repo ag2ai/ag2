@@ -11,8 +11,10 @@ the calls the framework made to the model (with any retry feedback), and the
 """
 
 import json
-from collections.abc import Sequence
+import os
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,6 +32,32 @@ BASIC_CATALOG = {
     "v0.9.1": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
     "v1.0": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
 }
+
+
+def renderer_capabilities(*catalog_ids: str) -> dict[str, Any]:
+    """The request fields of a v1.0 renderer that supports ``catalog_ids`` (the basic catalog when none are given).
+
+    A v1.0 request without them offers no A2UI ("omitting them withdraws A2UI for that turn").
+    """
+    supported = list(catalog_ids) or [BASIC_CATALOG["v1.0"]]
+    return {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": supported}}}
+
+
+def from_renderer(body: Mapping[str, Any], *catalog_ids: str) -> dict[str, Any]:
+    """``body`` as a v1.0 renderer supporting ``catalog_ids`` sends it; capabilities already in ``body`` win."""
+    return {**renderer_capabilities(*catalog_ids), **body}
+
+
+def catalog_id_of(catalog: "Mapping[str, Any] | str | os.PathLike[str]") -> str:
+    """The id a custom catalog (a dict or a JSON file) is served under."""
+    document = catalog if isinstance(catalog, Mapping) else json.loads(Path(catalog).read_text())
+    return str(document.get("catalogId", document.get("$id")))
+
+
+def served_catalogs(server_kwargs: Mapping[str, Any]) -> list[str]:
+    """Every catalog a v1.0 ``A2UIServer`` built with ``server_kwargs`` serves: the basic one and any custom one."""
+    custom = server_kwargs.get("custom_catalog")
+    return [BASIC_CATALOG["v1.0"], *([catalog_id_of(custom)] if custom is not None else [])]
 
 
 @dataclass
@@ -75,9 +103,14 @@ async def serve_turn(
     *replies: "str | ModelResponse",
     body: dict[str, Any] | None = None,
     tools: Sequence[Any] = (),
+    with_capabilities: bool = True,
     **server_kwargs: Any,
 ) -> Turn:
-    """Run one turn whose model answers with ``replies`` in order; ``server_kwargs`` configure ``A2UIServer``."""
+    """Run one turn whose model answers with ``replies`` in order; ``server_kwargs`` configure ``A2UIServer``.
+
+    A v1.0 request comes from a renderer that supports every catalog the server serves, unless ``body`` carries its
+    own capabilities or ``with_capabilities`` is false.
+    """
     tracking = TrackingConfig(TestConfig(*replies))
     failures: list[A2UIValidationFailedEvent] = []
     client_events: list[A2UIClientEvent] = []
@@ -104,6 +137,8 @@ async def serve_turn(
     )
     server = A2UIServer(agent, transport=RestTransport(encoding="jsonl"), **server_kwargs)
     request = body if body is not None else {"messages": [{"role": "user", "content": "show ui"}]}
+    if with_capabilities and server_kwargs.get("protocol_version") == "v1.0":
+        request = from_renderer(request, *served_catalogs(server_kwargs))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=server), base_url="http://a2ui.test") as client:
         response = await client.post("/a2ui", json=request)
     assert response.status_code == 200, response.text

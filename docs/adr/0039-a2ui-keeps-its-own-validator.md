@@ -105,12 +105,12 @@ in these places; line numbers are at that commit.
   called by the agent, and `openUrl` is `rendererOnly`. Upstream cases `call_function_message.json#0-2` call `openUrl`
   and are marked valid, because they check message shape only; `#3` calls `pingAgent`, which the basic catalog does
   not define. ag2 follows the prose and rejects all four.
-- **Custom catalog definitions.** ag2 checks a v1.0 custom catalog for the rules that change what it accepts: entity
-  names (L548-555, including the reserved `Surface`), `$ref` targets, `allowedParents` / `allowedChildren` as string
-  arrays, and `allowedCallers` with `requiresUserActivation`. It does not validate the whole catalog against
-  `catalog_definition.json`: that schema requires `catalogId`, while ag2 reads the id from `$id`, and it rejects the
-  extra root keys and `$defs` layouts that the catalogs in ag2's tests and docs use. Upstream cases
-  `catalog_schema_relaxation.json#1-6` therefore load.
+- **Custom catalog `protocolVersion`.** v1.0 L635 makes a catalog without `protocolVersion` a `"0.9"` catalog and
+  requires one for catalogs targeting 1.0, and ag2 rejects a catalog whose major.minor is not the served version's
+  (ADR 0040). The reference SDK's `_settle_protocol_version` instead takes the agent's version for a catalog that
+  states none, and upstream cases under `specification/v1_0/test/cases/` that check `catalog_definition.json`
+  (`catalog_schema_relaxation`, `composition_constraints`, `function_definitions`) omit it, since that schema leaves
+  it optional. ag2 follows the prose; the conformance probe states `"1.0"` for those cases, which then all agree.
 - **A2A DataParts with a single object.** The A2A extension (v1.0 `a2ui_extension_specification.md` L183, v0.9
   L178) says a DataPart's `data` "MUST be an array of messages". The reference SDK `a2ui_a2a` writes and reads one
   object per DataPart. ag2 follows the spec: `A2UIAgentExecutor` consumes a renderer DataPart whose `data` is a single

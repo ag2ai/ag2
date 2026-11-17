@@ -464,6 +464,12 @@ def _missing_strings(obj: JsonObject, *keys: str) -> list[str]:
     return [key for key in keys if not isinstance(obj.get(key), str)]
 
 
+def _unknown_properties(obj: JsonObject, where: str, allowed: frozenset[str]) -> str | None:
+    """The problem with ``obj`` (named ``where``) having properties besides ``allowed``, if it has any."""
+    extra = sorted(obj.keys() - allowed)
+    return f"{where} has unknown properties {', '.join(map(repr, extra))}" if extra else None
+
+
 def _action_problem(action: JsonObject, protocol: A2UIProtocol) -> str | None:
     missing = _missing_strings(action, "name", "surfaceId", "sourceComponentId", "timestamp")
     if missing:
@@ -484,9 +490,8 @@ def _action_metadata_problem(metadata: JsonValue) -> str | None:
     """``action.metadata`` (v1.0) holds only ``extensions``, whose keys "MUST be Unicode identifiers (UAX #31)"."""
     if not isinstance(metadata, dict):
         return "'action.metadata' must be an object"
-    extra = sorted(metadata.keys() - {"extensions"})
-    if extra:
-        return f"'action.metadata' has unknown properties {', '.join(map(repr, extra))}"
+    if problem := _unknown_properties(metadata, "'action.metadata'", frozenset({"extensions"})):
+        return problem
     extensions = metadata.get("extensions", {})
     if not isinstance(extensions, dict):
         return "'action.metadata.extensions' must be an object"
@@ -497,17 +502,26 @@ def _action_metadata_problem(metadata: JsonValue) -> str | None:
     return None
 
 
-def _function_call_problem(call: JsonObject) -> str | None:
-    extra = sorted(call.keys() - {"surfaceId", "functionCallId", "callFunction"})
-    if extra:
-        return f"'callAgentFunction' has unknown properties {', '.join(map(repr, extra))}"
+_CALL_AGENT_FUNCTION_KEYS = frozenset({"surfaceId", "functionCallId", "callFunction"})
+_FUNCTION_CALL_KEYS = frozenset({"@call", "catalogId", "args"})
+"""``FunctionCall`` is ``unevaluatedProperties: false`` over ``FunctionCommon`` and the function's own definition
+(``common_types.json``); an agent function's definition is its handler, whose arguments sit under ``args``."""
+_FUNCTION_RESPONSE_KEYS = frozenset({"functionCallId", "value", "error"})
+
+
+def _function_call_problem(call: JsonObject, protocol: A2UIProtocol) -> str | None:
+    if problem := _unknown_properties(call, "'callAgentFunction'", _CALL_AGENT_FUNCTION_KEYS):
+        return problem
     if not isinstance(call.get("functionCallId"), str):
         return "'callAgentFunction' needs a string 'functionCallId'"
+    # The official SDK answers an empty surfaceId or function name with INVALID_FUNCTION_CALL, as here.
     if not isinstance(call.get("surfaceId"), str) or not call["surfaceId"]:
         return "'callAgentFunction' needs a non-empty string 'surfaceId'"
     function = call.get("callFunction")
     if not isinstance(function, dict):
         return "'callAgentFunction' needs a 'callFunction' object"
+    if problem := _unknown_properties(function, "'callAgentFunction.callFunction'", _FUNCTION_CALL_KEYS):
+        return problem
     name = function.get("@call")
     if not isinstance(name, str) or not name:
         return "'callAgentFunction.callFunction' needs a non-empty string '@call'"
@@ -518,12 +532,11 @@ def _function_call_problem(call: JsonObject) -> str | None:
     return None
 
 
-def _function_response_problem(response: JsonObject) -> str | None:
+def _function_response_problem(response: JsonObject, protocol: A2UIProtocol) -> str | None:
     if not isinstance(response.get("functionCallId"), str):
         return "'rendererFunctionResponse' needs a string 'functionCallId'"
-    extra = sorted(response.keys() - {"functionCallId", "value", "error"})
-    if extra:
-        return f"'rendererFunctionResponse' has unknown properties {', '.join(map(repr, extra))}"
+    if problem := _unknown_properties(response, "'rendererFunctionResponse'", _FUNCTION_RESPONSE_KEYS):
+        return problem
     if ("value" in response) == ("error" in response):
         return "'rendererFunctionResponse' must carry exactly one of 'value' or 'error'"
     error = response.get("error")
@@ -559,6 +572,15 @@ def _error_problem(error: JsonObject, protocol: A2UIProtocol) -> str | None:
     return None
 
 
+_PAYLOAD_PROBLEMS: dict[str, Callable[[JsonObject, A2UIProtocol], str | None]] = {
+    "action": _action_problem,
+    "callAgentFunction": _function_call_problem,
+    "rendererFunctionResponse": _function_response_problem,
+    "error": _error_problem,
+}
+"""What checks each renderer→agent payload kind (``CLIENT_TO_SERVER_KEYS``)."""
+
+
 def envelope_problem(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:
     """Why ``envelope`` is not a renderer→agent message of ``protocol``, or ``None`` when it is one.
 
@@ -586,13 +608,7 @@ def envelope_problem(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:
     payload = envelope[kind]
     if not isinstance(payload, dict):
         return f"'{kind}' is not an object"
-    if kind == "action":
-        return _action_problem(payload, protocol)
-    if kind == "callAgentFunction":
-        return _function_call_problem(payload)
-    if kind == "rendererFunctionResponse":
-        return _function_response_problem(payload)
-    return _error_problem(payload, protocol)
+    return _PAYLOAD_PROBLEMS[kind](payload, protocol)
 
 
 def _answerable_call_id(envelope: JsonValue, protocol: A2UIProtocol) -> str | None:

@@ -127,7 +127,8 @@ class TestEarlierSurface:
 @pytest.mark.asyncio
 async def test_custom_component_references_come_from_its_schema() -> None:
     catalog = {
-        "$id": "https://example.com/cat.json",
+        "catalogId": "https://example.com/cat.json",
+        "protocolVersion": "1.0",
         "components": {
             "Panel": {
                 "type": "object",
@@ -236,8 +237,13 @@ async def test_a_partial_update_to_an_earlier_surface_needs_no_root(version: str
 
 def _panel_catalog(child_schema: dict[str, Any]) -> dict[str, Any]:
     return {
-        "$id": "https://example.com/cat.json",
-        "$defs": {"Kid": {"$ref": "common_types.json#/$defs/ComponentId"}},
+        "catalogId": "https://example.com/cat.json",
+        "protocolVersion": "1.0",
+        "$defs": {
+            "anyComponent": {"oneOf": [{"$ref": "#/components/Panel"}]},
+            "anyFunction": {"not": {}},
+            "Kid": {"$ref": "common_types.json#/$defs/ComponentId"},
+        },
         "components": {
             "Panel": {
                 "type": "object",

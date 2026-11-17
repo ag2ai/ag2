@@ -6,7 +6,8 @@
 
 As the official SDK's ``resolve_catalogs`` does, a renderer that lists ``supportedCatalogIds`` is offered only the
 agent's catalogs it names: the prompt and the validator both narrow to them. With none in common the turn runs
-without A2UI, and nothing A2UI reaches the renderer.
+without A2UI: no surface reaches the renderer, though a ``callAgentFunction`` is still answered. A v1.0 request
+without capabilities withdraws A2UI for its turn, and then nothing A2UI reaches the renderer.
 """
 
 import logging
@@ -20,7 +21,8 @@ from .seam import BASIC_CATALOG, a2ui_reply, serve_turn
 
 _CUSTOM_ID = "https://example.com/cat.json"
 _CUSTOM = {
-    "$id": _CUSTOM_ID,
+    "catalogId": _CUSTOM_ID,
+    "protocolVersion": "1.0",
     "components": {
         "MyWidget": {
             "type": "object",
@@ -141,3 +143,71 @@ async def test_no_catalog_in_common_runs_the_turn_without_a2ui(caplog: pytest.Lo
     assert _BASIC_ID not in prompt
     assert "A2UI Client Capabilities" not in prompt
     assert "supports none of the agent's catalogs" in caplog.text
+
+
+_FUNCTION_CALL = {
+    "version": "1.0",
+    "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": {"@call": "lookup"}},
+}
+
+
+def _lookup(called: list[str]) -> Any:
+    @a2ui_action
+    def lookup() -> dict[str, Any]:
+        called.append("lookup")
+        return {"updateDataModel": {"surfaceId": "s", "path": "/v", "value": 1}}
+
+    return lookup
+
+
+@pytest.mark.asyncio
+async def test_no_catalog_in_common_still_answers_a_function_call(caplog: pytest.LogCaptureFixture) -> None:
+    # The agent "MUST return an agentFunctionResponse" (a2ui_protocol.md, callAgentFunction); its surfaces stay home.
+    called: list[str] = []
+
+    with caplog.at_level(logging.WARNING, logger="ag2.a2ui"):
+        turn = await serve_turn(
+            body={**_body("https://unknown.example/c.json"), "messages": [], "a2ui": [_FUNCTION_CALL]},
+            actions=[_lookup(called)],
+            protocol_version="v1.0",
+        )
+
+    assert called == ["lookup"]
+    assert turn.ui == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}}]
+    assert "dropping 1 A2UI message(s) from handlers" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_request_without_capabilities_withdraws_a2ui(caplog: pytest.LogCaptureFixture) -> None:
+    # "Capabilities carried per message are scoped to that message's turn, and omitting them withdraws A2UI for
+    # that turn" (v1.0 a2ui_protocol.md, "Renderer capabilities").
+    called: list[str] = []
+
+    with caplog.at_level(logging.WARNING, logger="ag2.a2ui"):
+        turn = await serve_turn(
+            a2ui_reply(_surface(_BASIC_ID, _TEXT), prose="Done."),
+            body={"messages": [{"role": "user", "content": "show ui"}], "a2ui": [_FUNCTION_CALL]},
+            with_capabilities=False,
+            actions=[_lookup(called)],
+            protocol_version="v1.0",
+        )
+
+    assert called == ["lookup"]
+    assert turn.frames == [{"text": "Done."}]
+    prompt = "\n".join(turn.model_calls[0].prompt)
+    assert _BASIC_ID not in prompt
+    assert "dropping 2 A2UI message(s) from handlers" in caplog.text
+    assert "dropping 2 A2UI message(s) from the agent" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", ["v0.9", "v0.9.1"])
+async def test_before_v1_0_a_request_without_capabilities_is_offered_every_catalog(version: str) -> None:
+    surface = [
+        {"version": version, "createSurface": {"surfaceId": "s", "catalogId": BASIC_CATALOG[version]}},
+        {"version": version, "updateComponents": {"surfaceId": "s", "components": [_TEXT]}},
+    ]
+
+    turn = await serve_turn(a2ui_reply(surface), protocol_version=version)
+
+    assert turn.ui == surface

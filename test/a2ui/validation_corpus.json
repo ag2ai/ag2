@@ -1,7 +1,7 @@
 {
  "catalogs": {
   "widget_v09": {
-   "$id": "https://example.com/cat.json",
+   "catalogId": "https://example.com/cat.json",
    "components": {
     "MyWidget": {
      "type": "object",
@@ -21,7 +21,8 @@
    }
   },
   "widget_v10": {
-   "$id": "https://example.com/cat.json",
+   "catalogId": "https://example.com/cat.json",
+   "protocolVersion": "1.0",
    "components": {
     "MyWidget": {
      "type": "object",
@@ -41,7 +42,8 @@
    }
   },
   "text_override_v10": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
    "components": {
     "Text": {
      "type": "object",
@@ -61,7 +63,8 @@
    }
   },
   "agent_fn_v10": {
-   "$id": "https://mycompany.com/cat.json",
+   "catalogId": "https://mycompany.com/cat.json",
+   "protocolVersion": "1.0",
    "functions": {
     "lookup": {
      "type": "object",
@@ -79,7 +82,7 @@
    }
   },
   "escaped_component": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
    "components": {
     "widget/~definition": {
      "type": "object",
@@ -95,10 +98,21 @@
    }
   },
   "ref_local_v10": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
    "$defs": {
     "Local": {
      "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
     }
    },
    "components": {
@@ -120,10 +134,21 @@
    }
   },
   "ref_common_types_v10": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
    "$defs": {
     "Local": {
      "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
     }
    },
    "components": {
@@ -145,7 +170,8 @@
    }
   },
   "ref_own_definitions_v10": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
    "$defs": {
     "anyComponent": {
      "oneOf": [
@@ -199,10 +225,21 @@
    }
   },
   "ref_in_annotations_v10": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
    "$defs": {
     "Local": {
      "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
     }
    },
    "components": {
@@ -253,7 +290,7 @@
    }
   },
   "cross_catalog_ref_v09": {
-   "$id": "https://example.com/catalog.json",
+   "catalogId": "https://example.com/catalog.json",
    "$defs": {
     "Local": {
      "type": "string"
@@ -278,7 +315,8 @@
    }
   },
   "renderer_fn_v10": {
-   "$id": "https://mycompany.com/cat.json",
+   "catalogId": "https://mycompany.com/cat.json",
+   "protocolVersion": "1.0",
    "functions": {
     "localCheck": {
      "type": "object",
@@ -296,7 +334,8 @@
    }
   },
   "composition_v10": {
-   "$id": "https://example.com/composition.json",
+   "catalogId": "https://example.com/composition.json",
+   "protocolVersion": "1.0",
    "components": {
     "Text": {
      "type": "object",
@@ -1646,7 +1685,7 @@
    "version": "v0.9",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9",
@@ -3340,7 +3379,7 @@
    "version": "v0.9.1",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "v0.9.1",
@@ -5030,7 +5069,7 @@
    "version": "v1.0",
    "note": "components but no id root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",
@@ -5295,11 +5334,11 @@
         "id": "root",
         "component": "Column",
         "children": [
-         "\u00fcn\u00efc\u00f6d\u00e9_1"
+         "ünïcödé_1"
         ]
        },
        {
-        "id": "\u00fcn\u00efc\u00f6d\u00e9_1",
+        "id": "ünïcödé_1",
         "component": "Text",
         "text": "hi"
        }
@@ -5697,7 +5736,7 @@
    "version": "v1.0",
    "note": "inline components without root",
    "expect": "retry",
-   "error": "No component with id 'root' found on surface 's' \u2014 the A2UI spec requires the component tree to have a 'root' node.",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
    "messages": [
     {
      "version": "1.0",

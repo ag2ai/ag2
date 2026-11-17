@@ -89,6 +89,9 @@ A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an i
 
 ```json
 {
+  "a2uiRendererCapabilities": {
+    "1.0": {"supportedCatalogIds": ["https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"]}
+  },
   "a2ui": [
     {
       "version": "1.0",
@@ -101,6 +104,8 @@ A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an i
   ]
 }
 ```
+
+A v1.0 request carries the renderer's capabilities: one without them withdraws A2UI for its turn, so the call would get no answer (see [Capability negotiation](/docs/user-guide/a2ui/capabilities#client-capability-negotiation)).
 
 ```json
 {"version": "1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true}}}
@@ -115,7 +120,7 @@ The reply is always exactly one of `#!python value` or `#!python error`. Any mes
 | `#!python error.code` | When |
 |---|---|
 | `#!python UNKNOWN_FUNCTION` | No action is registered under that name, or an explicit `#!python catalogId` names a catalog this turn does not offer (see [Capability negotiation](/docs/user-guide/a2ui/capabilities#client-capability-negotiation)). |
-| `#!python INVALID_FUNCTION_CALL` | The envelope is malformed but carries a `#!python functionCallId` (no `#!python surfaceId`, an empty `#!python @call`, an unknown property, a `#!python catalogId` that is not a string, `#!python args` that is not an object), or `#!python args` does not fit the handler's parameters, including unknown keyword names when the handler has no `#!python **kwargs`. An omitted `#!python args` uses the handler's defaults. |
+| `#!python INVALID_FUNCTION_CALL` | The envelope is malformed but carries a `#!python functionCallId` (a missing or empty `#!python surfaceId`, an empty `#!python @call`, as the official A2UI SDK also treats them; an unknown property, in the envelope or in `#!python callFunction`; a `#!python catalogId` that is not a string; `#!python args` that is not an object), or `#!python args` does not fit the handler's parameters, including unknown keyword names when the handler has no `#!python **kwargs`. An omitted `#!python args` uses the handler's defaults. |
 | `#!python EXECUTION_ERROR` | The handler raised, or returned messages that fail validation (the error text is logged, not sent to the renderer). |
 
 If `#!python callFunction` omits `#!python catalogId`, the call is still answered. The spec asks the renderer to send it, but the message schema does not require it, so the server does not reject a call without one.

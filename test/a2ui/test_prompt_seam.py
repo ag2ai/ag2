@@ -21,7 +21,7 @@ from .seam import serve_turn
 _GOLDEN_DIR = Path(__file__).parent / "prompts"
 
 _WIDGET_CATALOG = {
-    "$id": "https://example.com/cat.json",
+    "catalogId": "https://example.com/cat.json",
     "components": {
         "MyWidget": {
             "type": "object",
@@ -38,7 +38,8 @@ _WIDGET_CATALOG = {
 }
 
 _V1_CATALOG = {
-    "$id": "https://mycompany.com/cat.json",
+    "catalogId": "https://mycompany.com/cat.json",
+    "protocolVersion": "1.0",
     "instructions": "Prefer MyWidget for greetings.",
     "components": {
         "MyWidget": {

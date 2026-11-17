@@ -275,7 +275,7 @@ async def run_client_interactions(
         runtime: The deployment's A2UI runtime.
         agent: The agent whose dependencies and variables the handlers resolve against.
         offer: What this turn offers the renderer. Handlers' messages are checked against its catalogs; on a turn
-            that offers no A2UI the handlers still run, but their messages are dropped with a warning.
+            that offers no A2UI the handlers still run, but only what :meth:`A2UIOffer.deliverable` keeps is sent.
         variables: The variables the request carried.
 
     Returns:
@@ -323,12 +323,7 @@ async def run_client_interactions(
         # Before v1.0 there is no reply to send: leave the turn to the agent.
         handled = handled or bool(answer)
         messages.extend(answer)
-    if messages and not offer.sends_ui:
-        logger.warning(
-            "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from handlers.", len(messages)
-        )
-        return [], handled
-    return messages, handled
+    return offer.deliverable(messages, source="handlers"), handled
 
 
 def _invalid(messages: list[ServerToClientMessage], validator: A2UIResponseParser | None, *, handler: str) -> bool:

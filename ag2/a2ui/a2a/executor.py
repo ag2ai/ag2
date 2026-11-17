@@ -136,9 +136,7 @@ class A2UIAgentExecutor(AgentExecutor):
             try_activate_a2ui_extension(request_context, version=self.protocol_version)
             # Read before the A2UI DataParts are consumed: their metadata may carry the capabilities.
             caps = self._client_capabilities(request_context)
-            offer = self._runtime.offer_for(
-                caps, capabilities_required=self._runtime.protocol.a2a_turn_scoped_capabilities
-            )
+            offer = self._runtime.offer_for(caps)
             interactions = self._rewrite_incoming_a2ui_parts(request_context)
             task = request_context.current_task
             token = _INCOMING_REQUEST.set(
@@ -205,7 +203,7 @@ class A2UIAgentExecutor(AgentExecutor):
         per-turn fragments.
         """
         incoming = _INCOMING_REQUEST.get()
-        offer = incoming.offer if incoming is not None else self._runtime.full_offer
+        offer = self._turn_offer(incoming)
         caps = incoming.capabilities if incoming is not None else None
         prompts: list[str] = [offer.system_prompt_section] if offer.system_prompt_section else []
         if fragment := self._runtime.capabilities_prompt(caps, offer):
@@ -216,6 +214,10 @@ class A2UIAgentExecutor(AgentExecutor):
             if data_model_fragment := data_model_to_prompt(surfaces):
                 prompts.append(data_model_fragment)
         return tuple(prompts)
+
+    def _turn_offer(self, incoming: _IncomingRequest | None) -> A2UIOffer:
+        """The turn's negotiated offer; every catalog when no request was captured (no message to read)."""
+        return incoming.offer if incoming is not None else self._runtime.full_offer
 
     def _client_capabilities(self, request_context: RequestContext) -> "A2UIClientCapabilities | None":
         """Decode ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) for the served version.
@@ -258,7 +260,7 @@ class A2UIAgentExecutor(AgentExecutor):
         # on the turn's stream, alongside the validation middleware.
         incoming = _INCOMING_REQUEST.get()
         interactions = incoming.interactions if incoming is not None else ()
-        offer = incoming.offer if incoming is not None else self._runtime.full_offer
+        offer = self._turn_offer(incoming)
         extra_middleware = self._runtime.turn_middleware(interactions, offer)
 
         # Answer the interactions the server handles itself — registered clicks and
@@ -294,11 +296,7 @@ class A2UIAgentExecutor(AgentExecutor):
                 additional_middleware=extra_middleware,
             )
             prose_text = response.message.content if response.message else ""
-            if a2ui_messages and not offer.sends_ui:
-                logger.warning(
-                    "The renderer offers no A2UI this turn; not sending %d A2UI message(s).", len(a2ui_messages)
-                )
-                a2ui_messages.clear()
+            a2ui_messages = offer.deliverable(a2ui_messages, source="the agent")
             agent_msg = self._build_a2ui_message(writer, prose_text or "", a2ui_messages, final_variables)
             has_pending = bool(response.tool_calls and response.tool_calls.calls and response.response_force)
 

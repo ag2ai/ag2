@@ -79,7 +79,8 @@ class A2UIServer:
                 rewritten into a generic prompt so the agent can react.
             protocol_version: A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
             custom_catalog: A custom catalog (path or dict), validated as written.
-                Must include a ``$id`` used as the catalogId. Before v1.0 it replaces
+                It must declare a ``catalogId`` (a ``$id``, if any, must equal it) and, for
+                v1.0, ``"protocolVersion": "1.0"``. Before v1.0 it replaces
                 the basic catalog; in v1.0 both are served (ADR 0040).
             custom_catalog_rules: Plain-text rules for the custom catalog components.
             include_schema_in_prompt: Include the full JSON schema in the prompt

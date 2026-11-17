@@ -208,10 +208,7 @@ class _A2UITurnCore:
         prose = response.message.content if response.message else ""
         if prose:
             yield A2UIProseFrame(prose)
-        if a2ui_messages and not offer.sends_ui:
-            logger.warning("The renderer offers no A2UI this turn; dropping %d A2UI message(s).", len(a2ui_messages))
-            return
-        for message in a2ui_messages:
+        for message in offer.deliverable(a2ui_messages, source="the agent"):
             yield A2UIMessageFrame(message)
 
 

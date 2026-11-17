@@ -117,9 +117,13 @@ async def test_a_malformed_envelope_is_dropped(
             "'callAgentFunction' needs a non-empty string 'surfaceId'",
         ),
         ({**_CALL, "extra": 1}, "'callAgentFunction' has unknown properties 'extra'"),
+        (
+            {**_CALL, "callFunction": {**_CALL["callFunction"], "returnType": "string"}},
+            "'callAgentFunction.callFunction' has unknown properties 'returnType'",
+        ),
         ({**_CALL, "callFunction": "lookup"}, "'callAgentFunction' needs a 'callFunction' object"),
     ],
-    ids=["no-surface-id", "extra-key", "call-not-an-object"],
+    ids=["no-surface-id", "extra-key", "extra-key-in-call", "call-not-an-object"],
 )
 async def test_a_malformed_function_call_with_an_id_is_answered_invalid(call: dict[str, Any], reason: str) -> None:
     called: list[str] = []
