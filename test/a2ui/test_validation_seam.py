@@ -169,10 +169,10 @@ async def test_stripping_the_a2ui_block_keeps_the_message_metadata(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("protocol_version", ["v0.9", "v1.0"])
+@pytest.mark.parametrize("protocol_version", ["v0.9", "v0.9.1", "v1.0"])
 async def test_surface_on_an_unknown_catalog_is_reported_once(protocol_version: str) -> None:
     # The SDK answers CATALOG_NOT_FOUND; the surface's components have no catalog to be checked against,
-    # so neither its references, its reachability nor its root are judged by the agent's catalog.
+    # so neither their schema, their references, their reachability nor the root are judged by the agent's catalog.
     unknown = "https://example.com/nope.json"
     version = WIRE_VERSION[protocol_version]
     messages = [
@@ -183,7 +183,8 @@ async def test_surface_on_an_unknown_catalog_is_reported_once(protocol_version: 
                 "surfaceId": "s",
                 "components": [
                     {"id": "top", "component": "Column", "children": ["a", "b"]},
-                    {"id": "orphan", "component": "Text", "text": "hi"},
+                    {"id": "orphan", "component": "Text"},
+                    {"id": "odd", "component": "NotInTheBasicCatalog"},
                 ],
             },
         },

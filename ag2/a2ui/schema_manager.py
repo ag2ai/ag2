@@ -357,6 +357,16 @@ def _registry_for_surface_catalog(registry: Registry, catalog_id: str | None) ->
     ])
 
 
+_OPEN_CATALOG: JsonSchema = {"$defs": {"anyComponent": {}, "anyFunction": {}, "theme": {}}}
+"""A catalog that accepts any component, function and theme: what a surface on an unknown catalog is checked by."""
+
+
+def _registry_for_unknown_catalog(registry: Registry, schema_base_uri: str) -> Registry:
+    """Before v1.0, the message schema reaches the agent's catalog as ``catalog.json``; open it for a surface whose
+    catalog is unknown, since what that catalog holds cannot be checked."""
+    return registry.with_resources([(f"{schema_base_uri}catalog.json", _resource(_OPEN_CATALOG))])
+
+
 _RESERVED_COMPONENT_NAME = "Surface"
 """The canonical container ``createSurface`` instantiates; no catalog may define a component by that name."""
 

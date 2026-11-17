@@ -445,6 +445,10 @@ _FUNCTION_RPC_ENVELOPES: dict[type, str] = {
 """The envelope kind of each decoded result that exists only with function RPC (v1.0)."""
 
 
+def _function_rpc_kind(result: A2UIIncomingParseResult) -> str | None:
+    return next((kind for cls, kind in _FUNCTION_RPC_ENVELOPES.items() if isinstance(result, cls)), None)
+
+
 def decode_envelopes(envelopes: Iterable[JsonValue], *, function_rpc: bool) -> list[A2UIIncomingParseResult]:
     """Decode client→server envelopes once per request, dropping (with a warning) those of no known kind.
 
@@ -464,7 +468,7 @@ def decode_envelopes(envelopes: Iterable[JsonValue], *, function_rpc: bool) -> l
         if isinstance(result, A2UIIncomingUnknownResult):
             logger.warning("Skipping A2UI envelope of unrecognized kind: %s", result.parse_error)
             continue
-        if not function_rpc and (kind := _FUNCTION_RPC_ENVELOPES.get(type(result))) is not None:
+        if not function_rpc and (kind := _function_rpc_kind(result)) is not None:
             logger.warning("Skipping A2UI envelope '%s': it exists only in protocol v1.0.", kind)
             continue
         results.append(result)

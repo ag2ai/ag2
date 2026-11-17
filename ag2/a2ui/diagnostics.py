@@ -96,7 +96,7 @@ def _renderer_cannot_call(call: JsonValue) -> str:
     return f"function {call!r} cannot be called by renderer (allowedCallers is agentOnly)"
 
 
-def _reserved_surface(call: JsonValue) -> str:
+def _reserved_surface(_call: JsonValue) -> str:
     return (
         "component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component"
     )

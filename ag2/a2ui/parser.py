@@ -24,7 +24,7 @@ from ._types import (
 from ._versions import A2UIProtocol
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
-from .schema_manager import _registry_for_surface_catalog
+from .schema_manager import _registry_for_surface_catalog, _registry_for_unknown_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -162,40 +162,40 @@ def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
     return errors
 
 
-def _unknown_catalog_errors(messages: Sequence[JsonObject], catalog_ids: Collection[str]) -> list[str]:
-    """A surface must be created on a catalog the agent has; the official SDK answers ``CATALOG_NOT_FOUND``."""
-    errors: list[str] = []
+@dataclass(frozen=True, slots=True)
+class _UnknownCatalog:
+    operation: int
+    surface_id: str | None
+    catalog_id: str
+
+
+def _unknown_catalogs(messages: Sequence[JsonObject], catalog_ids: Collection[str]) -> list[_UnknownCatalog]:
+    """The ``createSurface``\\s that name a catalog the agent does not have (the SDK answers ``CATALOG_NOT_FOUND``)."""
+    found: list[_UnknownCatalog] = []
     for i, message in enumerate(messages):
         payload = message.get("createSurface")
-        catalog_id = payload.get("catalogId") if isinstance(payload, dict) else None
-        if isinstance(catalog_id, str) and catalog_id not in catalog_ids:
-            known = ", ".join(repr(known_id) for known_id in catalog_ids)
-            errors.append(
-                f"Operation {i}: unknown catalog {catalog_id!r} (at /createSurface/catalogId); use one of: {known}"
-            )
-    return errors
-
-
-def _unknown_catalog_surfaces(messages: Sequence[JsonObject], catalog_ids: Collection[str]) -> set[str]:
-    """The surfaces these messages create on a catalog the agent does not have."""
-    surfaces: set[str] = set()
-    for message in messages:
-        payload = message.get("createSurface")
-        if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
+        if not isinstance(payload, dict):
             continue
         catalog_id = payload.get("catalogId")
         if isinstance(catalog_id, str) and catalog_id not in catalog_ids:
-            surfaces.add(surface_id)
-    return surfaces
+            surface_id = payload.get("surfaceId")
+            found.append(_UnknownCatalog(i, surface_id if isinstance(surface_id, str) else None, catalog_id))
+    return found
 
 
-def _off_surfaces(messages: Sequence[JsonObject], surfaces: Collection[str]) -> list[JsonObject]:
-    """``messages`` without those that target one of ``surfaces``."""
-    return [
-        message
-        for message in messages
-        if not any(isinstance(p, dict) and p.get("surfaceId") in surfaces for p in message.values())
-    ]
+def _unknown_catalog_error(unknown: _UnknownCatalog, catalog_ids: Collection[str]) -> str:
+    known = ", ".join(repr(known_id) for known_id in catalog_ids)
+    return (
+        f"Operation {unknown.operation}: unknown catalog {unknown.catalog_id!r} (at /createSurface/catalogId); "
+        f"use one of: {known}"
+    )
+
+
+def _targets_surface(message: JsonValue, surfaces: Collection[str]) -> bool:
+    """Whether ``message``'s payload names one of ``surfaces`` as its ``surfaceId``."""
+    return isinstance(message, dict) and any(
+        isinstance(payload, dict) and payload.get("surfaceId") in surfaces for payload in message.values()
+    )
 
 
 def _components_of(update_components: JsonValue) -> list[JsonValue]:
@@ -345,19 +345,31 @@ class A2UIResponseParser:
         # Message TypedDicts are JSON objects on the wire; the checker reads them as such.
         objects = cast(Sequence[JsonObject], operations)
         errors: list[str] = []
+        unknown_catalogs = _unknown_catalogs(objects, self._catalog_ids) if self._catalog_ids is not None else []
+        uncheckable = {unknown.surface_id for unknown in unknown_catalogs if unknown.surface_id is not None}
         surface_catalogs: dict[str, str | None] = {}
         catalog_checkers: dict[str | None, MessageChecker] = {}
+        open_checker: MessageChecker | None = None
         for i, op in enumerate(objects):
             try:
                 checker = self._checker
-                if self._protocol.per_surface_catalogs and self._registry is not None and self._schema is not None:
-                    catalog_id = _surface_catalog(op, surface_catalogs)
-                    if catalog_id is not _SurfaceCatalog.UNKNOWN:
-                        if catalog_id not in catalog_checkers:
-                            catalog_checkers[catalog_id] = MessageChecker(
-                                self._schema, _registry_for_surface_catalog(self._registry, catalog_id)
+                if self._registry is not None and self._schema is not None:
+                    if self._protocol.per_surface_catalogs:
+                        catalog_id = _surface_catalog(op, surface_catalogs)
+                        if catalog_id is not _SurfaceCatalog.UNKNOWN:
+                            if catalog_id not in catalog_checkers:
+                                catalog_checkers[catalog_id] = MessageChecker(
+                                    self._schema, _registry_for_surface_catalog(self._registry, catalog_id)
+                                )
+                            checker = catalog_checkers[catalog_id]
+                    elif _targets_surface(op, uncheckable):
+                        # Before v1.0 the catalog is not per surface: open it for a surface on an unknown catalog.
+                        if open_checker is None:
+                            open_checker = MessageChecker(
+                                self._schema,
+                                _registry_for_unknown_catalog(self._registry, self._protocol.schema_base_uri),
                             )
-                        checker = catalog_checkers[catalog_id]
+                        checker = open_checker
                 errors.extend(f"Operation {i}: {issue.render(op)}" for issue in checker.issues(op))
             except Unresolvable as exc:
                 # A model-written ``$ref`` target the registry lacks: report it rather than crash the turn.
@@ -370,8 +382,8 @@ class A2UIResponseParser:
         # A surface on an unknown catalog gets that one error: its components have no catalog to be judged by.
         checkable: Sequence[JsonObject] = objects
         if self._catalog_ids is not None:
-            errors.extend(_unknown_catalog_errors(objects, self._catalog_ids))
-            checkable = _off_surfaces(objects, _unknown_catalog_surfaces(objects, self._catalog_ids))
+            errors.extend(_unknown_catalog_error(unknown, self._catalog_ids) for unknown in unknown_catalogs)
+            checkable = [message for message in objects if not _targets_surface(message, uncheckable)]
         if self._component_references is not None:
             errors.extend(component_graph_errors(checkable, self._component_references))
 

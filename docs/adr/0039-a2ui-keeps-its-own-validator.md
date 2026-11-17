@@ -74,8 +74,15 @@ in these places; line numbers are at that commit.
   renderer buffer updates until it arrives. ag2 rejects a response that creates a surface and gives it components but
   no `root`: a stateless server cannot know whether a later response will send one, and a retry is cheaper for the
   model than a surface that never renders. Updates to a surface created earlier need no `root`.
+- **Dangling references and orphans on a new surface.** v1.0 `a2ui_protocol.md` L223 asks renderers to handle
+  references to components that "do not yet exist" with placeholders, and L787 has them render "skipping invalid
+  references". For a surface the response creates, ag2 rejects a reference to a component the response does not send
+  and a component not reachable from `root`, as `a2ui-core` does under `STRICT_VALIDATION`. Same reasoning as the
+  `root` rule: a stateless server cannot wait for the rest of the tree, and a placeholder that never fills is a
+  broken UI. Updates to a surface created earlier may still reference earlier components.
 - **`callAgentFunction` without `catalogId`.** v1.0 `a2ui_protocol.md` L1495 says the renderer MUST set
-  `callFunction.catalogId`. `renderer_to_agent.json` does not require it, and ag2 accepts the call without it: the MUST binds the renderer, and refusing the call would only fail the user's click.
+  `callFunction.catalogId`. `renderer_to_agent.json` does not require it, and ag2 accepts the call without it: the
+  MUST binds the renderer, and refusing the call would only fail the user's click.
 - **`List.listStyle` for v0.9.1.** Upstream's `specification/v0_9_1/catalogs/basic/catalog.json` lacks
   `List.listStyle`, which a2ui-project/a2ui#3956 added only to `specification/v0_9/catalogs/basic/catalog.json`. Both
   files declare the same `$id`, so ag2 serves the newer v0.9 content for v0.9.1, as `a2ui-core` does
