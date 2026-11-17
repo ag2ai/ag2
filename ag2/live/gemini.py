@@ -290,6 +290,7 @@ async def _pump_events(
     # `turn_complete`), so wrap it in a loop to keep the conversation
     # alive across turns. An empty receive() means the connection closed.
     text = ""
+    heard = ""
     usage = Usage()
     while True:
         had_message = False
@@ -298,6 +299,7 @@ async def _pump_events(
 
             emitted = await _handle_server_content(message.server_content, context)
             text += emitted
+            heard = await _collect_input_transcription(message.server_content, heard, model, context)
 
             # Usage arrives on its own message field (not server_content), often
             # only once per turn; keep the latest seen value for the rollup.
@@ -345,8 +347,6 @@ async def _handle_server_content(
     emitted_text = ""
     if content.input_transcription is not None and content.input_transcription.text:
         await context.send(TranscriptionChunkEvent(content.input_transcription.text))
-        if content.input_transcription.finished:
-            await context.send(TranscriptionCompletedEvent(content.input_transcription.text))
 
     if content.output_transcription is not None and content.output_transcription.text:
         chunk = content.output_transcription.text
@@ -367,6 +367,42 @@ async def _handle_server_content(
                 await context.send(ModelMessageChunk(part.text))
 
     return emitted_text
+
+
+async def _collect_input_transcription(
+    content: gtypes.LiveServerContent | None,
+    heard: str,
+    model: str,
+    context: ConversationContext,
+) -> str:
+    # Gemini 3.x Live sends one final transcription of what the user said;
+    # earlier models send fragments, which the Gemini API never marks
+    # `finished`. The fragments are joined until one is `finished` (Vertex AI
+    # may send it) or the generation completes, is interrupted, or the turn
+    # completes. This is the same split as in Google's ADK.
+    if content is None:
+        return heard
+
+    transcription = content.input_transcription or gtypes.Transcription()
+    text = transcription.text or ""
+    if _sends_final_input_transcription(model):
+        if text:
+            await context.send(TranscriptionCompletedEvent(text))
+        return heard
+
+    heard += text
+    if transcription.finished or content.interrupted or content.generation_complete or content.turn_complete:
+        if heard.strip():
+            await context.send(TranscriptionCompletedEvent(heard.strip()))
+        return ""
+
+    return heard
+
+
+def _sends_final_input_transcription(model: str) -> bool:
+    # The same test as ADK's `_is_gemini_3_x_live`, which keeps the 3.5 translate model on the joining path.
+    name = model.rsplit("/", 1)[-1]
+    return name.startswith("gemini-3.") and "-live" in name and not name.startswith("gemini-3.5-live-translate")
 
 
 def _encode_args(args: dict[str, Any] | None) -> str:

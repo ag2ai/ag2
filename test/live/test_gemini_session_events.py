@@ -21,6 +21,8 @@ from ag2.events import (
     ModelReasoning,
     ModelResponse,
     SynthesizedAudioEvent,
+    TranscriptionChunkEvent,
+    TranscriptionCompletedEvent,
 )
 from ag2.live import gemini
 
@@ -66,6 +68,23 @@ class Recorder:
         self.seen.append(event)
 
 
+async def run_transcribed_turn(model: str, *turn: gtypes.LiveServerContent) -> list[BaseEvent]:
+    """Replays `turn` in a session with input transcription on, and returns every event sent."""
+    config = gemini.RealTimeConfig(
+        model,
+        input=gemini.InputConfig(transcribe=True),
+        client=FakeClient(*turn),  # type: ignore[arg-type]
+    )
+    context = ConversationContext(stream=MemoryStream())
+    recorder = Recorder()
+    context.stream.subscribe(recorder.record)
+
+    async with context.stream.get(ModelResponse) as turn_done, config.session(context, serializer=None):  # type: ignore[arg-type]
+        await turn_done
+
+    return recorder.seen
+
+
 async def test_thought_summaries_are_reasoning_not_reply_text() -> None:
     # The message layout of one real turn of this model, with no thinking config
     # set: each thought summary arrives in a message of its own, then the
@@ -104,3 +123,66 @@ async def test_thought_summaries_are_reasoning_not_reply_text() -> None:
         SynthesizedAudioEvent(b"\x00\x01"),
         ModelResponse(ModelMessage("The ball costs 0.05.")),
     ]
+
+
+class TestInputTranscription:
+    @pytest.mark.parametrize("boundary", ["generation_complete", "interrupted"])
+    async def test_fragments_complete_at_each_boundary(self, boundary: str) -> None:
+        # Before Gemini 3, the user's words arrive as fragments, and the Gemini API
+        # never marks one `finished`: what was heard so far completes when the
+        # generation completes or is interrupted, and when the turn completes.
+        seen = await run_transcribed_turn(
+            "gemini-2.5-flash-native-audio-preview-09-2025",
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text=" What is")),
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text=" the weather")),
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text=" today?")),
+            gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text="Sunny.")),
+            gtypes.LiveServerContent(**{boundary: True}),
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text=" Thanks.")),
+            gtypes.LiveServerContent(turn_complete=True),
+        )
+
+        assert seen == [
+            TranscriptionChunkEvent(" What is"),
+            TranscriptionChunkEvent(" the weather"),
+            TranscriptionChunkEvent(" today?"),
+            ModelMessageChunk("Sunny."),
+            TranscriptionCompletedEvent("What is the weather today?"),
+            TranscriptionChunkEvent(" Thanks."),
+            TranscriptionCompletedEvent("Thanks."),
+            ModelResponse(ModelMessage("Sunny.")),
+        ]
+
+    async def test_fragments_complete_on_finished(self) -> None:
+        # On Vertex AI a fragment can carry `finished`.
+        seen = await run_transcribed_turn(
+            "gemini-2.5-flash-native-audio-preview-09-2025",
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text="What is")),
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text=" the weather", finished=True)),
+            gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text="Sunny.")),
+            gtypes.LiveServerContent(turn_complete=True),
+        )
+
+        assert seen == [
+            TranscriptionChunkEvent("What is"),
+            TranscriptionChunkEvent(" the weather"),
+            TranscriptionCompletedEvent("What is the weather"),
+            ModelMessageChunk("Sunny."),
+            ModelResponse(ModelMessage("Sunny.")),
+        ]
+
+    async def test_gemini_3_transcription_is_complete_as_it_arrives(self) -> None:
+        # Gemini 3.x Live sends one final transcription, without `finished`.
+        seen = await run_transcribed_turn(
+            "gemini-3.8-live",
+            gtypes.LiveServerContent(input_transcription=gtypes.Transcription(text="What is the weather today?")),
+            gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text="Sunny.")),
+            gtypes.LiveServerContent(turn_complete=True),
+        )
+
+        assert seen == [
+            TranscriptionChunkEvent("What is the weather today?"),
+            TranscriptionCompletedEvent("What is the weather today?"),
+            ModelMessageChunk("Sunny."),
+            ModelResponse(ModelMessage("Sunny.")),
+        ]
