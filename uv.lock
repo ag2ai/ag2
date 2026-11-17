@@ -193,7 +193,9 @@ dev = [
     { name = "transformers" },
     { name = "typer" },
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
+    { name = "types-grpcio" },
     { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog" },
     { name = "websockets" },
@@ -300,7 +302,9 @@ types = [
     { name = "tenki" },
     { name = "textual" },
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
+    { name = "types-grpcio" },
     { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
 ]
 
@@ -407,7 +411,9 @@ dev = [
     { name = "transformers", specifier = ">=4.57,<6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
+    { name = "types-grpcio" },
     { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
@@ -551,7 +557,9 @@ types = [
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "textual" },
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
+    { name = "types-grpcio" },
     { name = "types-jsonschema" },
+    { name = "types-protobuf" },
     { name = "types-pyyaml" },
 ]
 
@@ -6302,6 +6310,15 @@ wheels = [
 ]
 
 [[package]]
+name = "types-grpcio"
+version = "1.85.0.20261028"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/6b/5248f1b10df2c02ffbd99f3c913259bf73cabd2bee0ca1c28d6f3e66c3f4/types_grpcio-1.85.0.20261028.tar.gz", hash = "sha256:4ea4f36a54cf9a62fcb09515f7305e89c01f4edca54b32de24f6b1204b84522c", size = 16127, upload-time = "2026-10-28T07:38:58.025Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c5/ee/e2b2f2d677478456869ca922c1d5bb68f64052c9dfd9ad6c2a91a1122269/types_grpcio-1.85.0.20261028-py3-none-any.whl", hash = "sha256:2c2684330ae57ab64ffb43183ac652e73d2609024e6076e3e9d2b8ae06816207", size = 16076, upload-time = "2026-10-28T07:38:57.193Z" },
+]
+
+[[package]]
 name = "types-jsonschema"
 version = "4.26.0.20261006"
 source = { registry = "https://pypi.org/simple" }
@@ -6311,6 +6328,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/29/d2/1f742605f5a6d39f993134885b8de41c98af606871d3ebddaf3e776bd1eb/types_jsonschema-4.26.0.20261006.tar.gz", hash = "sha256:3eb7db61b6819d40addfdaac7173e749071a7d4a9a4394f0c844598ec84b2500", size = 16843, upload-time = "2026-10-06T08:16:07.318Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/a0/4f2e3c0dc3d5cad958006f2e0307065cc8fe4fbf0393ff0b69d55ee9bbe5/types_jsonschema-4.26.0.20261006-py3-none-any.whl", hash = "sha256:29301f4e65e3928540cdf5e23ad716e38bb0c0b416a48dada213edd3d70206ec", size = 16113, upload-time = "2026-10-06T08:16:06.355Z" },
+]
+
+[[package]]
+name = "types-protobuf"
+version = "7.35.1.20260906"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e1/6c/e3e5b3e10bc328126a39637c138f9ebfd734bf14342b9f3540039b4ab995/types_protobuf-7.35.1.20260906.tar.gz", hash = "sha256:efd1a3862d4c967dad5512ef8d56b1530ac84f182c41735b94004756518c4998", size = 69895, upload-time = "2026-09-06T06:35:28.308Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/4e/f63e826c68f77ef875506d72f225918800346545ee99847bc28f3394f18d/types_protobuf-7.35.1.20260906-py3-none-any.whl", hash = "sha256:5155e48569e0dabff303fdf578db96cd31ea9a4a63b18018a4ceac6b0ae17462", size = 86419, upload-time = "2026-09-06T06:35:27.247Z" },
 ]
 
 [[package]]

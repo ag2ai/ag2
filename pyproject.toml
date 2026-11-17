@@ -266,6 +266,10 @@ types = [
     # `botocore-stubs` in, which `ag2/config/bedrock/bedrock_client.py` needs under
     # `disallow_any_unimported`. Type-check only — never a published constraint.
     "types-aiobotocore[bedrock-runtime]",
+    # `ag2/a2a` builds gRPC channels/servers and protobuf `Value`s; unresolved, those
+    # types are Any and trip `disallow_any_unimported`
+    "types-grpcio",
+    "types-protobuf",
     { include-group = "test" },
     "ag2[openai, anthropic, gemini, mistral, xai, zai, ollama, dashscope, typesafe, elevenlabs, a2a, ag-ui, acp]",
     # search tools in `ag2/tools/search`, checked under `disallow_any_unimported`
@@ -437,68 +441,13 @@ convention = "google"
 [tool.mypy]
 python_version = "3.11"
 
-# The `ag2` tree is not yet strict-clean. Strict mypy coverage is being
-# (re)introduced module-by-module; until then mypy is scoped to modules
-# that already pass under `strict = true`.
-files = [
-    "ag2/__init__.py",
-    "ag2/_import_utils.py",
-    "ag2/_model_input.py",
-    "ag2/_replay.py",
-    "ag2/_run_lifecycle.py",
-    "ag2/_telemetry_consts.py",
-    "ag2/a2a",
-    "ag2/a2ui",
-    "ag2/acp",
-    "ag2/ag_ui",
-    "ag2/agent.py",
-    "ag2/aggregate.py",
-    "ag2/annotations.py",
-    "ag2/assembly.py",
-    "ag2/compact.py",
-    "ag2/config",
-    "ag2/context.py",
-    "ag2/eval",
-    "ag2/events",
-    "ag2/exceptions.py",
-    "ag2/extensions",
-    "ag2/files",
-    "ag2/history.py",
-    "ag2/hitl.py",
-    "ag2/knowledge",
-    "ag2/live",
-    "ag2/mcp",
-    "ag2/mcp_ui",
-    "ag2/middleware",
-    "ag2/mypy.py",
-    "ag2/network",
-    "ag2/observers",
-    "ag2/plugin.py",
-    "ag2/policies",
-    "ag2/response",
-    "ag2/scopes.py",
-    "ag2/spec.py",
-    "ag2/stream.py",
-    "ag2/streams",
-    "ag2/task.py",
-    "ag2/testing.py",
-    "ag2/textual.py",
-    "ag2/tools",
-    "ag2/types.py",
-    "ag2/usage.py",
-    "ag2/utils.py",
-    "ag2/version.py",
-    "ag2/watch.py",
-]
+files = ["ag2"]
 
 strict = true
 ignore_missing_imports = true
 install_types = true
 non_interactive = true
 plugins = ["pydantic.mypy", "ag2.mypy"]
-
-# remove after all files in the repo are fixed
-follow_imports = "silent"
 
 # from https://blog.wolt.com/engineering/2021/09/30/professional-grade-mypy-configuration/
 disallow_untyped_defs = true
@@ -507,7 +456,7 @@ check_untyped_defs = true
 warn_return_any = true
 show_error_codes = true
 
-warn_unused_ignores = false
+warn_unused_ignores = true
 
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true
@@ -541,12 +490,6 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = "ag2.extensions.mi4afa.*"
 disallow_any_unimported = false
-
-# AG-UI's SDK does not ship typing metadata, so values crossing that boundary
-# are Any even though this module's own functions remain checked strictly.
-[[tool.mypy.overrides]]
-module = "ag2.ag_ui.*"
-disable_error_code = ["no-any-unimported"]
 
 # `sounddevice` ships no stubs, so its types arrive as Any at this module's boundary.
 [[tool.mypy.overrides]]
