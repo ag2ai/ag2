@@ -115,6 +115,23 @@ def _component_description(comp_def: JsonSchema, envelope: frozenset[str]) -> st
     return f"Properties: {', '.join(sorted(props))}" if props else ""
 
 
+_BASIC_COMPONENT_REF_PREFIX = "basic_catalog.json#/components/"
+"""How a catalog used in place of the basic one (before v1.0) reaches a basic component."""
+
+
+def _example_component_types(messages: JsonValue) -> set[str]:
+    """The ``component`` types the prompt example's messages use."""
+    types: set[str] = set()
+    for message in messages if isinstance(messages, list) else ():
+        for payload in _as_object(message).values():
+            components = _as_object(payload).get("components")
+            for component in components if isinstance(components, list) else ():
+                kind = _as_object(component).get("component")
+                if isinstance(kind, str):
+                    types.add(kind)
+    return types
+
+
 def _pointer_token(key: str) -> str:
     return key.replace("~", "~0").replace("/", "~1")
 
@@ -506,20 +523,27 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
 
 
 @dataclass(frozen=True, slots=True)
-class _MergedCatalog:
-    """The agent's catalog: basic plus custom, custom winning on a name collision.
+class _AgentCatalogs:
+    """The catalogs the agent serves, each as written; none is merged into another.
 
-    The prompt, the component listing and validation all read this one view.
+    v1.0 catalogs are mixable (a2ui_protocol.md, "Mixable catalogs and component resolution logic"): the basic and
+    the custom catalog are both served, a surface defaults to the basic one, and a custom component or function
+    names its catalog. Before v1.0 a surface has one catalog and a custom catalog is used "in place of the basic
+    catalog" (v0_9 a2ui_protocol.md, "Swappable Catalogs & Validation"); it may still ``$ref`` basic definitions.
     """
 
     basic: JsonSchema
     custom: JsonSchema | None
-    schema: JsonSchema
-    """The merged catalog document, under the custom catalog's ``$id`` (the basic one when there is none)."""
+    mixable: bool
+
+    @property
+    def default(self) -> JsonSchema:
+        """The catalog ``createSurface`` names in the prompt."""
+        return self.custom if self.custom is not None and not self.mixable else self.basic
 
     @property
     def id(self) -> str:
-        return str(self.schema["$id"])
+        return str(self.default["$id"])
 
     @property
     def custom_components(self) -> JsonObject:
@@ -527,30 +551,36 @@ class _MergedCatalog:
 
     @property
     def by_id(self) -> dict[str, JsonSchema]:
-        """Every catalog a surface may name, by ``$id``: the basic one, and the merged one when it differs."""
-        return {str(self.basic["$id"]): self.basic, self.id: self.schema}
+        """Every catalog a surface may name, by ``$id``."""
+        if self.custom is None:
+            return {str(self.basic["$id"]): self.basic}
+        if not self.mixable:
+            return {str(self.custom["$id"]): self.custom}
+        return {str(self.basic["$id"]): self.basic, str(self.custom["$id"]): self.custom}
 
 
-def _merge_catalogs(basic: JsonSchema, custom: JsonSchema | None) -> _MergedCatalog:
-    """Merge ``custom`` over ``basic``, rebuilding ``anyComponent`` / ``anyFunction`` to cover the union."""
-    if custom is None:
-        return _MergedCatalog(basic=basic, custom=None, schema=basic)
-    merged: JsonObject = {**basic, "$id": custom["$id"]}
-    for section in _CATALOG_SECTIONS:
-        merged[section] = {**_as_object(basic.get(section)), **_as_object(custom.get(section))}
-    components = _as_object(merged["components"])
-    functions = _as_object(merged["functions"])
-    defs = _as_object(merged["$defs"])
-    if components:
-        defs["anyComponent"] = {
-            "oneOf": [{"$ref": _catalog_definition_ref("", "components", name)} for name in components],
-            "discriminator": {"propertyName": "component"},
-        }
-    if functions:
-        defs["anyFunction"] = {
-            "oneOf": [{"$ref": _catalog_definition_ref("", "functions", name)} for name in functions]
-        }
-    return _MergedCatalog(basic=basic, custom=custom, schema=merged)
+def _with_any_definitions(catalog: JsonSchema) -> JsonSchema:
+    """``catalog`` with the ``anyComponent`` / ``anyFunction`` the message schemas reference, built from its own
+    components and functions where it does not define them; a catalog without any accepts none (``false``)."""
+    defs = dict(_as_object(catalog.get("$defs")))
+    components = _as_object(catalog.get("components"))
+    functions = _as_object(catalog.get("functions"))
+    if "anyComponent" not in defs:
+        defs["anyComponent"] = (
+            {
+                "oneOf": [{"$ref": _catalog_definition_ref("", "components", name)} for name in components],
+                "discriminator": {"propertyName": "component"},
+            }
+            if components
+            else False
+        )
+    if "anyFunction" not in defs:
+        defs["anyFunction"] = (
+            {"oneOf": [{"$ref": _catalog_definition_ref("", "functions", name)} for name in functions]}
+            if functions
+            else False
+        )
+    return {**catalog, "$defs": defs}
 
 
 def _with_catalog_function_dispatch(
@@ -682,9 +712,13 @@ class A2UISchemaManager:
         if protocol.per_surface_catalogs:
             # A closed function lets each call be checked against one definition (see ``_closed_objects``).
             basic = {**basic, "functions": _closed_objects(basic.get("functions"))}
-        catalog = _merge_catalogs(basic, custom)
+        catalog = _AgentCatalogs(
+            basic=basic,
+            custom=_with_any_definitions(custom) if custom is not None else None,
+            mixable=protocol.per_surface_catalogs,
+        )
         if protocol.per_surface_catalogs:
-            common_types = _with_catalog_function_dispatch(common_types, catalog.by_id, catalog.schema)
+            common_types = _with_catalog_function_dispatch(common_types, catalog.by_id, catalog.default)
             server_to_client = _with_catalog_component_selection(server_to_client, catalog.by_id)
         self._catalog = catalog
         self._common_types = common_types
@@ -715,7 +749,9 @@ class A2UISchemaManager:
     def component_references(self) -> ComponentReferences:
         """Where each component type of the merged catalog references other components."""
         self._ensure_loaded()
-        return component_references(self._catalog.schema)
+        return component_references(
+            *self._catalog.by_id.values(), documents={"basic_catalog.json": self._spec.basic_catalog}
+        )
 
     def build_schema_registry(self) -> Registry:
         """The registry ``$ref``s in :attr:`server_to_client_schema` resolve against.
@@ -731,7 +767,7 @@ class A2UISchemaManager:
             str(self._common_types["$id"]): common_types,
             **{catalog_id: _resource(catalog) for catalog_id, catalog in catalogs.items()},
             # Aliases. ``catalog.json`` next to the message schema names the agent's catalog.
-            f"{base}catalog.json": _resource(self._catalog.schema),
+            f"{base}catalog.json": _resource(self._catalog.default),
             # Before v1.0 a custom catalog may reach the basic one as ``basic_catalog.json``, resolved
             # against ``catalog.json`` above.
             f"{base}basic_catalog.json": _resource(self._spec.basic_catalog),
@@ -758,9 +794,30 @@ class A2UISchemaManager:
         return Registry().with_resources(resources.items())
 
     def _build_prompt_example(self) -> str:
-        """Build the prompt example JSON string from the version-specific template."""
-        raw = json.dumps(self._spec.prompt_example, separators=(",", ": "))
+        """Build the prompt example JSON string from the version-specific template.
+
+        The example's components come from the basic catalog; a catalog used in place of it may lack them, and then
+        the example shows only the messages that carry no components.
+        """
+        example = self._spec.prompt_example
+        available = _as_object(self._catalog.default.get("components"))
+        if isinstance(example, list) and not _example_component_types(example) <= available.keys():
+            example = [message for message in example if not _example_component_types([message])]
+        raw = json.dumps(example, separators=(",", ": "))
         return self._fill_template(raw)
+
+    def _component_lines(self, components: JsonObject, envelope: frozenset[str]) -> str:
+        """One described line per component; a bare ``$ref`` into the basic catalog is described by its target."""
+        basic = _as_object(self._spec.basic_catalog.get("components"))
+        lines = ""
+        for name in sorted(components):
+            definition = _as_object(components.get(name))
+            ref = definition.get("$ref")
+            if isinstance(ref, str) and ref.startswith(_BASIC_COMPONENT_REF_PREFIX):
+                definition = _as_object(basic.get(_pointer_key(ref.removeprefix(_BASIC_COMPONENT_REF_PREFIX))))
+            if desc := _component_description(definition, envelope):
+                lines += f"- **{name}**: {desc}\n"
+        return lines + "\n" if lines else ""
 
     def _fill_template(self, text: str) -> str:
         return text.replace("{catalog_id}", self.catalog_id).replace("{version_string}", self._protocol.wire_version)
@@ -797,26 +854,29 @@ class A2UISchemaManager:
         sections.append(f"\n\n## A2UI Message Types\n\n{message_types}")
 
         catalog = self._catalog
-        if _as_object(catalog.schema.get("components")):
-            basic_components = sorted(_as_object(catalog.basic.get("components")))
-            custom_comp_defs = catalog.custom_components
-            custom_components = sorted(custom_comp_defs)
-
+        # The properties every component shares: the ``component`` discriminator and ``ComponentCommon``
+        # (``id`` in every version, then v0.9 ``accessibility`` or v1.0 ``@catalogId``, ...).
+        common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
+        envelope = frozenset({"component", *_as_object(common.get("properties"))})
+        default_components = _as_object(catalog.default.get("components"))
+        mixed_in = catalog.custom_components if catalog.mixable else {}
+        if default_components or mixed_in:
             comp_section = "\n\n## Available Components\n\n"
-            if basic_components:
-                comp_section += f"**Basic catalog:** {', '.join(basic_components)}\n\n"
-            if custom_components:
-                comp_section += f"**Custom components:** {', '.join(custom_components)}\n\n"
-                # The properties every component shares: the ``component`` discriminator and ``ComponentCommon``
-                # (``id`` in every version, then v0.9 ``accessibility`` or v1.0 ``@catalogId``, ...).
-                common = _as_object(_as_object(self._common_types.get("$defs")).get("ComponentCommon"))
-                envelope = frozenset({"component", *_as_object(common.get("properties"))})
-                for comp_name in custom_components:
-                    comp_def = _as_object(custom_comp_defs.get(comp_name))
-                    desc = _component_description(comp_def, envelope)
-                    if desc:
-                        comp_section += f"- **{comp_name}**: {desc}\n"
-                comp_section += "\n"
+            if catalog.custom is None:
+                comp_section += f"**Basic catalog:** {', '.join(sorted(default_components))}\n\n"
+            elif catalog.mixable:
+                comp_section += f"**Basic catalog** (the surface default): {', '.join(sorted(default_components))}\n\n"
+                if mixed_in:
+                    custom_id = str(catalog.custom["$id"])
+                    comp_section += (
+                        f"**Custom catalog** (`{custom_id}`): {', '.join(sorted(mixed_in))}\n\n"
+                        f'These are not in the surface\'s default catalog: give each of them `"@catalogId": "{custom_id}"`, '
+                        f'and each call to one of this catalog\'s functions `"catalogId": "{custom_id}"`.\n\n'
+                    )
+                    comp_section += self._component_lines(mixed_in, envelope)
+            else:
+                comp_section += f"**Components:** {', '.join(sorted(default_components))}\n\n"
+                comp_section += self._component_lines(default_components, envelope)
 
             comp_section += (
                 "Each component uses a flat discriminator format:\n"
@@ -828,7 +888,8 @@ class A2UISchemaManager:
 
         if include_rules:
             rules_parts: list[str] = []
-            if self._spec.catalog_rules:
+            # A catalog used in place of the basic one replaces its rules too.
+            if self._spec.catalog_rules and catalog.default is catalog.basic:
                 rules_parts.append(self._spec.catalog_rules)
             if self._custom_catalog_rules:
                 rules_parts.append(self._custom_catalog_rules)

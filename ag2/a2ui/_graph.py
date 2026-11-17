@@ -31,18 +31,22 @@ ComponentReferences: TypeAlias = Mapping[str, tuple[_Reference, ...]]
 """Where each component type holds references to other components, by component type."""
 
 
-def component_references(catalog: JsonObject) -> ComponentReferences:
-    """Read, from a catalog, where each of its component types references other components.
+def component_references(
+    *catalogs: JsonObject, documents: Mapping[str, JsonObject] | None = None
+) -> ComponentReferences:
+    """Read, from catalogs, where each of their component types references other components.
 
     As the spec says, only a property whose schema ``$ref``s ``ComponentId``, ``Child`` or ``ChildList`` is a
     reference; a plain string is static text. Like the official SDK, an inline object schema with ``componentId``
-    and ``path`` (or ``dataBinding``) also counts, as a template child list.
+    and ``path`` (or ``dataBinding``) also counts, as a template child list. A later catalog's component wins over
+    an earlier one's of the same type. ``documents`` resolves a ``$ref`` into another file (``basic_catalog.json``).
     """
-    components = catalog.get("components")
     references: dict[str, tuple[_Reference, ...]] = {}
-    for key, definition in components.items() if isinstance(components, dict) else ():
-        found = dict.fromkeys(_references_in(definition, (), catalog, frozenset()))
-        references[_component_type(definition) or key] = tuple(found)
+    for catalog in catalogs:
+        components = catalog.get("components")
+        for key, definition in components.items() if isinstance(components, dict) else ():
+            found = dict.fromkeys(_references_in(definition, (), catalog, frozenset(), documents or {}))
+            references[_component_type(definition) or key] = tuple(found)
     return references
 
 
@@ -61,27 +65,34 @@ def _component_type(definition: JsonValue) -> str | None:
     return None
 
 
-def _references_in(schema: JsonValue, path: _Path, catalog: JsonObject, seen: frozenset[str]) -> Iterator[_Reference]:
+def _references_in(
+    schema: JsonValue, path: _Path, catalog: JsonObject, seen: frozenset[str], documents: Mapping[str, JsonObject]
+) -> Iterator[_Reference]:
     if not isinstance(schema, dict):
         return
     ref = schema.get("$ref")
     if isinstance(ref, str):
+        document, _, pointer = ref.partition("#")
         if (kind := _REFERENCE_DEFINITIONS.get(ref.rsplit("/", 1)[-1])) is not None:
             yield _Reference(path, kind)
         elif ref.startswith("#/") and ref not in seen:
             # A catalog-local definition (``#/$defs/Kid``) may itself name ``ComponentId``.
-            yield from _references_in(_resolve_local(catalog, ref), path, catalog, seen | {ref})
+            yield from _references_in(_resolve_local(catalog, ref), path, catalog, seen | {ref}, documents)
+        elif document in documents and pointer.startswith("/") and ref not in seen:
+            # A definition in another catalog file (before v1.0, ``basic_catalog.json#/components/Column``).
+            target = documents[document]
+            yield from _references_in(_resolve_local(target, f"#{pointer}"), path, target, seen | {ref}, documents)
     for keyword in ("allOf", "anyOf", "oneOf"):
         branches = schema.get(keyword)
         for branch in branches if isinstance(branches, list) else ():
-            yield from _references_in(branch, path, catalog, seen)
+            yield from _references_in(branch, path, catalog, seen, documents)
     properties = schema.get("properties")
     if isinstance(properties, dict) and "componentId" in properties and properties.keys() & {"path", "dataBinding"}:
         yield _Reference(path, "list")
         return
     for name, subschema in properties.items() if isinstance(properties, dict) else ():
-        yield from _references_in(subschema, (*path, name), catalog, seen)
-    yield from _references_in(schema.get("items"), (*path, _ANY_ITEM), catalog, seen)
+        yield from _references_in(subschema, (*path, name), catalog, seen, documents)
+    yield from _references_in(schema.get("items"), (*path, _ANY_ITEM), catalog, seen, documents)
 
 
 def _resolve_local(catalog: JsonObject, ref: str) -> JsonValue:

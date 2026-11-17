@@ -14,6 +14,9 @@ from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
 
+_BASIC_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+"""Basic components on a custom-catalog surface name their catalog (a2ui_protocol.md L511)."""
+
 
 def _catalog(allowed_callers: str = "agentOnly") -> dict[str, Any]:
     return {
@@ -303,9 +306,16 @@ async def test_omitted_or_empty_function_arguments_use_handler_defaults(include_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "catalog_id", [None, "https://example.com/catalog.json", "https://unrelated.example/catalog.json"]
+    "catalog_id",
+    [
+        None,
+        "https://example.com/catalog.json",
+        "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "https://unrelated.example/catalog.json",
+    ],
 )
-async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str | None) -> None:
+async def test_function_calls_resolve_only_in_a_configured_catalog(catalog_id: str | None) -> None:
+    # The renderer sets catalogId to the catalog the call resolved to (a2ui_protocol.md L1495): any the server has.
     calls: list[str] = []
 
     @a2ui_action
@@ -337,7 +347,7 @@ async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str
         },
     )
 
-    if catalog_id is None or catalog_id == "https://example.com/catalog.json":
+    if catalog_id != "https://unrelated.example/catalog.json":
         assert calls == ["default"]
         expected = {"functionCallId": "fc-1", "value": "default"}
     else:
@@ -404,12 +414,18 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
     components: list[dict[str, Any]]
     if binding == "action":
         components = [
-            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-            {"id": "label", "component": "Text", "text": "Lookup"},
+            {
+                "id": "root",
+                "component": "Button",
+                "@catalogId": _BASIC_ID,
+                "child": "label",
+                "action": {"functionCall": call},
+            },
+            {"id": "label", "component": "Text", "@catalogId": _BASIC_ID, "text": "Lookup"},
         ]
     else:
         value = {"@call": "formatString", "args": {"value": call}} if binding == "nested" else call
-        components = [{"id": "root", "component": "Text", "text": value}]
+        components = [{"id": "root", "component": "Text", "@catalogId": _BASIC_ID, "text": value}]
     payload: dict[str, Any] = {"surfaceId": "s", "components": components}
     if message_key == "createSurface":
         payload["catalogId"] = _catalog()["$id"]
@@ -436,7 +452,7 @@ async def test_renderer_callable_bindings_are_emitted(allowed_callers: str) -> N
         "createSurface": {
             "surfaceId": "s",
             "catalogId": "https://example.com/catalog.json",
-            "components": [{"id": "root", "component": "Text", "text": {"@call": "lookup"}}],
+            "components": [{"id": "root", "component": "Text", "@catalogId": _BASIC_ID, "text": {"@call": "lookup"}}],
         },
     }
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>"))
@@ -467,6 +483,7 @@ async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
                     {
                         "id": "root",
                         "component": "Text",
+                        "@catalogId": _BASIC_ID,
                         "text": "Lookup",
                         "@metadata": {"extensions": {"literal": {"@call": "lookup"}}},
                     }
@@ -526,8 +543,14 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
                 "surfaceId": "s",
                 "catalogId": custom_id,
                 "components": [
-                    {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-                    {"id": "label", "component": "Text", "text": "Open"},
+                    {
+                        "id": "root",
+                        "component": "Button",
+                        "@catalogId": _BASIC_ID,
+                        "child": "label",
+                        "action": {"functionCall": call},
+                    },
+                    {"id": "label", "component": "Text", "@catalogId": _BASIC_ID, "text": "Open"},
                 ],
             },
         }

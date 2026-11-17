@@ -35,6 +35,9 @@ class _A2UIRuntime:
 
     protocol: A2UIProtocol
     catalog_id: str
+    """The catalog ``createSurface`` names in the prompt."""
+    catalog_ids: tuple[str, ...]
+    """Every catalog the agent serves."""
     actions: tuple[A2UIEventAction, ...]
     """Declared to the LLM so it can render the buttons."""
     server_actions: Mapping[str, A2UIAction]
@@ -120,6 +123,7 @@ def build_runtime(
     return _A2UIRuntime(
         protocol=schema_manager.protocol,
         catalog_id=schema_manager.catalog_id,
+        catalog_ids=schema_manager.catalog_ids,
         actions=declarations,
         server_actions=collect_server_actions(actions),
         system_prompt_section=f"{base_prompt}\n\n{prompt_section}",

@@ -6174,8 +6174,8 @@
   {
    "id": "custom:v09_basic_on_custom_surface",
    "version": "v0.9",
-   "note": "Column/Text on custom surface (ag2: custom extends basic)",
-   "expect": "frames",
+   "note": "v0.9: the custom catalog is used in place of the basic one (a2ui_protocol.md L157)",
+   "expect": "retry",
    "catalog": "widget_v09",
    "messages": [
     {
@@ -6211,13 +6211,14 @@
       ]
      }
     }
-   ]
+   ],
+   "error": "Operation 1: Component 'root' (Column): unknown component 'Column'"
   },
   {
    "id": "custom:v09_widget_on_basic_surface",
    "version": "v0.9",
-   "note": "MyWidget on basic surface",
-   "expect": "frames",
+   "note": "v0.9: with a custom catalog, the basic one is not the agent's",
+   "expect": "retry",
    "catalog": "widget_v09",
    "messages": [
     {
@@ -6240,7 +6241,8 @@
       ]
      }
     }
-   ]
+   ],
+   "error": "Operation 0: unknown catalog 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json' (at /createSurface/catalogId); use one of: 'https://example.com/cat.json'"
   },
   {
    "id": "custom:v10_widget_ok",
@@ -6364,8 +6366,8 @@
   {
    "id": "custom:v10_basic_on_custom_surface",
    "version": "v1.0",
-   "note": "Column/Text on custom surface (ag2: custom extends basic)",
-   "expect": "frames",
+   "note": "v1.0: a component resolves only against its @catalogId or the surface default, no fallback (L511-522)",
+   "expect": "retry",
    "catalog": "widget_v10",
    "messages": [
     {
@@ -6401,7 +6403,8 @@
       ]
      }
     }
-   ]
+   ],
+   "error": "Operation 1: Component 'root' (Column): unknown component 'Column'"
   },
   {
    "id": "custom:v10_widget_on_basic_surface",
@@ -6427,6 +6430,87 @@
         "id": "root",
         "component": "MyWidget",
         "foo": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_basic_with_catalog_id_on_custom_surface",
+   "version": "v1.0",
+   "note": "v1.0: mixable catalogs, a basic component names its catalog",
+   "expect": "frames",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w",
+         "t"
+        ],
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_widget_with_catalog_id_on_basic_surface",
+   "version": "v1.0",
+   "note": "v1.0: mixable catalogs, a custom component names its catalog",
+   "expect": "frames",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w"
+        ]
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x",
+        "@catalogId": "https://example.com/cat.json"
        }
       ]
      }
@@ -7057,8 +7141,8 @@
   {
    "id": "custom:v09_basic_text_with_custom_catalog",
    "version": "v0.9",
-   "note": "custom catalog extends, not replaces, the basic catalog",
-   "expect": "frames",
+   "note": "v0.9: the custom catalog is used in place of the basic one",
+   "expect": "retry",
    "catalog": "widget_v09",
    "messages": [
     {
@@ -7074,7 +7158,8 @@
       ]
      }
     }
-   ]
+   ],
+   "error": "Operation 0: Component 'root' (Text): unknown component 'Text'"
   },
   {
    "id": "custom:v10_ref_local_def",

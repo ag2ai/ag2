@@ -140,11 +140,18 @@ async def test_custom_component_references_come_from_its_schema() -> None:
             }
         },
     }
+    # Mixable catalogs: the custom Panel names its catalog on a basic surface (a2ui_protocol.md L511).
     messages = [
-        _create("v1.0", catalog_id="https://example.com/cat.json"),
+        _create("v1.0"),
         _update(
             "v1.0",
-            {"id": "root", "component": "Panel", "header": "title", "body": ["line"]},
+            {
+                "id": "root",
+                "component": "Panel",
+                "@catalogId": "https://example.com/cat.json",
+                "header": "title",
+                "body": ["line"],
+            },
             _text("title"),
             _text("line"),
         ),
@@ -244,8 +251,12 @@ def _panel_catalog(child_schema: dict[str, Any]) -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_custom_child_references_are_found_through_a_local_definition() -> None:
     messages = [
-        _create("v1.0", catalog_id="https://example.com/cat.json"),
-        _update("v1.0", {"id": "root", "component": "Panel", "child": "t"}, _text("t")),
+        _create("v1.0"),
+        _update(
+            "v1.0",
+            {"id": "root", "component": "Panel", "@catalogId": "https://example.com/cat.json", "child": "t"},
+            _text("t"),
+        ),
     ]
 
     turn = await serve_turn(

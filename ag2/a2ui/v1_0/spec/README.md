@@ -3,8 +3,8 @@
 These JSON schemas are vendored from the upstream A2UI project.
 
 - **Source repository:** https://github.com/a2ui-project/a2ui
-- **Source paths:** `specification/v1_0/json/*.json` and
-  `catalogs/basic/v1/catalog.json`
+- **Source paths:** `specification/v1_0/json/*.json` (all but `sample.json`,
+  an example payload) and `catalogs/basic/v1/catalog.json`
 - **Pinned commit:** `6e79b2e20fe2e1543aff3b9928613daa2b37189c` (upstream `main`,
   2026-11-16). It includes `TextField.value` being required in the v1 basic
   catalog (a2ui-project/a2ui#3868) and the `@`-prefixed component envelope keys

@@ -8,7 +8,7 @@ Example response format:
 ```
 Here is the UI you requested.
 <a2ui-json>
-[{"version": "v0.9","createSurface": {"surfaceId": "s1","catalogId": "https://example.com/cat.json"}},{"version": "v0.9","updateComponents": {"surfaceId": "s1","components": [{"id": "root","component": "Card","child": "layout1"},{"id": "layout1","component": "Column","children": ["text1","btn1"]},{"id": "text1","component": "Text","text": "Hello World"},{"id": "btn1","component": "Button","child": "btn1_text","action": {"event": {"name": "click"}}},{"id": "btn1_text","component": "Text","text": "Click Me"}]}}]
+[{"version": "v0.9","createSurface": {"surfaceId": "s1","catalogId": "https://example.com/cat.json"}}]
 </a2ui-json>
 ```
 
@@ -35,9 +35,7 @@ This applies to ChoicePicker `value`, TextField `value`, Slider `value`, and any
 
 ## Available Components
 
-**Basic catalog:** AudioPlayer, Button, Card, CheckBox, ChoicePicker, Column, DateTimeInput, Divider, Icon, Image, List, Modal, Row, Slider, Tabs, Text, TextField, Video
-
-**Custom components:** Bare, MyWidget
+**Components:** Bare, MyWidget
 
 - **Bare**: Properties: bar
 - **MyWidget**: A widget that shows foo.
@@ -51,12 +49,6 @@ Components are referenced by `id`. Use `children` (array of ids) for layout comp
 
 
 ## Component Rules
-
-**REQUIRED PROPERTIES:** You MUST include ALL required properties for every component, even if they are inside a template or will be bound to data.
-- For 'Text', you MUST provide 'text'. If dynamic, use { "path": "..." }.
-- For 'Image', you MUST provide 'url'. If dynamic, use { "path": "..." }.
-- For 'Button', you MUST provide 'action'.
-- For 'TextField', 'CheckBox', etc., you MUST provide 'label'.
 
 Use MyWidget sparingly.
 

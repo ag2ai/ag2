@@ -18,9 +18,9 @@ The basic catalog covers the common building blocks (surfaces, text, buttons, in
 !!! note
     `#!python "v0.9"` and `#!python "v0.9.1"` share the same basic-catalog id on purpose — the upstream v0.9.1 catalog file declares the v0.9 `#!python $id`. `#!python "v1.0"` has its own. Selecting `#!python protocol_version=` picks the matching catalog automatically.
 
-## Extending With a Custom Catalog
+## Adding a Custom Catalog
 
-To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog` that **extends** the basic catalog. It can be a dict or a path to a JSON file, and must declare a `#!python $id` — that id becomes the active catalog id. Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
+To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog`. It can be a dict or a path to a JSON file, and must declare a `#!python $id`, the id surfaces and components use to name it. It is validated as written: nothing from the basic catalog is merged into it. How it combines with the basic catalog depends on the protocol version (see below). Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
 
 ```python linenums="1" hl_lines="6-11 18 19"
 from ag2 import Agent
@@ -31,7 +31,7 @@ from ag2.config import AnthropicConfig
 custom_catalog = {
     "$id": "https://example.com/catalogs/charts/catalog.json",
     "components": {
-        # component definitions that extend the basic catalog ...
+        # component definitions ...
     },
 }
 
@@ -45,7 +45,10 @@ server = A2UIServer(
 )
 ```
 
-The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry — so malformed uses of your components are caught and retried just like the built-ins.
+Malformed uses of your components are caught and retried just like the built-ins.
+
+- **v0.9 and v0.9.1**: as the spec says, a custom catalog is used *in place of* the basic one. Surfaces are created with its `#!python $id`, the prompt lists only its components and its rules replace the basic catalog's, and a `#!python createSurface` naming the basic catalog reports `unknown catalog`. To keep basic components, declare them in your catalog, for example `#!python "Text": {"$ref": "basic_catalog.json#/components/Text"}`.
+- **v1.0**: catalogs are mixable. The basic catalog stays the surface default, and the prompt tells the LLM to give each custom component `#!python "@catalogId": "<your $id>"` and each call to a custom function `#!python "catalogId": "<your $id>"`. A component resolves only against its own `#!python @catalogId` or its surface's `#!python catalogId`: a basic `#!python Column` on a surface created with your catalog's id must name the basic catalog. Your rules are appended to the basic catalog's instructions.
 
 !!! note "v1.0 catalogs"
     A v1.0 catalog may `#!python $ref` only the components, functions and leaf `#!python $defs` it declares (`#!python #/components/...`, `#!python #/functions/...`, `#!python #/$defs/...`) and the standard types the spec lists, written as `#!python common_types.json#/$defs/<Type>` (for example `#!python DynamicString`, `#!python ChildList` or `#!python Action`). A reference into another catalog, the basic one included, is rejected when the catalog is loaded. v1.0 catalogs carry their guidance in an `#!python instructions` field; without `#!python custom_catalog_rules`, the custom catalog's `#!python instructions` are appended instead.
@@ -59,7 +62,7 @@ The custom catalog's rules are appended to the basic catalog's rules in the syst
 
 A client advertises what its renderer supports via `#!python A2UIClientCapabilities` — a list of `#!python supported_catalog_ids` and, optionally, `#!python inline_catalogs` (catalog definitions the client supplies inline). The transport renders this into a per-turn prompt fragment so the LLM targets only components the client can render.
 
-Negotiation is **advisory**: if the client's supported catalogs don't include the active catalog id, the mismatch is noted in the prompt and logged as a warning — it never blocks output. The A2UI spec frames capabilities as a hint, not a contract.
+Negotiation is **advisory**: if the client's supported catalogs don't include the catalog the prompt creates surfaces with, the mismatch is noted in the prompt and logged as a warning — it never blocks output. The A2UI spec frames capabilities as a hint, not a contract.
 
 How capabilities reach the agent depends on the transport:
 

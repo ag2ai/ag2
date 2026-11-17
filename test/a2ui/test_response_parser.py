@@ -13,6 +13,8 @@ from ag2.a2ui.schema_manager import A2UISchemaManager
 
 from ._helpers import extracting_parser, validating_parser
 
+_BASIC_V1_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+
 
 def _text_with_nested_format_string(depth: int, leaf: JsonObject | str) -> JsonObject:
     value: JsonObject | str = leaf
@@ -532,9 +534,17 @@ class TestA2UIResponseParserV1Validation:
     def test_agent_only_function_in_an_action_is_reported_by_name(
         self, parser_v1_agent_function: A2UIResponseParser
     ) -> None:
+        # The basic components name their catalog; the call resolves against the surface's (a2ui_protocol.md L511).
+        basic = {"@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"}
         components = [
-            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": {"@call": "lookup"}}},
-            {"id": "label", "component": "Text", "text": "Go"},
+            {
+                "id": "root",
+                "component": "Button",
+                "child": "label",
+                "action": {"functionCall": {"@call": "lookup"}},
+                **basic,
+            },
+            {"id": "label", "component": "Text", "text": "Go", **basic},
         ]
         surface = {"surfaceId": "s", "catalogId": "https://mycompany.com/cat.json", "components": components}
         ops = [{"version": "1.0", "createSurface": surface}]
@@ -594,8 +604,14 @@ class TestSurfaceCatalogValidation:
         if call_catalog is not None:
             call["catalogId"] = catalogs[call_catalog]
         components: list[JsonObject] = [
-            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-            {"id": "label", "component": "Text", "text": "Open"},
+            {
+                "id": "root",
+                "component": "Button",
+                "@catalogId": _BASIC_V1_CATALOG,
+                "child": "label",
+                "action": {"functionCall": call},
+            },
+            {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Open"},
         ]
         create: JsonObject = {"surfaceId": "s", "catalogId": catalogs[surface_catalog]}
         if message_key == "createSurface":
@@ -632,8 +648,14 @@ class TestSurfaceCatalogValidation:
                 "updateComponents": {
                     "surfaceId": "s",
                     "components": [
-                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-                        {"id": "label", "component": "Text", "text": "Open"},
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "@catalogId": _BASIC_V1_CATALOG,
+                            "child": "label",
+                            "action": {"functionCall": call},
+                        },
+                        {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Open"},
                     ],
                 },
             }
@@ -669,7 +691,7 @@ class TestSurfaceCatalogValidation:
                             "child": "label",
                             "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
                         },
-                        {"id": "label", "component": "Text", "text": "Open"},
+                        {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Open"},
                     ],
                 },
             },
@@ -683,6 +705,7 @@ class TestSurfaceCatalogValidation:
     def test_component_catalog_does_not_override_its_functions_surface_default(
         self, parser: A2UIResponseParser, surface_catalog: str
     ) -> None:
+        # The Button names the basic catalog; its call still resolves against the surface's (a2ui_protocol.md L511).
         catalogs = {
             "basic": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
             "custom": "https://example.com/catalog.json",
@@ -697,11 +720,11 @@ class TestSurfaceCatalogValidation:
                         {
                             "id": "root",
                             "component": "Button",
-                            "@catalogId": catalogs["custom" if surface_catalog == "basic" else "basic"],
+                            "@catalogId": catalogs["basic"],
                             "child": "label",
                             "action": {"functionCall": {"@call": "openUrl", "args": {"url": "https://example.com"}}},
                         },
-                        {"id": "label", "component": "Text", "text": "Open"},
+                        {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Open"},
                     ],
                 },
             },
@@ -735,7 +758,7 @@ def test_component_can_select_basic_catalog_over_custom_surface() -> None:
             "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
-                "catalogId": manager.catalog_id,
+                "catalogId": "https://example.com/catalog.json",
                 "components": [
                     {
                         "id": "root",
@@ -869,7 +892,7 @@ class TestCatalogFunctionDefinitions:
             server_to_client_schema=manager.server_to_client_schema,
             schema_registry=manager.build_schema_registry(),
         )
-        call: JsonObject = {"@call": "lookup", "catalogId": manager.catalog_id, "args": {"id": "x"}}
+        call: JsonObject = {"@call": "lookup", "catalogId": "https://example.com/catalog.json", "args": {"id": "x"}}
         if call_kind == "rpc":
             operation = {"version": "1.0", "callRendererFunction": {"functionCallId": "fc", "callFunction": call}}
         else:
@@ -877,10 +900,16 @@ class TestCatalogFunctionDefinitions:
                 "version": "1.0",
                 "createSurface": {
                     "surfaceId": "s",
-                    "catalogId": manager.catalog_id,
+                    "catalogId": "https://example.com/catalog.json",
                     "components": [
-                        {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-                        {"id": "label", "component": "Text", "text": "Lookup"},
+                        {
+                            "id": "root",
+                            "component": "Button",
+                            "@catalogId": _BASIC_V1_CATALOG,
+                            "child": "label",
+                            "action": {"functionCall": call},
+                        },
+                        {"id": "label", "component": "Text", "@catalogId": _BASIC_V1_CATALOG, "text": "Lookup"},
                     ],
                 },
             }
@@ -922,7 +951,7 @@ class TestCatalogFunctionDefinitions:
                 "version": "1.0",
                 "callRendererFunction": {
                     "functionCallId": "fc",
-                    "callFunction": {**call, "catalogId": manager.catalog_id},
+                    "callFunction": {**call, "catalogId": "https://example.com/catalog.json"},
                 },
             }
         ])

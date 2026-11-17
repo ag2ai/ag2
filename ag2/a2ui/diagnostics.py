@@ -196,6 +196,11 @@ def _leaf_message(error: _SchemaError, rejecting: str | None) -> str:
     instance = error.instance
     if rejecting is not None:
         return _REJECTING_FORMATS[rejecting](instance.get("@call") if isinstance(instance, dict) else None)
+    if error.validator is None and isinstance(instance, dict):
+        # A ``false`` schema: a catalog's ``anyComponent`` / ``anyFunction`` when it defines none.
+        for tag, noun in (("component", "component"), ("@call", "function")):
+            if isinstance(instance.get(tag), str):
+                return f"unknown {noun} {instance[tag]!r}"
     if error.validator == "format" and error.validator_value == COMPONENT_ID_FORMAT:
         return f"{instance!r} is not a valid component id: it must be a {UAX31_IDENTIFIER}"
     if error.validator == "format" and error.validator_value == XID_FORMAT:

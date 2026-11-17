@@ -243,3 +243,34 @@ async def test_not_a_message_lists_the_served_versions_message_kinds(protocol_ve
     turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=protocol_version)
 
     assert turn.errors == [[f"- Operation 0 is not an A2UI message: expected an object with exactly one of {kinds}"]]
+
+
+@pytest.mark.asyncio
+async def test_v0_9_custom_catalog_keeps_the_basic_components_it_references() -> None:
+    # v0.9: a custom catalog is used in place of the basic one (a2ui_protocol.md L157), and may $ref its definitions.
+    custom_id = "https://example.com/cat.json"
+    catalog = {
+        "$id": custom_id,
+        "components": {
+            "Column": {"$ref": "basic_catalog.json#/components/Column"},
+            "Text": {"$ref": "basic_catalog.json#/components/Text"},
+        },
+    }
+    messages = [
+        {"version": "v0.9", "createSurface": {"surfaceId": "s", "catalogId": custom_id}},
+        {
+            "version": "v0.9",
+            "updateComponents": {
+                "surfaceId": "s",
+                "components": [
+                    {"id": "root", "component": "Column", "children": ["t"]},
+                    {"id": "t", "component": "Text", "text": "hi"},
+                ],
+            },
+        },
+    ]
+
+    turn = await serve_turn(a2ui_reply(messages), custom_catalog=catalog)
+
+    assert turn.feedback == []
+    assert turn.ui == messages

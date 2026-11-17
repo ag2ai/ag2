@@ -28,7 +28,7 @@ plain JSON — the same way the sibling AG-UI transport renders agent state.
 """
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from fast_depends.exceptions import ValidationError
@@ -169,7 +169,7 @@ async def run_agent_function(
     call: A2UIIncomingFunctionCall,
     *,
     protocol: A2UIProtocol,
-    catalog_id: str,
+    catalog_ids: Collection[str],
     context: ConversationContext,
     validator: A2UIResponseParser | None = None,
 ) -> list[ServerToClientMessage]:
@@ -181,7 +181,7 @@ async def run_agent_function(
         call: The parsed incoming call; its ``args`` become the handler's keyword arguments.
         protocol: The served protocol version. A version without function RPC
             cannot answer the call, so it is logged and answered with nothing.
-        catalog_id: The active catalog. An explicit different catalog must not
+        catalog_ids: Every catalog the server has. A call naming another catalog does not
             select a local action merely because its function name matches.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
@@ -210,7 +210,7 @@ async def run_agent_function(
             )
         ]
 
-    if action is None or call.catalog_id not in (None, catalog_id):
+    if action is None or (call.catalog_id is not None and call.catalog_id not in catalog_ids):
         return [
             _function_response(
                 call.function_call_id,
@@ -284,7 +284,7 @@ async def run_client_interactions(
                 runtime.server_actions.get(call.call),
                 call,
                 protocol=runtime.protocol,
-                catalog_id=runtime.catalog_id,
+                catalog_ids=runtime.catalog_ids,
                 context=context,
                 validator=runtime.message_validator,
             )

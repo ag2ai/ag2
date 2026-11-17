@@ -8,7 +8,7 @@ Example response format:
 ```
 Here is the UI you requested.
 <a2ui-json>
-[{"version": "1.0","createSurface": {"surfaceId": "s1","catalogId": "https://mycompany.com/cat.json"}},{"version": "1.0","updateComponents": {"surfaceId": "s1","components": [{"id": "root","component": "Card","child": "layout1"},{"id": "layout1","component": "Column","children": ["text1","btn1"]},{"id": "text1","component": "Text","text": "Hello World"},{"id": "btn1","component": "Button","child": "btn1_text","action": {"event": {"name": "click"}}},{"id": "btn1_text","component": "Text","text": "Click Me"}]}}]
+[{"version": "1.0","createSurface": {"surfaceId": "s1","catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"}},{"version": "1.0","updateComponents": {"surfaceId": "s1","components": [{"id": "root","component": "Card","child": "layout1"},{"id": "layout1","component": "Column","children": ["text1","btn1"]},{"id": "text1","component": "Text","text": "Hello World"},{"id": "btn1","component": "Button","child": "btn1_text","action": {"event": {"name": "click"}}},{"id": "btn1_text","component": "Text","text": "Click Me"}]}}]
 </a2ui-json>
 ```
 
@@ -16,7 +16,7 @@ Here is the UI you requested.
 ## A2UI Message Types
 
 Each message in the JSON array must be one of:
-- `createSurface`: Initialize a new surface. Requires `surfaceId`. `catalogId` ("https://mycompany.com/cat.json") is optional and sets the surface's default catalog: a component without `@catalogId` and a function call without `catalogId` resolve against it, and nothing falls back to another catalog. Without a `catalogId`, every component needs its own `@catalogId` and every function call its own `catalogId`. It may also carry the initial `components` array and `dataModel` object, so a whole UI can be sent in this single message.
+- `createSurface`: Initialize a new surface. Requires `surfaceId`. `catalogId` ("https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json") is optional and sets the surface's default catalog: a component without `@catalogId` and a function call without `catalogId` resolve against it, and nothing falls back to another catalog. Without a `catalogId`, every component needs its own `@catalogId` and every function call its own `catalogId`. It may also carry the initial `components` array and `dataModel` object, so a whole UI can be sent in this single message.
 - `updateComponents`: Add/update components on a surface. Requires `surfaceId` and `components` array.
 - `updateDataModel`: Update the data model. Requires `surfaceId` and `value`; `path` is optional. Set `value` to `null` to delete the key at `path`.
 - `deleteSurface`: Remove a surface. Requires `surfaceId`.
@@ -43,14 +43,16 @@ Two places keep the plain `path` spelling: a list template, `"children": {"compo
 
 To run a function on the renderer, emit a `callRendererFunction` message; the renderer replies with the result, and that reply reaches you as your next input:
 
-`{"version": "1.0", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": {"@call": "myFunction", "catalogId": "https://mycompany.com/cat.json", "args": {...}}}}`
+`{"version": "1.0", "callRendererFunction": {"functionCallId": "fc-1", "callFunction": {"@call": "myFunction", "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json", "args": {...}}}}`
 
 
 ## Available Components
 
-**Basic catalog:** AudioPlayer, Button, Card, CheckBox, ChoicePicker, Column, DateTimeInput, Divider, Icon, Image, List, Modal, Row, Slider, Tabs, Text, TextField, Video
+**Basic catalog** (the surface default): AudioPlayer, Button, Card, CheckBox, ChoicePicker, Column, DateTimeInput, Divider, Icon, Image, List, Modal, Row, Slider, Tabs, Text, TextField, Video
 
-**Custom components:** MyWidget
+**Custom catalog** (`https://mycompany.com/cat.json`): MyWidget
+
+These are not in the surface's default catalog: give each of them `"@catalogId": "https://mycompany.com/cat.json"`, and each call to one of this catalog's functions `"catalogId": "https://mycompany.com/cat.json"`.
 
 - **MyWidget**: Properties: foo
 
