@@ -14,11 +14,12 @@ Key behaviors preserved from the old system:
 - FATAL handling: emits HaltEvent for observers to halt execution
 """
 
+from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent, HaltEvent, ObserverAlert, Severity
 
 
-class AlertPolicy:
+class AlertPolicy(AssemblyPolicy):
     """Injects observer alerts into the LLM prompt.
 
     Reads ObserverAlert events from the event list, formats them as

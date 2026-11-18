@@ -2,41 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from dirty_equals import HasAttributes
 
 from ag2 import Agent, Context, observer
-from ag2.events import BaseEvent, HumanInputRequest, HumanMessage, ModelMessage, ModelResponse, ToolCallEvent
+from ag2.events import BaseEvent, HumanInputRequest, HumanMessage, ModelResponse, ToolCallEvent
 from ag2.middleware import BaseMiddleware, Middleware
 from ag2.middleware.base import AgentTurn
 from ag2.plugin import Plugin
-from ag2.testing import TestConfig
-
-
-class MockClient:
-    """Minimal LLM client that records which prompt was active and returns a fixed reply."""
-
-    def __init__(self, mock: MagicMock) -> None:
-        self.mock = mock
-
-    def copy(self) -> "MockClient":
-        return self
-
-    def create(self) -> "MockClient":
-        return self
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        self.mock(context.prompt)
-        return ModelResponse(ModelMessage("reply"))
+from ag2.testing import TestConfig, TrackingConfig
 
 
 @pytest.mark.asyncio
@@ -91,31 +69,34 @@ class TestPluginTools:
 
 @pytest.mark.asyncio
 class TestPluginPrompts:
-    async def test_static(self, mock: MagicMock) -> None:
+    async def test_static(self) -> None:
         plugin = Plugin(prompt="from plugin")
-        agent = Agent("agent", config=MockClient(mock), plugins=[plugin])
+        config = TrackingConfig(TestConfig("reply"))
+        agent = Agent("agent", config=config, plugins=[plugin])
 
         await agent.ask("Hi!")
-        mock.assert_called_once_with(["from plugin"])
+        assert config.calls == [HasAttributes(prompt=("from plugin",))]
 
-    async def test_dynamic(self, mock: MagicMock) -> None:
+    async def test_dynamic(self) -> None:
         plugin = Plugin()
 
         @plugin.prompt
         async def my_prompt() -> str:
             return "dynamic"
 
-        agent = Agent("agent", config=MockClient(mock), plugins=[plugin])
+        config = TrackingConfig(TestConfig("reply"))
+        agent = Agent("agent", config=config, plugins=[plugin])
         await agent.ask("Hi!")
-        mock.assert_called_once_with(["dynamic"])
+        assert config.calls == [HasAttributes(prompt=("dynamic",))]
 
-    async def test_multiple_plugins_ordered(self, mock: MagicMock) -> None:
+    async def test_multiple_plugins_ordered(self) -> None:
         p1 = Plugin(prompt="first")
         p2 = Plugin(prompt="second")
-        agent = Agent("agent", config=MockClient(mock), plugins=[p1, p2])
+        config = TrackingConfig(TestConfig("reply"))
+        agent = Agent("agent", config=config, plugins=[p1, p2])
 
         await agent.ask("Hi!")
-        mock.assert_called_once_with(["first", "second"])
+        assert config.calls == [HasAttributes(prompt=("first", "second"))]
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@
 import asyncio
 import json
 import sys
+from collections.abc import Awaitable
 from pathlib import Path
 from uuid import uuid4
 
@@ -267,6 +268,7 @@ class TestDefaultBootstrap:
         assert await store.exists("/memory/SKILL.md")
 
         root_skill = await store.read("/SKILL.md")
+        assert root_skill is not None
         assert "test-agent" in root_skill
 
     async def test_sentinel_prevents_rebootstrap(self) -> None:
@@ -781,7 +783,7 @@ class TestSqliteKnowledgeStore:
         """
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
-            ops = []
+            ops: list[Awaitable[object]] = []
             for i in range(50):
                 path = f"/t/{i}"
                 ops.append(store.write(path, f"value-{i}"))

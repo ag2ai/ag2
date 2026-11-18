@@ -14,15 +14,12 @@ These tests isolate both components from the full Agent stack to verify
 edge cases not covered by Agent integration tests.
 """
 
-from collections.abc import Sequence
-from typing import Any, Self
 from unittest.mock import MagicMock
 
 import pytest
 
 from ag2 import Agent, Context
 from ag2.assembly import AssemblerMiddleware
-from ag2.config import LLMClient, ModelConfig
 from ag2.events import (
     BaseEvent,
     HaltEvent,
@@ -31,12 +28,12 @@ from ag2.events import (
     ObserverAlert,
     Severity,
     ToolCallEvent,
-    ToolCallsEvent,
 )
 from ag2.middleware import HaltCheckMiddleware, Middleware
 from ag2.observers import BaseObserver
-from ag2.policies import AlertPolicy
+from ag2.policies import AlertPolicy, SlidingWindowPolicy
 from ag2.stream import MemoryStream
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final import tool
 from ag2.watch import EventWatch
 
@@ -47,45 +44,6 @@ pytestmark = pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWar
 def echo_tool(value: str) -> str:
     """Echoes back input."""
     return f"echo: {value}"
-
-
-class _RecordingClient(LLMClient):
-    """LLM client that records calls and returns canned responses."""
-
-    def __init__(self, *responses: ModelResponse | ToolCallEvent | str) -> None:
-        self._responses = list(responses)
-        self._call_count = 0
-        self.calls: list[tuple[list[BaseEvent], list[str]]] = []
-
-    async def __call__(
-        self,
-        messages: Sequence[BaseEvent],
-        context: Context,
-        **kwargs: Any,
-    ) -> ModelResponse:
-        self.calls.append((list(messages), list(context.prompt)))
-        resp = self._responses[self._call_count] if self._call_count < len(self._responses) else "done"
-        self._call_count += 1
-        if isinstance(resp, str):
-            return ModelResponse(message=ModelMessage(content=resp))
-        if isinstance(resp, ToolCallEvent):
-            return ModelResponse(tool_calls=ToolCallsEvent(calls=[resp]))
-        return resp
-
-
-class _RecordingConfig(ModelConfig):
-    __test__ = False
-
-    def __init__(self, *responses: ModelResponse | ToolCallEvent | str) -> None:
-        self._responses = responses
-        self.client: _RecordingClient | None = None
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> _RecordingClient:
-        self.client = _RecordingClient(*self._responses)
-        return self.client
 
 
 class TestAlertPolicyUnit:
@@ -291,14 +249,13 @@ class TestHaltCheckMiddleware:
     @pytest.mark.asyncio
     async def test_no_halt_passes_through(self) -> None:
         """Without any FATAL alert, LLM is called normally."""
-        config = _RecordingConfig("normal response")
+        config = TrackingConfig(TestConfig("normal response"))
 
         agent = Agent("test", config=config, assembly=[AlertPolicy()])
         reply = await agent.ask("Hi")
 
         assert reply.body == "normal response"
-        assert config.client is not None
-        assert config.client._call_count == 1
+        assert len(config.calls) == 1
 
     @pytest.mark.asyncio
     async def test_halt_short_circuits_second_llm_call(self) -> None:
@@ -307,9 +264,11 @@ class TestHaltCheckMiddleware:
         Flow: LLM call 1 returns tool call -> ModelResponse fires FATAL observer
         -> tool executes -> LLM call 2 intercepted by HaltCheckMiddleware.
         """
-        config = _RecordingConfig(
-            ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
-            "should-not-reach",
+        config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
+                "should-not-reach",
+            )
         )
 
         class _FatalOnFirst(BaseObserver):
@@ -341,15 +300,16 @@ class TestHaltCheckMiddleware:
         assert reply.body is not None
         assert "HALTED" in reply.body
         # Second LLM call was short-circuited
-        assert config.client is not None
-        assert config.client._call_count == 1
+        assert len(config.calls) == 1
 
     @pytest.mark.asyncio
     async def test_registered_as_middleware_halts_the_same_way(self) -> None:
         """The middleware= replacement for assembly= stops the second LLM call."""
-        config = _RecordingConfig(
-            ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
-            "should-not-reach",
+        config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
+                "should-not-reach",
+            )
         )
 
         class _Fatal(BaseObserver):
@@ -372,15 +332,16 @@ class TestHaltCheckMiddleware:
         reply = await agent.ask("Hi")
 
         assert reply.body == "HALTED: FATAL: Stop now"
-        assert config.client is not None
-        assert config.client._call_count == 1
+        assert len(config.calls) == 1
 
     @pytest.mark.asyncio
     async def test_halt_event_on_stream(self) -> None:
         """HaltEvent is observable on the stream."""
-        config = _RecordingConfig(
-            ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
-            "after",
+        config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
+                "after",
+            )
         )
 
         class _Fatal(BaseObserver):
@@ -414,9 +375,11 @@ class TestHaltCheckMiddleware:
     @pytest.mark.asyncio
     async def test_nonfatal_does_not_halt(self) -> None:
         """Non-fatal alerts don't trigger HaltCheckMiddleware."""
-        config = _RecordingConfig(
-            ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
-            "final result",
+        config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
+                "final result",
+            )
         )
 
         class _Warning(BaseObserver):
@@ -441,15 +404,16 @@ class TestHaltCheckMiddleware:
 
         # Should complete normally — second LLM call happens
         assert reply.body == "final result"
-        assert config.client is not None
-        assert config.client._call_count == 2
+        assert len(config.calls) == 2
 
     @pytest.mark.asyncio
     async def test_concurrent_fatal_from_two_observers(self) -> None:
         """Two observers both emit FATAL in the same turn — handled gracefully."""
-        config = _RecordingConfig(
-            ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
-            "should-not-reach",
+        config = TrackingConfig(
+            TestConfig(
+                ToolCallEvent(name="echo_tool", arguments='{"value": "x"}'),
+                "should-not-reach",
+            )
         )
 
         class _FatalObs(BaseObserver):
@@ -482,18 +446,12 @@ class TestAlertPolicyOrdering:
 
     def test_alert_before_reduction_no_warning(self) -> None:
         """AlertPolicy before SlidingWindowPolicy produces no warnings."""
-        from ag2.assembly import AssemblerMiddleware
-        from ag2.policies import SlidingWindowPolicy
-
         policies = [AlertPolicy(), SlidingWindowPolicy(50)]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert warnings == []
 
     def test_reduction_before_alert_warns(self) -> None:
         """SlidingWindowPolicy before AlertPolicy produces a warning."""
-        from ag2.assembly import AssemblerMiddleware
-        from ag2.policies import SlidingWindowPolicy
-
         policies = [SlidingWindowPolicy(50), AlertPolicy()]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert len(warnings) == 1

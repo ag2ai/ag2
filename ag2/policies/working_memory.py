@@ -4,12 +4,13 @@
 
 """WorkingMemoryPolicy — injects persistent working memory."""
 
+from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 from ag2.knowledge import WORKING_MEMORY_PATH, KnowledgeStore
 
 
-class WorkingMemoryPolicy:
+class WorkingMemoryPolicy(AssemblyPolicy):
     """Injects /memory/working.md from the knowledge store.
 
     Working memory is the agent's persistent state -- updated by

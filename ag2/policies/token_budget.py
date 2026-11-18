@@ -5,11 +5,12 @@
 """TokenBudgetPolicy — keep events within a token budget."""
 
 from ag2._replay import replayable_span
+from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 
 
-class TokenBudgetPolicy:
+class TokenBudgetPolicy(AssemblyPolicy):
     """Keep events within a token budget.
 
     Estimates tokens by character count. Retains most recent events first.

@@ -5,11 +5,12 @@
 """SlidingWindowPolicy — keep the last N events."""
 
 from ag2._replay import replayable_span
+from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
 from ag2.events import BaseEvent
 
 
-class SlidingWindowPolicy:
+class SlidingWindowPolicy(AssemblyPolicy):
     """Keep the last N events. Drop older events.
 
     The window is a target, not a guarantee: events the cut orphaned are dropped
