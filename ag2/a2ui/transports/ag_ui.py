@@ -230,7 +230,7 @@ def _request_from_agui(core: "_A2UITurnCore", incoming: RunAgentInput) -> A2UISe
         capability_sources=[forwarded],
         data_model_source=forwarded,
     )
-    current_inputs.extend(TextInput(p) for p in renderer.prompts[0])
+    current_inputs.extend(TextInput(p) for p in renderer.all_prompts)
     return A2UIServerRequest(
         current_inputs=current_inputs,
         history=history,

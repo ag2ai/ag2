@@ -6,6 +6,7 @@
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from itertools import chain
 
 from .._types import A2UIVersion, JsonObject, JsonValue
 from ..actions import A2UIEventAction
@@ -28,6 +29,11 @@ class A2UIRendererInput:
     """``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0); ``None`` when the request has none."""
     data_model: dict[str, JsonObject] | None = None
     """``a2uiClientDataModel`` (``a2uiRendererDataModel`` in v1.0) surfaces; ``None`` when absent."""
+
+    @property
+    def all_prompts(self) -> tuple[str, ...]:
+        """Every group's prompts in request order, for a transport that places them together."""
+        return tuple(chain.from_iterable(self.prompts))
 
 
 def read_renderer_input(

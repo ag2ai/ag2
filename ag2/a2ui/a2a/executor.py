@@ -40,9 +40,9 @@ class _IncomingRequest:
     awaiting_input: bool
 
 
-# Per-request carrier for the client→server interactions parsed in ``execute``
-# (where the raw A2UI DataParts are available, before they are rewritten to
-# text) so ``_run_one_turn`` can surface them as A2UIClientEvents. A ContextVar
+# Per-request carrier for the ``A2UITurn`` opened in ``execute`` (where the raw
+# A2UI DataParts are still available, before they are rewritten to text) and for
+# whether the task was awaiting input, so ``_run_one_turn`` reuses that turn. A ContextVar
 # keeps this coroutine-local — the executor instance is shared across requests,
 # so a plain attribute would race between concurrent turns.
 _INCOMING_REQUEST: "contextvars.ContextVar[_IncomingRequest | None]" = contextvars.ContextVar(

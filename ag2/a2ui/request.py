@@ -113,7 +113,7 @@ def parse_request(
     renderer = read_renderer_input(
         version_key, resolve_action, envelope_groups=[raw_a2ui], capability_sources=[data], data_model_source=data
     )
-    current_inputs.extend(TextInput(p) for p in renderer.prompts[0])
+    current_inputs.extend(TextInput(p) for p in renderer.all_prompts)
 
     return A2UIServerRequest(
         current_inputs=current_inputs,
