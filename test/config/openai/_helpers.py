@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Responses API scaffolding shared by the hosted-tool tests."""
+"""Scaffolding shared by the OpenAI client tests: Responses API events and Chat Completions streams."""
 
 import json
 from typing import Any
@@ -197,3 +197,19 @@ def calls(events: list[BaseEvent]) -> list[BuiltinToolCallEvent]:
 
 def results(events: list[BaseEvent]) -> list[BuiltinToolResultEvent]:
     return [e for e in events if isinstance(e, BuiltinToolResultEvent)]
+
+
+def completion_chunk(delta: dict[str, Any], finish_reason: str | None = None) -> dict[str, Any]:
+    """One Chat Completions stream chunk carrying `delta` on choice 0."""
+    return {
+        "id": "chatcmpl_1",
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": "test-model",
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    }
+
+
+def completion_sse(chunks: list[dict[str, Any]]) -> bytes:
+    """Chat Completions chunks as one SSE stream body, ``[DONE]`` included."""
+    return "".join(f"data: {json.dumps(c)}\n\n" for c in chunks).encode() + b"data: [DONE]\n\n"
