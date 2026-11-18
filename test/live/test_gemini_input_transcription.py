@@ -2,7 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 import ssl
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 from pathlib import Path
@@ -21,65 +23,71 @@ from google.genai import Client
 from google.genai import types as gtypes
 
 from ag2 import MemoryStream
-from ag2.events import ModelResponse, TranscriptionChunkEvent, TranscriptionCompletedEvent
+from ag2.events import ModelMessageChunk, ModelResponse, TranscriptionChunkEvent, TranscriptionCompletedEvent
 from ag2.live import LiveAgent, gemini
-
-pytestmark = pytest.mark.asyncio
 
 HOST = "127.0.0.1"
 NATIVE_AUDIO_MODEL = "gemini-2.5-flash-native-audio-preview-09-2025"
 
 
+@dataclass(frozen=True, slots=True)
 class Certificate:
-    """A self-signed certificate for 127.0.0.1: the SDK only dials `wss://`."""
-
-    def __init__(self, directory: Path) -> None:
-        key = ec.generate_private_key(ec.SECP256R1())
-        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, HOST)])
-        cert = (
-            x509
-            .CertificateBuilder()
-            .subject_name(name)
-            .issuer_name(name)
-            .public_key(key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.now(UTC) - timedelta(minutes=5))
-            .not_valid_after(datetime.now(UTC) + timedelta(hours=1))
-            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ip_address(HOST))]), critical=False)
-            .sign(key, hashes.SHA256())
-        )
-        self.cert_pem = cert.public_bytes(serialization.Encoding.PEM)
-        self.cert_file = directory / "cert.pem"
-        self.key_file = directory / "key.pem"
-        self.cert_file.write_bytes(self.cert_pem)
-        self.key_file.write_bytes(
-            key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption(),
-            )
-        )
+    cert_file: Path
+    key_file: Path
 
 
 @pytest.fixture(scope="module")
 def certificate(tmp_path_factory: pytest.TempPathFactory) -> Certificate:
-    return Certificate(tmp_path_factory.mktemp("tls"))
+    """Generate a self-signed certificate for the SDK's local WSS connection."""
+    directory = tmp_path_factory.mktemp("tls")
+    cert_file = directory / "cert.pem"
+    key_file = directory / "key.pem"
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, HOST)])
+    now = datetime.now(UTC)
+    cert = (
+        x509
+        .CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(hours=1))
+        .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ip_address(HOST))]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_file.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return Certificate(cert_file, key_file)
 
 
 class LiveServer:
-    """A local Gemini Live endpoint: completes the setup, then sends one turn of server content."""
+    """A local Gemini Live endpoint that sends scripted server content after setup."""
 
     def __init__(self, certificate: Certificate, *turn: gtypes.LiveServerContent) -> None:
         self._certificate = certificate
         self._turn = turn
         self._server: websockets.asyncio.server.Server | None = None
+        self._connection: websockets.asyncio.server.ServerConnection | None = None
 
     async def _handle(self, connection: websockets.asyncio.server.ServerConnection) -> None:
         await connection.recv()  # the session setup
+        self._connection = connection
         await connection.send(_wire(gtypes.LiveServerMessage(setup_complete=gtypes.LiveServerSetupComplete())))
         for content in self._turn:
-            await connection.send(_wire(gtypes.LiveServerMessage(server_content=content)))
+            await self.send(content)
         await connection.wait_closed()
+
+    async def send(self, content: gtypes.LiveServerContent) -> None:
+        assert self._connection is not None
+        await self._connection.send(_wire(gtypes.LiveServerMessage(server_content=content)))
 
     async def __aenter__(self) -> "LiveServer":
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -99,7 +107,7 @@ class LiveServer:
             api_key="test-key-not-used",
             http_options=gtypes.HttpOptions(
                 base_url=f"https://{HOST}:{port}",
-                async_client_args={"ssl": ssl.create_default_context(cadata=self._certificate.cert_pem.decode())},
+                async_client_args={"ssl": ssl.create_default_context(cafile=self._certificate.cert_file)},
             ),
         )
 
@@ -116,175 +124,137 @@ def said(text: str) -> gtypes.LiveServerContent:
     return gtypes.LiveServerContent(output_transcription=gtypes.Transcription(text=text))
 
 
-async def test_fragments_complete_when_the_generation_completes(certificate: Certificate) -> None:
-    # Before Gemini 3, the user's words arrive as fragments, and the Gemini API never
-    # marks one `finished`: what was heard so far completes with the generation.
-    async with LiveServer(
-        certificate,
-        heard(" What is"),
-        heard(" the weather"),
-        heard(" today?"),
-        said("Sunny."),
-        gtypes.LiveServerContent(generation_complete=True),
-        heard(" Thanks."),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
+def _live_agent(server: LiveServer, stream: MemoryStream, model: str) -> LiveAgent:
+    return LiveAgent(
+        "assistant",
+        config=gemini.RealTimeConfig(
+            model,
+            input=gemini.InputConfig(transcribe=True),
+            client=server.client(),
+        ),
+        stream=stream,
+    )
+
+
+async def _completed_transcripts(
+    certificate: Certificate,
+    *content: gtypes.LiveServerContent,
+    model: str = NATIVE_AUDIO_MODEL,
+) -> list[str]:
+    async with LiveServer(certificate, *content) as server:
         stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                NATIVE_AUDIO_MODEL,
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
-        )
+        agent = _live_agent(server, stream, model)
         transcripts: list[str] = []
         stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
 
-        async with stream.get(ModelResponse) as turn_done, agent.run():
+        async with asyncio.timeout(5), stream.get(ModelResponse) as turn_done, agent.run():
             await turn_done
 
-    assert transcripts == ["What is the weather today?", "Thanks."]
+    return transcripts
 
 
-async def test_fragments_complete_when_the_user_interrupts(certificate: Certificate) -> None:
-    async with LiveServer(
-        certificate,
-        heard("Tell me a story"),
-        said("Once upon"),
-        heard(" Stop."),
-        gtypes.LiveServerContent(interrupted=True),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
-        stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                NATIVE_AUDIO_MODEL,
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
-        )
-        transcripts: list[str] = []
-        stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
-
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
-
-    assert transcripts == ["Tell me a story Stop."]
-
-
-async def test_fragments_complete_on_finished(certificate: Certificate) -> None:
-    # On Vertex AI the last fragment can carry `finished`; the turn completing
-    # afterwards does not send the transcript a second time.
-    async with LiveServer(
-        certificate,
-        heard("What is"),
-        heard(" the weather", finished=True),
-        said("Sunny."),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
-        stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                NATIVE_AUDIO_MODEL,
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
-        )
-        transcripts: list[str] = []
-        stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
-
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
-
-    assert transcripts == ["What is the weather"]
-
-
-async def test_gemini_3_transcription_is_complete_as_it_arrives(certificate: Certificate) -> None:
-    # Gemini 3.x Live sends one final transcription, without `finished`.
-    async with LiveServer(
-        certificate,
-        heard("What is the weather today?"),
-        said("Sunny."),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
-        stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                "gemini-3.8-live",
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
-        )
-        transcription: list[TranscriptionChunkEvent | TranscriptionCompletedEvent] = []
-        stream.where(TranscriptionChunkEvent | TranscriptionCompletedEvent).subscribe(
-            lambda event: transcription.append(event)
+@pytest.mark.asyncio
+class TestGeminiInputTranscription:
+    async def test_fragments_complete_when_the_generation_completes(self, certificate: Certificate) -> None:
+        # Before Gemini 3, the Gemini API can send fragments without marking the last one finished.
+        transcripts = await _completed_transcripts(
+            certificate,
+            heard(" What is"),
+            heard(" the weather"),
+            heard(" today?"),
+            said("Sunny."),
+            gtypes.LiveServerContent(generation_complete=True),
+            heard(" Thanks."),
+            gtypes.LiveServerContent(turn_complete=True),
         )
 
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
+        assert transcripts == ["What is the weather today?", "Thanks."]
 
-    assert transcription == [
-        TranscriptionChunkEvent("What is the weather today?"),
-        TranscriptionCompletedEvent("What is the weather today?"),
-    ]
-
-
-async def test_gemini_3_model_resource_name_is_complete_as_it_arrives(certificate: Certificate) -> None:
-    async with LiveServer(
-        certificate,
-        heard("What is"),
-        heard(" the weather today?"),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
-        stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                "models/gemini-3.8-live",
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
+    async def test_fragments_complete_when_the_user_interrupts(self, certificate: Certificate) -> None:
+        transcripts = await _completed_transcripts(
+            certificate,
+            heard("Tell me a story"),
+            said("Once upon"),
+            heard(" Stop."),
+            gtypes.LiveServerContent(interrupted=True),
+            gtypes.LiveServerContent(turn_complete=True),
         )
-        transcripts: list[str] = []
-        stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
 
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
+        assert transcripts == ["Tell me a story Stop."]
 
-    assert transcripts == ["What is", "the weather today?"]
-
-
-async def test_gemini_3_5_translate_joins_fragments(certificate: Certificate) -> None:
-    # The 3.5 translate model still sends fragments, as models before Gemini 3 do.
-    async with LiveServer(
-        certificate,
-        heard("What is"),
-        heard(" the weather today?"),
-        gtypes.LiveServerContent(turn_complete=True),
-    ) as server:
-        stream = MemoryStream()
-        agent = LiveAgent(
-            "assistant",
-            config=gemini.RealTimeConfig(
-                "gemini-3.5-live-translate-preview",
-                input=gemini.InputConfig(transcribe=True),
-                client=server.client(),
-            ),
-            stream=stream,
+    async def test_fragments_complete_on_finished(self, certificate: Certificate) -> None:
+        # On Vertex AI, the last fragment can carry finished before the turn completes.
+        transcripts = await _completed_transcripts(
+            certificate,
+            heard("What is"),
+            heard(" the weather", finished=True),
+            said("Sunny."),
+            gtypes.LiveServerContent(turn_complete=True),
         )
-        transcripts: list[str] = []
-        stream.where(TranscriptionCompletedEvent).subscribe(lambda event: transcripts.append(event.content))
 
-        async with stream.get(ModelResponse) as turn_done, agent.run():
-            await turn_done
+        assert transcripts == ["What is the weather"]
 
-    assert transcripts == ["What is the weather today?"]
+    async def test_gemini_3_transcription_is_complete_as_it_arrives(self, certificate: Certificate) -> None:
+        async with LiveServer(
+            certificate,
+            heard("What is the weather today?"),
+            said("Sunny."),
+            gtypes.LiveServerContent(turn_complete=True),
+        ) as server:
+            stream = MemoryStream()
+            agent = _live_agent(server, stream, "gemini-3.8-live")
+            transcription: list[TranscriptionChunkEvent | TranscriptionCompletedEvent] = []
+            stream.where(TranscriptionChunkEvent | TranscriptionCompletedEvent).subscribe(
+                lambda event: transcription.append(event)
+            )
+
+            async with asyncio.timeout(5), stream.get(ModelResponse) as turn_done, agent.run():
+                await turn_done
+
+        assert transcription == [
+            TranscriptionChunkEvent("What is the weather today?"),
+            TranscriptionCompletedEvent("What is the weather today?"),
+        ]
+
+    async def test_gemini_3_model_resource_name_is_complete_as_it_arrives(self, certificate: Certificate) -> None:
+        transcripts = await _completed_transcripts(
+            certificate,
+            heard("What is"),
+            heard(" the weather today?"),
+            gtypes.LiveServerContent(turn_complete=True),
+            model="models/gemini-3.8-live",
+        )
+
+        assert transcripts == ["What is", "the weather today?"]
+
+    async def test_gemini_3_5_translate_transcription_is_complete_as_it_arrives(self, certificate: Certificate) -> None:
+        first = "What is the weather like in Paris today?"
+        second = "Thanks. And what about tomorrow?"
+        async with LiveServer(certificate) as server:
+            stream = MemoryStream()
+            agent = _live_agent(server, stream, "gemini-3.5-live-translate-preview")
+            transcription: list[TranscriptionChunkEvent | TranscriptionCompletedEvent] = []
+            stream.where(TranscriptionChunkEvent | TranscriptionCompletedEvent).subscribe(
+                lambda event: transcription.append(event)
+            )
+
+            async with asyncio.timeout(5), agent.run():
+                for text in (first, second):
+                    # The API sends an empty transcription after each utterance.
+                    # Wait for completion before sending it.
+                    async with stream.get(TranscriptionCompletedEvent) as completed:
+                        await server.send(heard(text))
+                        await completed
+                    await server.send(gtypes.LiveServerContent(input_transcription=gtypes.Transcription()))
+
+                # The next output chunk confirms the last empty transcription was processed.
+                async with stream.get(ModelMessageChunk) as processed:
+                    await server.send(said("Translated speech."))
+                    await processed
+
+        assert transcription == [
+            TranscriptionChunkEvent(first),
+            TranscriptionCompletedEvent(first),
+            TranscriptionChunkEvent(second),
+            TranscriptionCompletedEvent(second),
+        ]

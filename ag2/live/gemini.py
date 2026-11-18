@@ -371,11 +371,13 @@ async def _handle_server_content(
 class _InputTranscription:
     """The user's speech in the current utterance, sent as chunks and then as one completed transcript.
 
-    Gemini 3.x Live sends one final transcription per utterance, so each one is
-    complete as it arrives. Earlier models send fragments, which the Gemini API
-    never marks `finished` (Vertex AI may): they are joined until one is
-    `finished`, or the generation completes, is interrupted, or the turn
-    completes. This is the split Google's ADK makes in `GeminiLlmConnection`.
+    Gemini 3.x Live, the live translate model included, sends one final
+    transcription per utterance, so each one is complete as it arrives. Earlier
+    models send fragments, which the Gemini API never marks `finished` (Vertex
+    AI may): they are joined until one is `finished`, or the generation
+    completes, is interrupted, or the turn completes. This is the split Google's
+    ADK makes in `GeminiLlmConnection`, except that ADK joins the translate
+    model's transcriptions, which never reach a generation or turn boundary.
 
     The Live API does not order the input transcription against the other
     server messages, so a fragment that arrives after one of those boundaries
@@ -406,9 +408,8 @@ class _InputTranscription:
 
 
 def _sends_final_input_transcription(model: str) -> bool:
-    # ADK's `is_gemini_3_x_live` name test: the 3.5 translate model still sends fragments.
     name = model.rsplit("/", 1)[-1]
-    return name.startswith("gemini-3.") and "-live" in name and not name.startswith("gemini-3.5-live-translate")
+    return name.startswith("gemini-3.") and "-live" in name
 
 
 def _encode_args(args: dict[str, Any] | None) -> str:
