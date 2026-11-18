@@ -10,7 +10,7 @@ from .base import ChangeCallback, ChangeSubscription, _normalize
 from .polling import PollingChangeWatcher
 
 try:
-    from redis import asyncio as _aioredis  # type: ignore[import-not-found]
+    from redis import asyncio as _aioredis
 except ImportError:
     _aioredis = None  # type: ignore[assignment]
 

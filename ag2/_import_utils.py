@@ -386,11 +386,9 @@ def _mark_object(o: T, dep_target: str) -> T:
 
     markname = dep_target.replace("-", "_")
     pytest_mark_markname = getattr(pytest.mark, markname)
-    pytest_mark_o = pytest_mark_markname(o)
+    pytest_mark_o: T = pytest.mark.aux_neg_flag(pytest_mark_markname(o))
 
-    pytest_mark_o = pytest.mark.aux_neg_flag(pytest_mark_o)
-
-    return pytest_mark_o  # type: ignore[no-any-return]
+    return pytest_mark_o
 
 
 def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> Callable[[G], G]:
@@ -430,7 +428,7 @@ def run_for_optional_imports(modules: str | Iterable[str], dep_target: str) -> C
                         )
                     return o(*args, **kwargs)
 
-        pytest_mark_o: G = _mark_object(wrapped, dep_target)  # type: ignore[assignment]
+        pytest_mark_o: G = _mark_object(wrapped, dep_target)
 
         return pytest_mark_o
 
@@ -452,14 +450,14 @@ def skip_on_missing_imports(modules: str | Iterable[str], dep_target: str) -> Ca
 
         def decorator(o: T) -> T:
             pytest_mark_o = _mark_object(o, dep_target)
-            return pytest_mark_o  # type: ignore[no-any-return]
+            return pytest_mark_o
 
     else:
 
         def decorator(o: T) -> T:
             pytest_mark_o = _mark_object(o, dep_target)
 
-            return pytest.mark.skip(  # type: ignore[return-value,no-any-return]
+            return pytest.mark.skip(  # type: ignore[return-value]
                 f"Missing module{'s' if len(missing_modules) > 1 else ''}: {', '.join(missing_modules)}. Install using 'pip install ag2[{dep_target}]'"
             )(pytest_mark_o)
 
