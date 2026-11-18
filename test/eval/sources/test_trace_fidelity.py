@@ -12,9 +12,8 @@ a divergence between what telemetry emits and what scorers expect surfaces here
 rather than silently scoring a replayed trace incorrectly.
 """
 
-import json
-
 import pytest
+from dirty_equals import HasAttributes, IsInstance, IsJson, IsStr
 
 pytest.importorskip("opentelemetry.sdk")
 
@@ -166,13 +165,11 @@ async def test_structured_tool_result_survives_the_span_round_trip(otel_provider
 
     spans = readable_spans_to_trace(exporter.get_finished_spans())
 
-    results = spans.events_of(ToolResultEvent)
-    assert len(results) == 1
-    [part] = results[0].result.parts
+    [result] = spans.events_of(ToolResultEvent)
     # One text part holding the JSON: the shape judge/attribution scorers read.
-    assert isinstance(part, TextInput)
-    assert json.loads(part.content) == {"city": "Oslo", "temp_c": 12}
-    assert part.metadata == {}
+    assert result.result.parts == [
+        IsInstance(TextInput) & HasAttributes(content=IsJson({"city": "Oslo", "temp_c": 12}), metadata={})
+    ]
 
 
 @pytest.mark.asyncio()
@@ -196,10 +193,11 @@ async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_p
 
     await agent.ask("Dump")
 
-    part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
-    assert isinstance(part, TextInput)
-    assert part.content.endswith("...[truncated]")
-    assert part.metadata == {"truncated": True}
+    [result] = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)
+    assert result.result.parts == [
+        IsInstance(TextInput)
+        & HasAttributes(content=IsStr(regex=r"(?s).*\.\.\.\[truncated\]"), metadata={"truncated": True})
+    ]
 
 
 @pytest.mark.asyncio()

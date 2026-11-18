@@ -87,6 +87,8 @@ async def test_two_asks():
     assert (await agent.ask("Hi again!")).body == "second"
 ```
 
+Every agent built from the same persistent config reads that one script. Concurrent asks take turns in whatever order they reach the model, so script them only when the order does not matter.
+
 ## How to test tool execution
 
 You can also use `TestConfig` to yield tool calls. This allows you to test both successful tool execution and error handling. By providing a `ToolCallEvent` as the first response and a string as the final response, you can simulate a complete agent-tool interaction loop.

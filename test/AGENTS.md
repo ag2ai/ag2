@@ -207,7 +207,7 @@ Do **not** instantiate schema classes directly in provider tests — always go t
 
 ### Fixtures
 
-Use the shared `context` pytest fixture from `test/config/conftest.py` (no need to import — pytest discovers it automatically):
+Use the shared `context` pytest fixture from `test/conftest.py` (no need to import — pytest discovers it automatically):
 
 ```python
 async def test_defaults(context: Context) -> None: ...

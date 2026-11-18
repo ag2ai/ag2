@@ -5,7 +5,6 @@
 """Test run_pairwise: produce two variants over a suite, then compare them."""
 
 import json
-from typing import Literal
 
 import pytest
 
@@ -13,19 +12,7 @@ pytest.importorskip("opentelemetry.sdk")
 
 from ag2 import Agent
 from ag2.eval import Suite, run_pairwise
-from ag2.eval.pairwise import PairwiseOutcome
-from ag2.testing import TestConfig
-
-
-class _Scripted:
-    """A PairwiseComparator returning a fixed winner per task_id."""
-
-    def __init__(self, key: str, wins: dict[str, Literal["a", "b", "tie"]]) -> None:
-        self.key = key
-        self._wins = wins
-
-    async def compare(self, *, task, trace_a, trace_b, reference_outputs) -> PairwiseOutcome:
-        return PairwiseOutcome(winner=self._wins.get(task.task_id, "tie"))
+from ag2.testing import TestComparator, TestConfig
 
 
 def _build_a(*, config=None) -> Agent:
@@ -42,7 +29,7 @@ async def test_run_pairwise_produces_then_compares(tmp_path) -> None:
         {"task_id": "t1", "inputs": {"input": "Q1?"}},
         {"task_id": "t2", "inputs": {"input": "Q2?"}},
     ])
-    judge = _Scripted("quality", {"t1": "b", "t2": "b"})
+    judge = TestComparator("quality", {"t1": "b", "t2": "b"})
 
     result = await run_pairwise(
         suite,
@@ -63,7 +50,7 @@ async def test_run_pairwise_produces_then_compares(tmp_path) -> None:
 async def test_run_pairwise_accepts_agent_instances(tmp_path) -> None:
     """``variant_a`` / ``variant_b`` accept prebuilt Agent instances, not just factories."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Q?"}}])
-    judge = _Scripted("quality", {"t1": "b"})
+    judge = TestComparator("quality", {"t1": "b"})
 
     result = await run_pairwise(
         suite,
@@ -81,7 +68,7 @@ async def test_run_pairwise_accepts_agent_instances(tmp_path) -> None:
 async def test_run_pairwise_label_is_recorded_and_serialized(tmp_path) -> None:
     """A user-defined ``label`` is carried on the result and persisted to the run JSON."""
     suite = Suite.from_list([{"task_id": "t1", "inputs": {"input": "Q?"}}])
-    judge = _Scripted("quality", {"t1": "b"})
+    judge = TestComparator("quality", {"t1": "b"})
 
     result = await run_pairwise(
         suite,

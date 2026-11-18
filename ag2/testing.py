@@ -10,6 +10,10 @@ from unittest.mock import MagicMock
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider
+from ag2.eval._types import Winner
+from ag2.eval.dataset.task import Task
+from ag2.eval.pairwise import PairwiseOutcome
+from ag2.eval.trace import Trace
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
@@ -28,6 +32,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "ModelCall",
+    "TestComparator",
     "TestConfig",
     "TestFilesClient",
     "TrackingConfig",
@@ -238,6 +243,9 @@ class TestConfig(ModelConfig):
         times, such as a judge called once per order::
 
             TestConfig("first", "second", persistent=True)
+
+        Every agent built from the same persistent config reads that one script,
+        so concurrent asks take turns in whatever order they reach the model.
         """
         self.events = events
         self._persistent = persistent
@@ -273,3 +281,30 @@ class TestConfig(ModelConfig):
         if self._files is None:
             raise FilesAPIUnsupportedError(type(self).__name__)
         return self._files
+
+
+class TestComparator:
+    """A pairwise comparator that returns a fixed winner per ``task_id``.
+
+    Tasks without a scripted winner come out as a tie. Use it to test what is
+    built on pairwise outcomes — tallies, win-rates, agreement — without a
+    judge model::
+
+        TestComparator("quality", {"t1": "b", "t2": "a"})
+    """
+
+    __test__ = False
+
+    def __init__(self, key: str, winners: Mapping[str, Winner]) -> None:
+        self.key = key
+        self._winners = winners
+
+    async def compare(
+        self,
+        *,
+        task: Task,
+        trace_a: Trace,
+        trace_b: Trace,
+        reference_outputs: dict[str, Any] | None,
+    ) -> PairwiseOutcome:
+        return PairwiseOutcome(winner=self._winners.get(task.task_id, "tie"))
