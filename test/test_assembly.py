@@ -10,6 +10,7 @@ from ag2 import Context
 from ag2.assembly import AssemblerMiddleware
 from ag2.compact import CompactionSummary
 from ag2.events import (
+    BaseEvent,
     ModelMessage,
     ModelReasoning,
     ModelRequest,
@@ -19,6 +20,7 @@ from ag2.events import (
     Severity,
     TextInput,
     ToolCallEvent,
+    ToolResult,
     ToolResultEvent,
 )
 from ag2.knowledge import KnowledgeStore, MemoryKnowledgeStore
@@ -47,7 +49,7 @@ class TestConversationPolicy:
             ModelRequest([TextInput("hello")]),
             ModelResponse(message=ModelMessage(content="hi")),
             ToolCallEvent(name="search", arguments="{}"),
-            ToolResultEvent(id="1", name="search", content="result"),
+            ToolResultEvent(parent_id="1", name="search", result=ToolResult("result")),
             ObserverAlert(source="mon", severity=Severity.WARNING, message="warn"),
         ]
         ctx = Context(stream=MemoryStream())
@@ -71,7 +73,7 @@ class TestConversationPolicy:
             ModelRequest([TextInput("hello")]),
             ProviderReasoning("planning the search"),
             ToolCallEvent(name="search", arguments="{}"),
-            ToolResultEvent(id="1", name="search", content="result"),
+            ToolResultEvent(parent_id="1", name="search", result=ToolResult("result")),
         ]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
@@ -97,7 +99,7 @@ class TestSlidingWindowPolicy:
     @pytest.mark.asyncio
     async def test_no_trim_below_max(self) -> None:
         policy = SlidingWindowPolicy(max_events=10)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         ctx = Context(stream=MemoryStream())
         prompts, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 5
@@ -106,16 +108,15 @@ class TestSlidingWindowPolicy:
     @pytest.mark.asyncio
     async def test_trims_to_max(self) -> None:
         policy = SlidingWindowPolicy(max_events=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
-        assert len(filtered) == 3
-        assert filtered[0].parts[0].content == "msg-7"
+        assert filtered == events[7:]
 
     @pytest.mark.asyncio
     async def test_transparent_adds_note(self) -> None:
         policy = SlidingWindowPolicy(max_events=3, transparent=True)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         prompts, _ = await policy.apply([], events, ctx)
         assert len(prompts) == 1
@@ -126,7 +127,7 @@ class TestTokenBudgetPolicy:
     @pytest.mark.asyncio
     async def test_no_trim_within_budget(self) -> None:
         policy = TokenBudgetPolicy(max_tokens=10000)
-        events = [ModelRequest([TextInput("short")])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("short")])]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         assert len(filtered) == 1
@@ -134,12 +135,12 @@ class TestTokenBudgetPolicy:
     @pytest.mark.asyncio
     async def test_trims_to_budget(self) -> None:
         policy = TokenBudgetPolicy(max_tokens=10, chars_per_token=1)
-        events = [ModelRequest([TextInput("a" * 20)]), ModelRequest([TextInput("b" * 5)])]
+        events: list[BaseEvent] = [ModelRequest([TextInput("a" * 20)]), ModelRequest([TextInput("b" * 5)])]
         ctx = Context(stream=MemoryStream())
         _, filtered = await policy.apply([], events, ctx)
         # Should keep at least the last event that fits
         assert len(filtered) >= 1
-        assert filtered[-1].parts[0].content == "b" * 5
+        assert filtered[-1] == events[-1]
 
 
 class TestAssemblerMiddleware:
@@ -193,27 +194,13 @@ class TestAssemblerMiddleware:
         assert ctx.prompt == ["original"]
 
     def test_validate_order_warns_on_bad_ordering(self) -> None:
-        class _FakePolicy:
-            def __init__(self, n):
-                self.name = n
-
-            async def apply(self, p, e, c):
-                return p, e
-
-        policies = [_FakePolicy("sliding_window"), _FakePolicy("episodic_memory")]
+        policies = [SlidingWindowPolicy(max_events=10), EpisodicMemoryPolicy()]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert len(warnings) == 1
         assert "sliding_window" in warnings[0]
 
     def test_validate_order_no_warnings_for_correct_order(self) -> None:
-        class _FakePolicy:
-            def __init__(self, n):
-                self.name = n
-
-            async def apply(self, p, e, c):
-                return p, e
-
-        policies = [_FakePolicy("episodic_memory"), _FakePolicy("sliding_window")]
+        policies = [EpisodicMemoryPolicy(), SlidingWindowPolicy(max_events=10)]
         warnings = AssemblerMiddleware.validate_order(policies)
         assert len(warnings) == 0
 

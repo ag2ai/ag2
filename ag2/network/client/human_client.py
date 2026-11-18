@@ -28,8 +28,10 @@ not the input modality.
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING
+
+from pydantic import JsonValue
 
 from ..channel import ChannelMetadata
 from ..envelope import EV_CHANNEL_INVITE, EV_CHANNEL_INVITE_ACK, EV_TEXT, Envelope
@@ -324,7 +326,7 @@ class HumanClient:
         type: str,
         target: str | list[str],
         ttl: str | int | None = None,
-        knobs: dict[str, object] | None = None,
+        knobs: Mapping[str, JsonValue] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> Channel:

@@ -131,23 +131,23 @@ def tool_result_to_text(result: ToolResult) -> str:
     return "".join(part.content if isinstance(part, TextInput) else str(part) for part in result.parts)
 
 
-def _value_from(value: Any) -> struct_pb2.Value:  # type: ignore[no-any-unimported]
+def _value_from(value: Any) -> struct_pb2.Value:
     target = struct_pb2.Value()
     json_format.Parse(json.dumps(value, default=_json_default), target)
     return target
 
 
-def _value_to_python(v: struct_pb2.Value) -> Any:  # type: ignore[no-any-unimported]
+def _value_to_python(v: struct_pb2.Value) -> Any:
     return json_format.MessageToDict(v, preserving_proto_field_name=True)
 
 
-def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:  # type: ignore[no-any-unimported]
+def struct_from_dict(payload: dict[str, Any]) -> struct_pb2.Struct:
     s = struct_pb2.Struct()
     json_format.ParseDict(payload, s)
     return s
 
 
-def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:  # type: ignore[no-any-unimported]
+def struct_to_dict(s: struct_pb2.Struct) -> dict[str, Any]:
     if not s or not s.fields:
         return {}
     # Annotated, not cast: the protobuf stubs type the result, an unstubbed install leaves it `Any`.

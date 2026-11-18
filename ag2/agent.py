@@ -994,7 +994,7 @@ class Agent(PluginTarget, Generic[TResult]):
         return tuple(self._system_prompt)
 
     @property
-    def dynamic_prompt(self) -> tuple[PromptType, ...]:
+    def dynamic_prompt(self) -> tuple[Callable[[BaseEvent, Context], Awaitable[str]], ...]:
         """Dynamic prompt hooks, in registration order."""
 
         return tuple(self._dynamic_prompt)

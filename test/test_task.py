@@ -17,7 +17,7 @@ from dirty_equals import IsList
 
 from ag2 import Agent, Context, TaskInject
 from ag2.config import AnthropicConfig
-from ag2.context import ConversationContext
+from ag2.context import ConversationContext, Stream
 from ag2.events import (
     BaseEvent,
     ModelResponse,
@@ -43,7 +43,7 @@ def _agent() -> Agent:
     return Agent(name="researcher", config=AnthropicConfig(model="claude-sonnet-5"))
 
 
-async def _persisted(stream: MemoryStream) -> list[BaseEvent]:
+async def _persisted(stream: Stream) -> list[BaseEvent]:
     """Read durably-persisted events from a MemoryStream's storage.
 
     Note: transient events (``TaskProgress``, ``ModelMessageChunk``) are
@@ -94,11 +94,12 @@ class TestStandaloneLifecycle:
     async def test_clean_exit_auto_completes(self) -> None:
         agent = _agent()
         async with Task(owner_id=agent.name, spec=TaskSpec(title="research X")) as task:
-            assert task.state == TaskState.RUNNING
+            states = [task.state]
             assert task.metadata.spec.title == "research X"
             stream = task.context.stream
 
-        assert task.state == TaskState.COMPLETED
+        states.append(task.state)
+        assert states == [TaskState.RUNNING, TaskState.COMPLETED]
         events = await _persisted(stream)
         types = [type(e) for e in events]
         assert TaskStarted in types

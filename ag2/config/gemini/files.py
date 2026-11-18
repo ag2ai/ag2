@@ -11,6 +11,8 @@ from google.genai import types
 
 from ag2.files.types import FileContent, FileProvider, UploadedFile, _created_at_to_float
 
+from ._compat import build_http_options
+
 if TYPE_CHECKING:
     from ag2.config.gemini.config import GeminiConfig
 
@@ -32,9 +34,7 @@ class GeminiFilesClient:
     __slots__ = ("_client",)
 
     def __init__(self, config: "GeminiConfig") -> None:
-        http_options = (
-            types.HttpOptions(httpx_async_client=config.http_client) if config.http_client is not None else None
-        )
+        http_options = build_http_options(config.http_client, config.api_version)
         self._client = genai.Client(api_key=config.api_key, vertexai=False, http_options=http_options)
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:

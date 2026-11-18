@@ -177,7 +177,10 @@ def test_build_packet_envelope_with_context_set() -> None:
         context_set={"score": 0.9},
     )
     assert env.event_type == EV_PACKET
-    assert env.event_data["context"] == {"score": 0.9}
+    assert env.event_data == {
+        "body": "step done",
+        "context_updates": {"set": {"score": 0.9}, "delete": []},
+    }
 
 
 # ── channels(open, message=...) seed ──────────────────────────────────────

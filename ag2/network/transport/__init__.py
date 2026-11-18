@@ -32,10 +32,10 @@ from .local import LocalLink, LocalLinkClient, LocalLinkEndpoint
 try:
     from .ws import WsLink, WsLinkClient, WsLinkEndpoint, serve_ws
 except ImportError as e:
-    WsLink = missing_additional_dependency("WsLink", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    WsLinkClient = missing_additional_dependency("WsLinkClient", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    WsLinkEndpoint = missing_additional_dependency("WsLinkEndpoint", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
-    serve_ws = missing_additional_dependency("serve_ws", "websockets>=14.0,<17", e)  # type: ignore[misc, assignment]
+    WsLink = missing_additional_dependency("WsLink", "websockets>=14.0,<17", e)  # type: ignore[misc]
+    WsLinkClient = missing_additional_dependency("WsLinkClient", "websockets>=14.0,<17", e)  # type: ignore[misc]
+    WsLinkEndpoint = missing_additional_dependency("WsLinkEndpoint", "websockets>=14.0,<17", e)  # type: ignore[misc]
+    serve_ws = missing_additional_dependency("serve_ws", "websockets>=14.0,<17", e)
 
 __all__ = (
     "ErrorFrame",

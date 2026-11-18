@@ -21,6 +21,7 @@ from typing_extensions import Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.events import Input
+from ag2.exceptions import FilesAPIUnsupportedError
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
@@ -401,4 +402,4 @@ class OpenAIDecisionsConfig(ModelConfig):
 
     def create_files_client(self) -> "FilesClient":
         # The endpoint takes inline data URLs only; an uploaded ``file_id`` is rejected.
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)

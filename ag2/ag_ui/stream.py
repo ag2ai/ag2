@@ -4,7 +4,7 @@
 
 import logging
 from base64 import b64decode, b64encode
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+from collections.abc import AsyncGenerator, Callable, Iterable, Sequence
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -182,7 +182,7 @@ class AGUIStream:
         hitl_hook: HumanHook | None = None,
         accept: str | None = None,
         context_prompt: Callable[[Sequence[ContextEntry]], str | None] | None = client_context_prompt,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str]:
         """Run `incoming` and yield encoded AG-UI events.
 
         `accept` is the request's `Accept` header. The stream is SSE whatever it says.
@@ -191,7 +191,7 @@ class AGUIStream:
         `context_prompt` renders the input's `context` entries into one prompt
         block for the model; `None` leaves them out.
 
-        Wrap the returned iterator in `contextlib.aclosing`: it holds a
+        Wrap the returned generator in `contextlib.aclosing`: it holds a
         channel open across yields.
         """
         command = AGStreamInput(

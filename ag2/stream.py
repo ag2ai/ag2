@@ -189,7 +189,7 @@ class MemoryStream(ABCStream):
         # Agent._execute populates this lazily on first turn — setting it
         # to None here so `getattr(..., None)` returns None instead of
         # hitting a slot-uninitialized AttributeError.
-        self._ag2_turn_lock = None  # type: ignore[assignment]
+        self._ag2_turn_lock = None
 
         if persist_all:
             # Persist every event including transient ones (streaming chunks, lifecycle, etc.)

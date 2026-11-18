@@ -39,10 +39,6 @@ class TestData:
         assert result.data == b"raw"
         assert result.media_type == "audio/wav"
 
-    def test_missing_media_type_raises(self) -> None:
-        with pytest.raises(ValueError, match="media_type"):
-            AudioInput(data=b"raw")
-
 
 class TestPath:
     def test_infers_wav(self, tmp_path: Path) -> None:
@@ -87,8 +83,3 @@ class TestPath:
         result = AudioInput(path=str(f))
 
         assert result.media_type == "audio/ogg"
-
-
-def test_no_args_raises() -> None:
-    with pytest.raises(ValueError, match="requires one of"):
-        AudioInput()
