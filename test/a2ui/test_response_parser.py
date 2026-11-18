@@ -185,9 +185,10 @@ class TestA2UIResponseParserValidation:
     @pytest.fixture()
     def parser_with_schema(self) -> A2UIResponseParser:
         manager = A2UISchemaManager()
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
+            server_to_client_schema=schemas.server_to_client_schema,
         )
 
     def test_validate_valid_create_surface(self, parser_with_schema: A2UIResponseParser) -> None:
@@ -250,10 +251,11 @@ class TestA2UIResponseParserV091Validation:
     @pytest.fixture()
     def parser_v091(self) -> A2UIResponseParser:
         manager = A2UISchemaManager(protocol_version="v0.9.1")
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
 
     def test_accepts_v0_9_1_version_string(self, parser_v091: A2UIResponseParser) -> None:
@@ -289,10 +291,11 @@ class TestA2UIResponseParserV1Validation:
                 },
             },
         )
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
 
     def test_call_renderer_function_accepts_a_function_the_agent_may_call(
@@ -563,10 +566,11 @@ class TestSurfaceCatalogValidation:
                 },
             },
         )
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
 
     @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
@@ -731,10 +735,11 @@ def test_component_can_select_basic_catalog_over_custom_surface() -> None:
             },
         },
     )
+    schemas = manager.validation_schemas()
     parser = A2UIResponseParser(
         protocol=manager.protocol,
-        server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-        schema_registry=manager.validation_schemas().schema_registry,
+        server_to_client_schema=schemas.server_to_client_schema,
+        schema_registry=schemas.schema_registry,
     )
 
     result = parser.validate([
@@ -775,10 +780,11 @@ class TestComponentCatalogValidation:
                 },
             },
         )
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
 
     @pytest.mark.parametrize("message_key", ["createSurface", "updateComponents"])
@@ -873,10 +879,11 @@ class TestCatalogFunctionDefinitions:
                 "functions": {"lookupDefinition": function_schema},
             },
         )
+        schemas = manager.validation_schemas()
         parser = A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
         call: dict[str, Any] = {"@call": "lookup", "catalogId": "https://example.com/catalog.json", "args": {"id": "x"}}
         if call_kind == "rpc":
@@ -928,10 +935,11 @@ class TestCatalogFunctionDefinitions:
                 "functions": {"lookupDefinition": function_schema},
             },
         )
+        schemas = manager.validation_schemas()
         parser = A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
         result = parser.validate([
             {
@@ -953,10 +961,11 @@ class TestPerComponentValidation:
     @pytest.fixture()
     def parser_with_components(self) -> A2UIResponseParser:
         manager = A2UISchemaManager()
+        schemas = manager.validation_schemas()
         return A2UIResponseParser(
             protocol=manager.protocol,
-            server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-            schema_registry=manager.validation_schemas().schema_registry,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
         )
 
     def test_button_missing_child_gives_actionable_error(self, parser_with_components: A2UIResponseParser) -> None:
@@ -1029,10 +1038,11 @@ class TestPerComponentValidation:
 
 def test_per_component_validation_works_without_catalog_id() -> None:
     manager = A2UISchemaManager()
+    schemas = manager.validation_schemas()
     parser = A2UIResponseParser(
         protocol=manager.protocol,
-        server_to_client_schema=manager.validation_schemas().server_to_client_schema,
-        schema_registry=manager.validation_schemas().schema_registry,
+        server_to_client_schema=schemas.server_to_client_schema,
+        schema_registry=schemas.schema_registry,
         # catalog_id intentionally omitted — should still drill into components.
     )
     ops = [
