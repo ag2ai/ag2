@@ -67,6 +67,19 @@ class A2UIOffer:
     def sends_ui(self) -> bool:
         return self.delivery is A2UIDelivery.UI
 
+    def answers_function_catalog(self, catalog_id: str | None) -> bool:
+        """Whether a ``callAgentFunction`` naming ``catalog_id`` may select a local handler by its ``@call`` name.
+
+        A call naming another catalog than the turn offers does not select a handler merely because its name
+        matches; it is answered ``UNKNOWN_FUNCTION``. With no catalog in common the renderer can only name its own
+        catalog and waits for the answer (v1_0 a2ui_protocol.md, "callAgentFunction": "The renderer MUST set
+        `catalogId`"), and a handler belongs to no catalog (ADR 0040), so any catalog is accepted. A turn that
+        withdrew A2UI offers no catalog, so only a call that names none is accepted.
+        """
+        if self.delivery is A2UIDelivery.FUNCTION_RESPONSES:
+            return True
+        return catalog_id is None or catalog_id in self.catalog_ids
+
     def deliverable(self, messages: list[ServerToClientMessage], *, source: str) -> list[ServerToClientMessage]:
         """The ``messages`` from ``source`` this turn may send; the rest are dropped with a warning."""
         if self.sends_ui or not messages:

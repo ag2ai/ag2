@@ -27,6 +27,10 @@ def _update(version: str, *components: dict[str, Any], surface_id: str = "s") ->
     }
 
 
+def _delete(version: str, surface_id: str = "s") -> dict[str, Any]:
+    return {"version": WIRE_VERSION[version], "deleteSurface": {"surfaceId": surface_id}}
+
+
 def _text(component_id: str) -> dict[str, Any]:
     return {"id": component_id, "component": "Text", "text": "hi"}
 
@@ -314,10 +318,6 @@ async def test_schema_and_graph_errors_are_reported_in_one_retry() -> None:
     assert "- Surface 's': component 'a' is not reachable from 'root'\n" in turn.feedback[0]
 
 
-def _delete(version: str, surface_id: str = "s") -> dict[str, Any]:
-    return {"version": WIRE_VERSION[version], "deleteSurface": {"surfaceId": surface_id}}
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("version", VERSIONS)
 class TestRecreatedSurface:
@@ -427,3 +427,102 @@ class TestSameTypeInTwoCatalogs:
 
         assert turn.feedback == []
         assert turn.ui == messages
+
+
+_BADGE_CATALOG_ID = "https://example.com/badges.json"
+_BADGE_CATALOG = {
+    "catalogId": _BADGE_CATALOG_ID,
+    "protocolVersion": "1.0",
+    "components": {
+        "Column": {
+            "type": "object",
+            "allowedChildren": ["Badge"],
+            "properties": {
+                "component": {"const": "Column"},
+                "children": {"$ref": "common_types.json#/$defs/ChildList"},
+            },
+            "required": ["component"],
+        },
+        "Badge": {
+            "type": "object",
+            "properties": {"component": {"const": "Badge"}, "label": {"type": "string"}},
+            "required": ["component"],
+        },
+    },
+}
+_BASIC_TREE = ({"id": "root", "component": "Column", "children": ["t"]}, _text("t"))
+
+
+@pytest.mark.asyncio
+class TestTreeTheRendererNeverBuilds:
+    # A message the renderer rejects never reaches a surface, so its components are not checked as a tree; only the
+    # error that rejects it is reported. The custom `Column` (children only `Badge`) is never the basic one's judge.
+    async def test_a_surface_without_a_default_catalog(self) -> None:
+        # "Components ... that do not explicitly specify their own `@catalogId` ... will use this surface-level
+        # default `catalogId`" (v1.0 a2ui_protocol.md, createSurface): with neither, a component has no type.
+        messages = [
+            {"version": "1.0", "createSurface": {"surfaceId": "s"}},
+            _update("v1.0", *_BASIC_TREE),
+        ]
+
+        turn = await serve_turn(
+            a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=_BADGE_CATALOG
+        )
+
+        assert turn.errors == [
+            [
+                "- Operation 1: Component 'root' (Column): names no '@catalogId' and the surface has no default "
+                "'catalogId' (set it in createSurface)",
+                "- Operation 1: Component 't' (Text): names no '@catalogId' and the surface has no default "
+                "'catalogId' (set it in createSurface)",
+            ]
+        ]
+
+    async def test_an_update_after_the_surface_is_deleted(self) -> None:
+        messages = [
+            _create("v1.0"),
+            _update("v1.0", *_BASIC_TREE),
+            _delete("v1.0"),
+            _update("v1.0", *_BASIC_TREE),
+        ]
+
+        turn = await serve_turn(
+            a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=_BADGE_CATALOG
+        )
+
+        assert turn.errors == [["- Operation 3: 'updateComponents' targets surface 's' after operation 2 deleted it"]]
+
+    async def test_an_update_before_the_surface_is_created(self) -> None:
+        # "A surface must be created before any `updateComponents` ... can be sent to it" (createSurface).
+        messages = [_update("v1.0", _text("z")), _create("v1.0"), _update("v1.0", *_BASIC_TREE)]
+
+        turn = await serve_turn(
+            a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=_BADGE_CATALOG
+        )
+
+        assert turn.errors == [
+            [
+                "- Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first"
+            ]
+        ]
+
+    async def test_a_second_create_of_a_live_surface(self) -> None:
+        # "It is a state integrity error ... to try to create a surface with a `surfaceId` that already exists": the
+        # renderer rejects the second createSurface, so the components it carries never join the tree.
+        messages = [
+            _create("v1.0"),
+            _update("v1.0", *_BASIC_TREE),
+            {
+                "version": "1.0",
+                "createSurface": {"surfaceId": "s", "catalogId": BASIC_CATALOG["v1.0"], "components": [_text("x")]},
+            },
+        ]
+
+        turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
+
+        assert turn.errors == [
+            [
+                "- Operation 2: surface 's' already exists (operation 0 created it); send deleteSurface before "
+                "creating it again, or use a new surfaceId"
+            ]
+        ]

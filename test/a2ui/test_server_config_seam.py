@@ -284,18 +284,75 @@ def test_v1_custom_catalog_constraints_follow_the_catalog_definition(catalog: di
         _server(protocol_version="v1.0", custom_catalog={"catalogId": _CATALOG_ID, "protocolVersion": "1.0", **catalog})
 
 
-def test_v1_custom_catalog_component_const_must_match_its_key() -> None:
-    # v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4. Component Discriminator Rule: the `component` const must be
-    # "matching the key under which it is defined".
-    catalog = {"catalogId": _CATALOG_ID, "protocolVersion": "1.0", "components": {"Gauge": _component("Meter")}}
+_CHECKABLE = {"$ref": "common_types.json#/$defs/Checkable"}
 
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            "Invalid custom catalog: component 'Gauge' declares \"component\": 'Meter'; it must be 'Gauge'"
+
+@pytest.mark.parametrize(
+    ("gauge", "error"),
+    [
+        pytest.param(
+            _component("Meter"),
+            "component 'Gauge' declares \"component\": 'Meter'; it must be 'Gauge'",
+            id="direct-const",
         ),
-    ):
+        pytest.param(
+            {"type": "object", "allOf": [_CHECKABLE, _component("Meter")]},
+            "component 'Gauge' declares \"component\": 'Meter'; it must be 'Gauge'",
+            id="trait-branch-const",
+        ),
+        pytest.param(
+            {"type": "object", "properties": {"component": {"enum": ["Gauge"]}}, "required": ["component"]},
+            "component 'Gauge' must declare \"component\" as a const",
+            id="enum",
+        ),
+        pytest.param(
+            {"type": "object", "properties": {"value": {"type": "number"}}},
+            "component 'Gauge' must declare \"component\" as a const",
+            id="missing",
+        ),
+    ],
+)
+def test_v1_custom_catalog_component_discriminator_follows_the_rule(gauge: dict[str, Any], error: str) -> None:
+    # v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4. Component Discriminator Rule: every component "must have a
+    # required property named `component` whose value is a constant (`const`) matching the key under which it is
+    # defined".
+    catalog = {"catalogId": _CATALOG_ID, "protocolVersion": "1.0", "components": {"Gauge": gauge}}
+
+    with pytest.raises(ValueError, match=re.escape(f"Invalid custom catalog: {error}")):
         _server(protocol_version="v1.0", custom_catalog=catalog)
+
+
+@pytest.mark.asyncio
+async def test_v1_custom_catalog_discriminator_is_required_even_where_the_catalog_omits_it() -> None:
+    # Upstream's own catalog cases (v1_0/test/cases/composition_constraints.json) leave "component" out of
+    # `required` and are valid; rule 4 still makes it "a required property", and the official SDK adds it.
+    catalog = {
+        "catalogId": _CATALOG_ID,
+        "protocolVersion": "1.0",
+        "components": {"Gauge": {"type": "object", "properties": {"component": {"const": "Gauge"}, "value": {}}}},
+    }
+    messages = [
+        {
+            "version": "1.0",
+            "createSurface": {"surfaceId": "s", "catalogId": _CATALOG_ID, "components": [{"id": "root", "value": 1}]},
+        }
+    ]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=catalog)
+
+    assert len(turn.feedback) == 1
+    assert "'component' is a required property" in turn.feedback[0]
+
+
+def test_v1_custom_catalog_accepts_a_discriminator_beside_a_trait() -> None:
+    # Rule 5 lets a component "import common property sets (such as `Checkable`) via `$ref`"; the v1.0 basic
+    # catalog's `CheckBox` is `{"allOf": [{"$ref": ...Checkable}, {"properties": {"component": {"const": ...}}}]}`.
+    gauge = {"type": "object", "allOf": [_CHECKABLE, _component("Gauge")]}
+
+    _server(
+        protocol_version="v1.0",
+        custom_catalog={"catalogId": _CATALOG_ID, "protocolVersion": "1.0", "components": {"Gauge": gauge}},
+    )
 
 
 def test_v09_custom_catalog_names_are_not_restricted() -> None:

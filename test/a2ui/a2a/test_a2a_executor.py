@@ -185,12 +185,12 @@ class TestIncomingA2UIDataParts:
         assert "user@example.com" not in synthesized
 
     @pytest.mark.parametrize(
-        ("data", "reaches_agent"),
-        [([ACTION_ENVELOPE, "junk"], True), ([], False)],
+        ("data", "action_prompted", "entry_dropped"),
+        [([ACTION_ENVELOPE, "junk"], True, True), ([], False, False)],
         ids=["mixed-list", "empty-list"],
     )
     async def test_an_a2ui_part_is_always_consumed(
-        self, data: list[Any], reaches_agent: bool, caplog: pytest.LogCaptureFixture
+        self, data: list[Any], action_prompted: bool, entry_dropped: bool, caplog: pytest.LogCaptureFixture
     ) -> None:
         # The A2A extension's "Processing Rules": a receiver "MUST continue processing the remaining messages in the
         # list" when one fails, so a non-object entry is dropped, and the part itself never reaches the agent raw.
@@ -204,8 +204,8 @@ class TestIncomingA2UIDataParts:
 
         received = [part for message in config.messages[-1] for part in getattr(message, "parts", None) or []]
         assert not any(isinstance(part, DataInput) for part in received)
-        assert ("user@example.com" in synthesized_text(config.messages[-1])) is reaches_agent
-        assert ("not a renderer-to-agent message" in caplog.text) is reaches_agent
+        assert ("user@example.com" in synthesized_text(config.messages[-1])) is action_prompted
+        assert ("not a renderer-to-agent message" in caplog.text) is entry_dropped
 
     async def test_entries_the_renderer_does_not_send_are_skipped(self) -> None:
         synthesized = await self._ask(create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE]))

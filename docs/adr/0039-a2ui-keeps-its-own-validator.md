@@ -111,6 +111,13 @@ in these places; line numbers are at that commit.
   states none, and upstream cases under `specification/v1_0/test/cases/` that check `catalog_definition.json`
   (`catalog_schema_relaxation`, `composition_constraints`, `function_definitions`) omit it, since that schema leaves
   it optional. ag2 follows the prose; the conformance probe states `"1.0"` for those cases, which then all agree.
+- **Component discriminators.** v1.0 L607–608 (rule 4) gives every catalog component "a required property named
+  `component` whose value is a constant (`const`) matching the key". The reference SDK takes the `const` as the
+  type even when it differs from the key, and uses the key when there is none. ag2 rejects at load a component whose
+  `component` is not a `const` equal to its key, looked up directly or in an `allOf` branch beside a trait (rule 5),
+  since the prompt names components by key and the validator by const. Upstream cases
+  `composition_constraints.json#0-1` leave `component` out of `required` and are valid; ag2 accepts them and, as the
+  SDK does, adds `component` to `required` in the catalog it serves.
 - **A2A DataParts with a single object.** The A2A extension (v1.0 `a2ui_extension_specification.md` L183, v0.9
   L178) says a DataPart's `data` "MUST be an array of messages". The reference SDK `a2ui_a2a` writes and reads one
   object per DataPart. ag2 follows the spec: `A2UIAgentExecutor` consumes a renderer DataPart whose `data` is a single

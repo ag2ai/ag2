@@ -31,7 +31,8 @@ Upstream A2UI (`6e79b2e`) and its reference SDK say more:
 Each turn gets an `A2UIOffer`, built from the renderer's capabilities for the served version:
 
 - Without capabilities, v1.0 offers no A2UI on any transport, per L1630: the renderer has withdrawn it, so not even
-  an `agentFunctionResponse` is sent. Before v1.0 every catalog the agent serves is offered, as the SDK does.
+  an `agentFunctionResponse` is sent. Such a turn offers no catalog, so a `callAgentFunction` naming one does not
+  select a handler: nobody waits for the answer, and a side-effecting handler should not run for nothing. Before v1.0 every catalog the agent serves is offered, as the SDK does.
 - With capabilities, only the agent's catalogs the renderer names are offered. The prompt, the validator, the catalog
   `createSurface` names in the prompt and the catalogs a `callAgentFunction` may name all narrow to them. Offers are
   cached per catalog subset, so the cost is paid once per subset.

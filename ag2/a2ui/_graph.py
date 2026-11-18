@@ -42,6 +42,15 @@ class ComponentType:
 ComponentTypes: TypeAlias = Mapping[tuple[str, str], ComponentType]
 """Each component type the catalogs define, by catalog id and component type: two catalogs may define one type."""
 
+
+@dataclass(frozen=True, slots=True)
+class _Typed:
+    """A component's ``component`` type name and, when its catalog resolves it, that type's definition."""
+
+    type_name: str
+    definition: ComponentType | None
+
+
 _SURFACE = "Surface"
 """The reserved container ``createSurface`` creates; a surface's ``root`` is always its child (v1.0)."""
 
@@ -58,7 +67,9 @@ def component_types(*catalogs: JsonObject, documents: Mapping[str, JsonObject] |
     """
     types: dict[tuple[str, str], ComponentType] = {}
     for catalog in catalogs:
-        catalog_id = str(catalog.get("$id"))
+        # A served catalog always has one: the schema manager sets a custom catalog's ``$id`` to its ``catalogId``.
+        if not isinstance(catalog_id := catalog.get("$id"), str):
+            raise ValueError("A catalog needs a string '$id' to key its component types by")
         components = catalog.get("components")
         for key, definition in components.items() if isinstance(components, dict) else ():
             found = dict.fromkeys(_references_in(definition, (), catalog, frozenset(), documents or {}))
@@ -130,84 +141,163 @@ def _resolve_local(catalog: JsonObject, ref: str) -> JsonValue:
     return node
 
 
-def component_graph_errors(messages: Sequence[JsonObject], types: ComponentTypes) -> list[str]:
-    """Check each surface's components in ``messages`` as a tree.
+@dataclass(slots=True)
+class Surface:
+    """One surface's components in a response, from its creation (or first update) until it is deleted."""
+
+    surface_id: str
+    created_at: int | None = None
+    """The operation that creates it in this response; ``None`` for a surface from an earlier turn, which may be
+    updated partially."""
+    catalog_id: str | None = None
+    """The ``catalogId`` its ``createSurface`` names, if it is created here and names one."""
+    batches: list[list[JsonObject]] = field(default_factory=list)
+    """Each message's components; a later message may update an earlier one's by id."""
+    first_update: tuple[str, int] | None = None
+    """For a surface from an earlier turn: its first update and that update's operation."""
+
+    @property
+    def created(self) -> bool:
+        return self.created_at is not None
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceWalk:
+    """The surfaces a response's messages build, in message order, and the lifecycle errors on the way."""
+
+    surfaces: list[Surface]
+    """Each surface the renderer would build; a message it rejects adds nothing to any of them."""
+    errors: list[str]
+
+
+_SURFACE_UPDATES = ("updateComponents", "updateDataModel")
+
+
+def walk_surfaces(messages: Sequence[JsonObject], *, lifetime_unique_surface_ids: bool) -> SurfaceWalk:
+    """Follow each surface through ``messages``: created, updated, deleted, created again.
+
+    A surface must be created before ``updateComponents`` / ``updateDataModel`` reach it, and creating an existing
+    surface without deleting it first is an integrity error (a2ui_protocol.md, ``createSurface``); a message
+    breaking either rule is reported and joins no surface, since the renderer rejects it. A surface this response
+    never creates may come from an earlier turn, so updates to it are accepted until it is deleted. A
+    ``deleteSurface`` ends a surface: one created again under its id starts empty ("to reconfigure them, the
+    surface must be deleted and recreated"). With ``lifetime_unique_surface_ids`` (v0.9, v1.0) the hint for a
+    duplicate also offers a new ``surfaceId``.
+    """
+    remedy = "send deleteSurface before creating it again" + (
+        ", or use a new surfaceId" if lifetime_unique_surface_ids else ""
+    )
+    surfaces: list[Surface] = []
+    errors: list[str] = []
+    current: dict[str, Surface] = {}
+    deleted_at: dict[str, int] = {}
+    for index, message in enumerate(messages):
+        for key, payload in message.items():
+            if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
+                continue
+            surface = current.get(surface_id)
+            if key == "createSurface":
+                if surface is not None and surface.created_at is not None:
+                    errors.append(
+                        f"Operation {index}: surface '{surface_id}' already exists "
+                        f"(operation {surface.created_at} created it); {remedy}"
+                    )
+                    continue
+                if surface is not None and surface.first_update is not None:
+                    event, at = surface.first_update
+                    errors.append(
+                        f"Operation {at}: '{event}' targets surface '{surface_id}' before operation {index} "
+                        "creates it; send createSurface first"
+                    )
+                    surfaces.remove(surface)
+                catalog_id = payload.get("catalogId")
+                surface = current[surface_id] = Surface(
+                    surface_id, created_at=index, catalog_id=catalog_id if isinstance(catalog_id, str) else None
+                )
+                surfaces.append(surface)
+            elif key == "deleteSurface":
+                current.pop(surface_id, None)
+                deleted_at[surface_id] = index
+                continue
+            elif key in _SURFACE_UPDATES:
+                if surface is None and surface_id in deleted_at:
+                    errors.append(
+                        f"Operation {index}: '{key}' targets surface '{surface_id}' "
+                        f"after operation {deleted_at[surface_id]} deleted it"
+                    )
+                    continue
+                if surface is None:
+                    surface = current[surface_id] = Surface(surface_id, first_update=(key, index))
+                    surfaces.append(surface)
+            else:
+                continue
+            if key in ("createSurface", "updateComponents"):
+                listed = payload.get("components")
+                surface.batches.append([c for c in (listed if isinstance(listed, list) else ()) if isinstance(c, dict)])
+    return SurfaceWalk(surfaces, errors)
+
+
+def component_graph_errors(surfaces: Sequence[Surface], types: ComponentTypes) -> list[str]:
+    """Check each surface's components as a tree.
 
     For a surface this response creates: every reference resolves, every component is reachable from
     ``root``, there are no cycles and no id appears twice in one message. A surface created earlier may be
     updated partially, so only duplicate ids and cycles among this response's own components are checked.
     Wherever both ends of a reference are in this response, the composition constraints apply, and a ``root`` sits
     under ``Surface``, on any surface: "the component with ``"id": "root"`` mounts as the child of the surface's
-    canonical ``Surface`` container" (v1.0 a2ui_protocol.md, ``updateComponents``).
-
-    A ``deleteSurface`` ends a surface: one created again under its id starts empty ("to reconfigure them, the
-    surface must be deleted and recreated", ``createSurface``). Each component's type is read from its own
-    ``@catalogId`` or its surface's ``catalogId`` (v1.0 "Mixable catalogs and component resolution logic").
+    canonical ``Surface`` container" (v1.0 a2ui_protocol.md, ``updateComponents``). Each component's type is read
+    from its own ``@catalogId`` or its surface's ``catalogId`` (v1.0 "Mixable catalogs and component resolution
+    logic").
     """
-    surfaces: list[_Surface] = []
-    current: dict[str, _Surface] = {}
-    for message in messages:
-        for key, payload in message.items():
-            if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
-                continue
-            if key == "deleteSurface":
-                current.pop(surface_id, None)
-                continue
-            if key not in ("createSurface", "updateComponents"):
-                continue
-            if (surface := current.get(surface_id)) is None:
-                surface = current[surface_id] = _Surface(surface_id)
-                surfaces.append(surface)
-            if key == "createSurface":
-                surface.created = True
-                catalog_id = payload.get("catalogId")
-                surface.catalog_id = catalog_id if isinstance(catalog_id, str) else None
-            listed = payload.get("components")
-            surface.batches.append([c for c in (listed if isinstance(listed, list) else ()) if isinstance(c, dict)])
     errors: list[str] = []
     for surface in surfaces:
         errors.extend(_surface_errors(surface, types))
     return errors
 
 
-@dataclass(slots=True)
-class _Surface:
-    """One surface's components in a response, from its creation (or first update) until it is deleted."""
+def missing_root_errors(surfaces: Sequence[Surface]) -> list[str]:
+    """A surface this response creates must have a ``root`` component among the components it is given.
 
-    surface_id: str
-    created: bool = False
-    """Whether this response creates it; a surface from an earlier turn may be updated partially."""
-    catalog_id: str | None = None
-    """The ``catalogId`` its ``createSurface`` names, if it is created here and names one."""
-    batches: list[list[JsonObject]] = field(default_factory=list)
-    """Each message's components; a later message may update an earlier one's by id."""
+    The spec asks for a ``root`` in one of a surface's component lists, so a partial update to a surface created
+    earlier (by an earlier turn or a server-side handler) needs none. v1.0's ``createSurface`` may carry the
+    initial components itself. A surface deleted and created again needs a ``root`` of its own.
+    """
+    return [
+        f"No component with id 'root' found on surface '{surface.surface_id}' — "
+        "the A2UI spec requires the component tree to have a 'root' node."
+        for surface in surfaces
+        if surface.created
+        and any(surface.batches)
+        and not any(component.get("id") == "root" for batch in surface.batches for component in batch)
+    ]
 
 
-def _type_of(component: JsonObject, surface: _Surface, types: ComponentTypes) -> ComponentType | None:
+def _type_of(component: JsonObject, surface: Surface, types: ComponentTypes) -> ComponentType | None:
     """The definition ``component`` resolves to: in its ``@catalogId``, else in its surface's catalog.
 
-    Where neither names a catalog the agent serves (a surface from an earlier turn, whose catalog this response
-    does not show), any served catalog's definition of the type is used; the schema check reports a component that
-    no catalog resolves.
+    ``None`` when that catalog does not define the type, when it is not one the agent serves, or when a surface
+    created here names no default catalog; the schema check reports each of these. Only on a surface from an
+    earlier turn, whose catalog this response does not show, is the type looked up by name in any served catalog.
     """
     name = component.get("component")
     if not isinstance(name, str):
         return None
     own = component.get("@catalogId")
-    catalog_id = own if isinstance(own, str) else surface.catalog_id if surface.created else None
-    if catalog_id is not None and (found := types.get((catalog_id, name))) is not None:
-        return found
-    if catalog_id is not None and any(known == catalog_id for known, _ in types):
-        return None
+    if isinstance(own, str):
+        return types.get((own, name))
+    if surface.created:
+        return types.get((surface.catalog_id, name)) if surface.catalog_id is not None else None
     candidates = [definition for (_, type_name), definition in types.items() if type_name == name]
     return candidates[-1] if candidates else None
 
 
-def _surface_errors(surface: _Surface, types: ComponentTypes) -> Iterator[str]:
+def _surface_errors(surface: Surface, types: ComponentTypes) -> Iterator[str]:
     prefix = f"Surface '{surface.surface_id}':"
-    complete = surface.created
+    # A component with no resolvable type hides its references; the schema check reports it, and the tree is
+    # judged as far as it is known.
+    unresolved = False
     edges: dict[str, list[str]] = {}
-    kinds: dict[str, tuple[str, ComponentType | None]] = {}
+    kinds: dict[str, _Typed] = {}
     for components in surface.batches:
         in_message: set[str] = set()
         for component in components:
@@ -221,8 +311,10 @@ def _surface_errors(surface: _Surface, types: ComponentTypes) -> Iterator[str]:
             component_type = component.get("component")
             known = _type_of(component, surface, types)
             if isinstance(component_type, str):
-                kinds[component_id] = (component_type, known)
+                kinds[component_id] = _Typed(component_type, known)
+                unresolved = unresolved or known is None
             edges[component_id] = list(_referenced_ids(component, known.references if known else ()))
+    complete = surface.created and not unresolved
 
     if complete:
         for component_id, targets in edges.items():
@@ -245,25 +337,26 @@ def _surface_errors(surface: _Surface, types: ComponentTypes) -> Iterator[str]:
 def _composition_errors(
     prefix: str,
     edges: Mapping[str, list[str]],
-    kinds: Mapping[str, tuple[str, ComponentType | None]],
+    kinds: Mapping[str, _Typed],
 ) -> Iterator[str]:
     """Each parent and child whose types the catalog's ``allowedParents`` / ``allowedChildren`` do not let nest.
 
     The renderer rejects these with ``UNALLOWED_PARENT`` / ``UNALLOWED_CHILD``. ``root`` is the child of the
     surface's ``Surface`` container.
     """
-    pairs: list[tuple[str, tuple[str, ComponentType | None], str]] = []
+    pairs: list[tuple[str, _Typed, str]] = []
     if "root" in kinds:
-        pairs.append((_SURFACE, (_SURFACE, None), "root"))
+        pairs.append((_SURFACE, _Typed(_SURFACE, None), "root"))
     for parent_id, targets in edges.items():
         parent_kind = kinds.get(parent_id)
         if parent_kind is not None:
             pairs.extend((parent_id, parent_kind, target) for target in targets)
-    for parent_id, (parent_type, parent), child_id in pairs:
+    for parent_id, parent_kind, child_id in pairs:
         child_kind = kinds.get(child_id)
         if child_kind is None:
             continue
-        child_type, child = child_kind
+        parent_type, parent = parent_kind.type_name, parent_kind.definition
+        child_type, child = child_kind.type_name, child_kind.definition
         if child is not None and child.allowed_parents is not None and parent_type not in child.allowed_parents:
             allowed = ", ".join(map(repr, sorted(child.allowed_parents))) or "none"
             yield (
@@ -339,50 +432,6 @@ def _cycles(edges: Mapping[str, list[str]]) -> Iterator[list[str]]:
                 iterators.append(iter(edges[target]))
 
 
-_SURFACE_UPDATES = ("updateComponents", "updateDataModel")
-
-
-def surface_lifecycle_errors(messages: Sequence[JsonObject], *, lifetime_unique_ids: bool) -> list[str]:
-    """Check, in message order, that each surface is created before it is updated and not created twice.
-
-    A surface must be created before ``updateComponents`` / ``updateDataModel`` reach it, and creating an existing
-    surface without deleting it first is an integrity error (a2ui_protocol.md, ``createSurface``). A surface this
-    response never creates may come from an earlier turn, so updates to it are accepted until it is deleted. With
-    ``lifetime_unique_ids`` (v0.9, v1.0) the hint for a duplicate also offers a new ``surfaceId``.
-    """
-    remedy = "send deleteSurface before creating it again" + (", or use a new surfaceId" if lifetime_unique_ids else "")
-    errors: list[str] = []
-    # Per surface: the last ``createSurface`` / ``deleteSurface``, or the first update while neither has happened.
-    last: dict[str, tuple[str, int]] = {}
-    for index, message in enumerate(messages):
-        for key, payload in message.items():
-            if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
-                continue
-            event, at = last.get(surface_id, ("", -1))
-            if key == "createSurface":
-                if event == "createSurface":
-                    errors.append(
-                        f"Operation {index}: surface '{surface_id}' already exists (operation {at} created it); "
-                        + remedy
-                    )
-                elif event in _SURFACE_UPDATES:
-                    errors.append(
-                        f"Operation {at}: '{event}' targets surface '{surface_id}' before operation {index} "
-                        "creates it; send createSurface first"
-                    )
-                last[surface_id] = (key, index)
-            elif key == "deleteSurface":
-                last[surface_id] = (key, index)
-            elif key in _SURFACE_UPDATES:
-                if event == "deleteSurface":
-                    errors.append(
-                        f"Operation {index}: '{key}' targets surface '{surface_id}' after operation {at} deleted it"
-                    )
-                elif not event:
-                    last[surface_id] = (key, index)
-    return errors
-
-
 def is_json_pointer(path: str) -> bool:
     """Whether ``path`` is an RFC 6901 JSON Pointer: empty, or ``/``-prefixed tokens with ``~`` only as ``~0`` / ``~1``."""
     return _JSON_POINTER.fullmatch(path) is not None
@@ -391,8 +440,11 @@ def is_json_pointer(path: str) -> bool:
 __all__ = (
     "ComponentType",
     "ComponentTypes",
+    "Surface",
+    "SurfaceWalk",
     "component_graph_errors",
     "component_types",
     "is_json_pointer",
-    "surface_lifecycle_errors",
+    "missing_root_errors",
+    "walk_surfaces",
 )

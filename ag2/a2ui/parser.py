@@ -13,7 +13,7 @@ from typing import Literal, cast
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
-from ._graph import ComponentTypes, component_graph_errors, is_json_pointer, surface_lifecycle_errors
+from ._graph import ComponentTypes, component_graph_errors, is_json_pointer, missing_root_errors, walk_surfaces
 from ._messages import is_server_message
 from ._types import (
     JsonObject,
@@ -125,35 +125,6 @@ def _as_messages(values: list[JsonValue], kinds: Collection[str]) -> "tuple[list
     return messages, None
 
 
-def _missing_root_errors(objects: Sequence[JsonValue]) -> list[str]:
-    """A surface these messages create must have a ``root`` component among the components they give it.
-
-    The spec asks for a ``root`` in one of a surface's component lists, so a partial update to a surface created
-    earlier (by an earlier turn or a server-side handler) needs none. v1.0's ``createSurface`` may carry the
-    initial components itself. A surface deleted and created again needs a ``root`` of its own.
-    """
-    created: list[tuple[str, list[JsonValue]]] = []
-    current: dict[str, list[JsonValue]] = {}
-    for op in objects:
-        for key, payload in op.items() if isinstance(op, dict) else ():
-            surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
-            if not isinstance(surface_id, str):
-                continue
-            if key == "createSurface" and surface_id not in current:
-                current[surface_id] = []
-                created.append((surface_id, current[surface_id]))
-            if key == "deleteSurface":
-                current.pop(surface_id, None)
-            elif key in ("createSurface", "updateComponents") and surface_id in current:
-                current[surface_id].extend(_components_of(payload))
-    return [
-        f"No component with id 'root' found on surface '{surface_id}' — "
-        "the A2UI spec requires the component tree to have a 'root' node."
-        for surface_id, components in created
-        if components and not any(isinstance(c, dict) and c.get("id") == "root" for c in components)
-    ]
-
-
 def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
     """A data-model update's ``path`` must be a JSON Pointer (RFC 6901)."""
     errors: list[str] = []
@@ -199,14 +170,6 @@ def _targets_surface(message: JsonValue, surfaces: Collection[str]) -> bool:
     return isinstance(message, dict) and any(
         isinstance(payload, dict) and payload.get("surfaceId") in surfaces for payload in message.values()
     )
-
-
-def _components_of(update_components: JsonValue) -> list[JsonValue]:
-    """Return the ``components`` list of an ``updateComponents`` (or v1.0 ``createSurface``) value, or ``[]``."""
-    if not isinstance(update_components, dict):
-        return []
-    components = update_components.get("components", [])
-    return components if isinstance(components, list) else []
 
 
 class _SurfaceCatalog(Enum):
@@ -392,16 +355,17 @@ class A2UIResponseParser:
 
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
-        errors.extend(surface_lifecycle_errors(objects, lifetime_unique_ids=self._protocol.lifetime_unique_surface_ids))
+        walk = walk_surfaces(objects, lifetime_unique_surface_ids=self._protocol.lifetime_unique_surface_ids)
+        errors.extend(walk.errors)
         # A surface on an unknown catalog gets that one error: its components have no catalog to be judged by.
-        checkable: Sequence[JsonObject] = objects
+        checkable = walk.surfaces
         if self._catalog_ids is not None:
             errors.extend(_unknown_catalog_error(unknown, self._catalog_ids) for unknown in unknown_catalogs)
-            checkable = [message for message in objects if not _targets_surface(message, uncheckable)]
+            checkable = [surface for surface in walk.surfaces if surface.surface_id not in uncheckable]
         if self._component_types is not None:
             errors.extend(component_graph_errors(checkable, self._component_types))
 
-        errors.extend(_missing_root_errors(checkable))
+        errors.extend(missing_root_errors(checkable))
 
         return A2UIValidationResult(
             is_valid=len(errors) == 0,

@@ -28,7 +28,7 @@ plain JSON — the same way the sibling AG-UI transport renders agent state.
 """
 
 import logging
-from collections.abc import Collection, Iterable
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from fast_depends.exceptions import ValidationError
@@ -186,22 +186,18 @@ async def run_agent_function(
     call: A2UIIncomingFunctionCall,
     *,
     protocol: A2UIProtocol,
-    catalog_ids: Collection[str] | None,
     context: ConversationContext,
     validator: A2UIResponseParser | None = None,
 ) -> list[ServerToClientMessage]:
     """Answer a renderer's ``callAgentFunction`` (v1.0) with an ``agentFunctionResponse``.
 
     Args:
-        action: The registered :class:`A2UIAction` named by the call, or ``None``
-            when nothing is registered under that name (answered ``UNKNOWN_FUNCTION``).
+        action: The registered :class:`A2UIAction` named by the call, or ``None`` when nothing is registered
+            under that name or the call names a catalog the turn does not answer for
+            (:meth:`A2UIOffer.answers_function_catalog`); ``None`` is answered ``UNKNOWN_FUNCTION``.
         call: The parsed incoming call; its ``args`` become the handler's keyword arguments.
         protocol: The served protocol version. A version without function RPC
             cannot answer the call, so it is logged and answered with nothing.
-        catalog_ids: The catalogs the turn offers. A call naming another catalog does not
-            select a local action merely because its function name matches. ``None`` accepts a call
-            naming any catalog: on a turn with no catalog in common the renderer can only name its own,
-            and a handler belongs to no catalog (ADR 0040), so it is matched by name alone.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
         validator: Checks the messages the handler returns; invalid ones fail the call
@@ -229,9 +225,7 @@ async def run_agent_function(
             )
         ]
 
-    if action is None or (
-        catalog_ids is not None and call.catalog_id is not None and call.catalog_id not in catalog_ids
-    ):
+    if action is None:
         return [
             _function_response(
                 call.function_call_id,
@@ -317,10 +311,9 @@ async def run_client_interactions(
         context = context or build_server_action_context(agent, variables=variables)
         call = interaction.function_call
         answer = await run_agent_function(
-            runtime.server_actions.get(call.call),
+            runtime.server_actions.get(call.call) if offer.answers_function_catalog(call.catalog_id) else None,
             call,
             protocol=runtime.protocol,
-            catalog_ids=offer.catalog_ids if offer.sends_ui else None,
             context=context,
             validator=offer.message_validator,
         )

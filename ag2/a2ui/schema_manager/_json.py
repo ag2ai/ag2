@@ -28,6 +28,11 @@ def _as_object(value: "JsonValue | None") -> JsonObject:
     return value if isinstance(value, dict) else {}
 
 
+def _as_list(value: "JsonValue | None") -> list[JsonValue]:
+    """Narrow a ``JsonValue`` to a JSON array, returning ``[]`` when it is not a list (see :func:`_as_object`)."""
+    return value if isinstance(value, list) else []
+
+
 def _pointer_token(key: str) -> str:
     return key.replace("~", "~0").replace("/", "~1")
 

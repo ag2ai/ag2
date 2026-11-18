@@ -261,6 +261,31 @@ async def test_a_request_without_capabilities_withdraws_a2ui(caplog: pytest.LogC
 
 
 @pytest.mark.asyncio
+async def test_a_request_without_capabilities_does_not_run_a_call_that_names_a_catalog() -> None:
+    # Matching a handler by `@call` name alone is for a renderer that shares no catalog and waits for the answer;
+    # one that "withdraws A2UI for that turn" (v1.0 a2ui_protocol.md, "Renderer capabilities") gets no answer.
+    called: list[str] = []
+    call = {
+        "version": "1.0",
+        "callAgentFunction": {
+            "surfaceId": "s",
+            "functionCallId": "fc-1",
+            "callFunction": {"@call": "lookup", "catalogId": "https://unknown.example/c.json"},
+        },
+    }
+
+    turn = await serve_turn(
+        body={"messages": [{"role": "user", "content": "hi"}], "a2ui": [call]},
+        with_capabilities=False,
+        actions=[_lookup(called)],
+        protocol_version="v1.0",
+    )
+
+    assert called == []
+    assert turn.ui == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("version", ["v0.9", "v0.9.1"])
 async def test_before_v1_0_a_request_without_capabilities_is_offered_every_catalog(version: str) -> None:
     surface = [

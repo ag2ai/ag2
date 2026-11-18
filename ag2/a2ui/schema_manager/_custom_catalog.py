@@ -6,6 +6,7 @@
 
 import os
 import re
+from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from referencing import Registry
 from .._types import JsonSchema, JsonValue
 from .._versions import A2UIProtocol
 from ..diagnostics import UAX31_IDENTIFIER, XID_FORMAT
-from ._json import _PACKAGE_DIR, _as_object, _load_object, _pointer_key, _pointer_token, _resource
+from ._json import _PACKAGE_DIR, _as_list, _as_object, _load_object, _pointer_key, _pointer_token, _resource
 
 # v1.0 constrains extension keys with Unicode property escapes, which Python's ``re``
 # (what ``jsonschema`` matches patterns with) rejects. Check those keys with a format
@@ -144,18 +145,60 @@ def _check_entity_names(catalog: JsonSchema) -> None:
 
 
 def _check_component_discriminators(catalog: JsonSchema) -> None:
-    """Reject a v1.0 catalog whose component declares a ``component`` const other than its key.
+    """Reject a v1.0 catalog component without a required ``component`` const equal to its key.
 
-    v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4: the const must be "matching the key under which it is
-    defined". The prompt names components by key and the validator by const, so a mismatch would be unusable.
+    v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4: every component "must have a required property named
+    `component` whose value is a constant (`const`) matching the key under which it is defined". Rule 5 lets the
+    discriminator sit beside imported traits in an ``allOf`` (the basic catalog's ``CheckBox`` does), so the
+    definition and its ``allOf`` branches are searched. The prompt names components by key and the validator by
+    const, so a component that breaks the rule could be named but never sent.
     """
     for name, definition in _as_object(catalog.get("components")).items():
-        discriminator = _as_object(_as_object(_as_object(definition).get("properties")).get("component"))
-        if "const" in discriminator and discriminator["const"] != name:
-            raise ValueError(
-                f'Invalid custom catalog: component {name!r} declares "component": {discriminator["const"]!r}; '
-                f"it must be {name!r}, the key it is defined under"
+        schemas = list(_definition_schemas(_as_object(definition)))
+        tags = [
+            tag for schema in schemas if isinstance(tag := _as_object(schema.get("properties")).get("component"), dict)
+        ]
+        if not tags or any("const" not in tag for tag in tags):
+            raise ValueError(f'Invalid custom catalog: component {name!r} must declare "component" as a const')
+        for tag in tags:
+            if tag["const"] != name:
+                raise ValueError(
+                    f'Invalid custom catalog: component {name!r} declares "component": {tag["const"]!r}; '
+                    f"it must be {name!r}, the key it is defined under"
+                )
+
+
+def _with_required_discriminators(catalog: JsonSchema) -> JsonSchema:
+    """``catalog`` with ``component`` in every component's ``required``, as the official SDK serves it.
+
+    Rule 4 makes the discriminator "a required property", yet upstream's own catalog cases
+    (v1_0/test/cases/composition_constraints.json) leave it out of ``required`` and are valid; the SDK adds it
+    (``message_processor.py``). Without it a catalog of one component would accept a component the renderer
+    cannot route. The caller's catalog is not changed.
+    """
+    components = _as_object(catalog.get("components"))
+    if not components:
+        return catalog
+    return {
+        **catalog,
+        "components": {
+            name: (
+                {**definition, "required": [*required, "component"]}
+                if isinstance(definition, dict)
+                and "component" not in (required := _as_list(definition.get("required")))
+                else definition
             )
+            for name, definition in components.items()
+        },
+    }
+
+
+def _definition_schemas(definition: JsonSchema) -> Iterator[JsonSchema]:
+    """``definition`` and the object schemas its ``allOf`` composes, depth first."""
+    yield definition
+    for branch in _as_list(definition.get("allOf")):
+        if isinstance(branch, dict):
+            yield from _definition_schemas(branch)
 
 
 def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
@@ -185,6 +228,7 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
     if protocol.catalog_definition_file is not None:
         _check_catalog_definition(catalog, protocol)
         _check_component_discriminators(catalog)
+        catalog = _with_required_discriminators(catalog)
     if protocol.restricted_catalog_refs:
         _check_catalog_references(catalog)
     return {**catalog, "$id": catalog_id}
