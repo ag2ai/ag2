@@ -2,26 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Chat Completions reasoning extraction across provider field names.
+"""Chat Completions reasoning is read from either provider field name.
 
-OpenAI-compatible servers split on where they attach reasoning tokens:
-DeepSeek and SGLang use ``reasoning_content``; vLLM, OpenRouter, and
-Ollama-compatible endpoints use ``reasoning``. Both non-streaming messages
-and streaming deltas must check both fields and emit ``ModelReasoning`` once.
+OpenAI-compatible servers disagree on where reasoning goes: DeepSeek, SGLang,
+xAI and DashScope send ``reasoning_content``; vLLM, OpenRouter and Ollama send
+``reasoning``. A completion and a stream must both read either field and emit
+one ``ModelReasoning`` per message or delta.
 """
 
-import json
 from typing import Any
 
 import httpx2
 import pytest
-from fast_depends.use import SerializerCls
 
-from ag2 import Context, MemoryStream
+from ag2 import Agent, MemoryStream
 from ag2.config import OpenAICompletionsConfig
-from ag2.events import ModelMessage, ModelMessageChunk, ModelReasoning, ModelRequest, TextInput
+from ag2.events import ModelReasoning
 
-from ._helpers import recording
+from ._helpers import completion_chunk, completion_sse, recording
+
+streaming_modes = pytest.mark.parametrize("streaming", [False, True], ids=["completion", "stream"])
 
 
 def _completion(message: dict[str, Any]) -> dict[str, Any]:
@@ -35,159 +35,68 @@ def _completion(message: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _chunk(delta: dict[str, Any], finish_reason: str | None = None) -> dict[str, Any]:
-    return {
-        "id": "chatcmpl_1",
-        "object": "chat.completion.chunk",
-        "created": 0,
-        "model": "test-model",
-        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
-    }
-
-
-def _sse(chunks: list[dict[str, Any]]) -> bytes:
-    return "".join(f"data: {json.dumps(c)}\n\n" for c in chunks).encode() + b"data: [DONE]\n\n"
-
-
-def _http_client_json(payload: dict[str, Any]) -> httpx2.AsyncClient:
+def _replying(response: httpx2.Response) -> httpx2.AsyncClient:
     def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=payload)
+        return response
 
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
 
-def _http_client_stream(chunks: list[dict[str, Any]]) -> httpx2.AsyncClient:
-    body = _sse(chunks)
+def _config(*reasoning_deltas: dict[str, Any], streaming: bool) -> OpenAICompletionsConfig:
+    """A server answering "ok" after the given reasoning fields, as one completion or as stream deltas."""
+    if streaming:
+        chunks = [completion_chunk(delta) for delta in reasoning_deltas]
+        chunks.append(completion_chunk({"content": "ok"}, finish_reason="stop"))
+        response = httpx2.Response(200, content=completion_sse(chunks), headers={"content-type": "text/event-stream"})
+    else:
+        message: dict[str, Any] = {"role": "assistant", "content": "ok"}
+        for fields in reasoning_deltas:
+            message.update(fields)
+        response = httpx2.Response(200, json=_completion(message))
 
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, content=body, headers={"content-type": "text/event-stream"})
-
-    return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
-
-
-async def _run(config: OpenAICompletionsConfig) -> list[ModelReasoning]:
-    events = await _run_all(config)
-    return [e for e in events if isinstance(e, ModelReasoning)]
+    return OpenAICompletionsConfig(
+        model="test-model", api_key="test", streaming=streaming, http_client=_replying(response)
+    )
 
 
-async def _run_all(config: OpenAICompletionsConfig) -> list[Any]:
+async def _ask(config: OpenAICompletionsConfig) -> tuple[str | None, list[ModelReasoning]]:
     stream = MemoryStream()
-    captured = recording(stream)
-    client = config.create()
-    await client(
-        messages=[ModelRequest([TextInput("go")])],
-        context=Context(stream=stream),
-        tools=[],
-        response_schema=None,
-        serializer=SerializerCls,
-    )
-    return captured
+    events = recording(stream)
+
+    reply = await Agent("reasoner", config=config).ask("go", stream=stream)
+
+    return reply.body, [e for e in events if isinstance(e, ModelReasoning)]
 
 
 @pytest.mark.asyncio
-async def test_non_streaming_reasoning_field() -> None:
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        http_client=_http_client_json(_completion({"role": "assistant", "content": "ok", "reasoning": "thought"})),
-    )
+@streaming_modes
+@pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+async def test_reasoning_is_read_from_either_field(field: str, streaming: bool) -> None:
+    config = _config({field: "thought"}, streaming=streaming)
 
-    assert await _run(config) == [ModelReasoning("thought")]
+    assert await _ask(config) == ("ok", [ModelReasoning("thought")])
 
 
 @pytest.mark.asyncio
-async def test_non_streaming_reasoning_content_field() -> None:
-    # DeepSeek / SGLang shape: non-streaming message carries reasoning_content.
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        http_client=_http_client_json(
-            _completion({"role": "assistant", "content": "ok", "reasoning_content": "thought"})
-        ),
-    )
+@pytest.mark.parametrize("field", ["reasoning_content", "reasoning"])
+async def test_stream_emits_reasoning_per_delta(field: str) -> None:
+    config = _config({field: "step 1 "}, {field: "step 2"}, streaming=True)
 
-    assert await _run(config) == [ModelReasoning("thought")]
+    assert await _ask(config) == ("ok", [ModelReasoning("step 1 "), ModelReasoning("step 2")])
 
 
 @pytest.mark.asyncio
-async def test_streaming_reasoning_field() -> None:
-    # vLLM / OpenRouter shape: streaming delta carries reasoning.
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        streaming=True,
-        http_client=_http_client_stream([
-            _chunk({"role": "assistant", "reasoning": "step 1 "}),
-            _chunk({"reasoning": "step 2"}),
-            _chunk({"content": "ok"}, finish_reason="stop"),
-        ]),
-    )
+@streaming_modes
+async def test_reasoning_content_wins_when_both_fields_are_set(streaming: bool) -> None:
+    config = _config({"reasoning_content": "preferred", "reasoning": "fallback"}, streaming=streaming)
 
-    events = await _run_all(config)
-    assert [e for e in events if isinstance(e, ModelReasoning)] == [
-        ModelReasoning("step 1 "),
-        ModelReasoning("step 2"),
-    ]
-    assert [e for e in events if isinstance(e, ModelMessageChunk)] == [ModelMessageChunk("ok")]
-    assert [e for e in events if isinstance(e, ModelMessage)] == [ModelMessage("ok")]
+    assert await _ask(config) == ("ok", [ModelReasoning("preferred")])
 
 
 @pytest.mark.asyncio
-async def test_streaming_reasoning_content_field() -> None:
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        streaming=True,
-        http_client=_http_client_stream([
-            _chunk({"role": "assistant", "reasoning_content": "step 1 "}),
-            _chunk({"reasoning_content": "step 2"}),
-            _chunk({"content": "ok"}, finish_reason="stop"),
-        ]),
-    )
+@streaming_modes
+@pytest.mark.parametrize("empty", [None, ""])
+async def test_empty_reasoning_content_falls_back_to_reasoning(empty: str | None, streaming: bool) -> None:
+    config = _config({"reasoning_content": empty, "reasoning": "fallback"}, streaming=streaming)
 
-    assert await _run(config) == [ModelReasoning("step 1 "), ModelReasoning("step 2")]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("streaming", [False, True])
-async def test_both_fields_present_emits_reasoning_once(streaming: bool) -> None:
-    payload_fields = {"reasoning_content": "preferred", "reasoning": "fallback"}
-    if streaming:
-        http_client = _http_client_stream([
-            _chunk({"role": "assistant", **payload_fields}),
-            _chunk({"content": "ok"}, finish_reason="stop"),
-        ])
-    else:
-        http_client = _http_client_json(_completion({"role": "assistant", "content": "ok", **payload_fields}))
-
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        streaming=streaming,
-        http_client=http_client,
-    )
-
-    assert await _run(config) == [ModelReasoning("preferred")]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("empty_value", [None, ""])
-@pytest.mark.parametrize("streaming", [False, True])
-async def test_empty_reasoning_content_falls_back_to_reasoning(streaming: bool, empty_value: Any) -> None:
-    payload_fields = {"reasoning_content": empty_value, "reasoning": "fallback"}
-    if streaming:
-        http_client = _http_client_stream([
-            _chunk({"role": "assistant", **payload_fields}),
-            _chunk({"content": "ok"}, finish_reason="stop"),
-        ])
-    else:
-        http_client = _http_client_json(_completion({"role": "assistant", "content": "ok", **payload_fields}))
-
-    config = OpenAICompletionsConfig(
-        model="test-model",
-        api_key="test",
-        streaming=streaming,
-        http_client=http_client,
-    )
-
-    assert await _run(config) == [ModelReasoning("fallback")]
+    assert await _ask(config) == ("ok", [ModelReasoning("fallback")])

@@ -37,7 +37,7 @@ from ag2.exceptions import UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, normalize_usage, response_proto_to_schema, tool_to_api
+from .mappers import convert_messages, extract_reasoning, normalize_usage, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 Modality = Literal["text", "audio"]
@@ -77,16 +77,6 @@ class CreateOptions(TypedDict, total=False):
     stream_options: ChatCompletionStreamOptionsParam | None | Omit
     reasoning_effort: ReasoningEffort | None | Omit
     extra_body: dict[str, Any] | None
-
-
-def _extract_reasoning(source: object) -> str | None:
-    """Return reasoning text from ``reasoning_content`` or ``reasoning``."""
-    # DeepSeek/SGLang attach ``reasoning_content`` while vLLM/OpenRouter attach ``reasoning``.
-    for attr in ("reasoning_content", "reasoning"):
-        value = getattr(source, attr, None)
-        if isinstance(value, str) and value:
-            return value
-    return None
 
 
 class OpenAIClient(LLMClient):
@@ -169,7 +159,7 @@ class OpenAIClient(LLMClient):
             msg = choice.message
             finish_reason = choice.finish_reason
 
-            if r := _extract_reasoning(msg):
+            if r := extract_reasoning(msg):
                 await context.send(ModelReasoning(r))
 
             if c := msg.content:
@@ -227,7 +217,7 @@ class OpenAIClient(LLMClient):
                     finish_reason = choice.finish_reason
                 delta = choice.delta
 
-                if r := _extract_reasoning(delta):
+                if r := extract_reasoning(delta):
                     await context.send(ModelReasoning(r))
 
                 if c := delta.content:
