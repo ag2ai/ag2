@@ -191,7 +191,7 @@ class CascadeConfig(RealtimeConfig):
             with context.stream.where(ModelMessageChunk).sub_scope(speech.on_chunk):
                 for _ in range(MAX_TOOL_ITERATIONS):
                     messages = _conversation(await context.stream.history.get_events())
-                    response = await client(  # type: ignore[operator]
+                    response = await client(
                         messages,
                         context,
                         tools=schemas,

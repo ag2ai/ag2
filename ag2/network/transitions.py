@@ -30,8 +30,10 @@ under a unique ``name``.
 """
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+
+from pydantic import JsonValue
 
 from .envelope import EV_PACKET, Envelope
 from .errors import NetworkError
@@ -218,8 +220,8 @@ class ToolCalled:
     def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
         if envelope.event_type != EV_PACKET:
             return False
-        routing = envelope.event_data.get("routing", {}) or {}
-        return routing.get("tool") == self.tool_name
+        routing = envelope.event_data.get("routing")
+        return isinstance(routing, dict) and routing.get("tool") == self.tool_name
 
 
 @dataclass(slots=True)
@@ -233,7 +235,7 @@ class ContextEquals:
     """
 
     key: str
-    value: Any
+    value: JsonValue
     name: ClassVar[str] = "context_equals"
 
     def evaluate(self, state: "WorkflowState", envelope: Envelope) -> bool:
@@ -373,14 +375,15 @@ class TransitionGraph:
         when you need isolation (e.g. multi-tenant tests) or a registry
         seeded with custom targets / conditions.
         """
-        if isinstance(data, str):
-            data = json.loads(data)
+        parsed = json.loads(data) if isinstance(data, str) else data
+        if not isinstance(parsed, dict):
+            raise ValueError(f"a transition graph must be a JSON object, got {type(parsed).__name__}")
         reg = registry if registry is not None else TransitionRegistry.default()
         return cls(
-            initial_speaker=data["initial_speaker"],
-            transitions=[_transition_from_dict(t, reg) for t in (data.get("transitions") or [])],
-            default_target=reg.target_from_dict(data.get("default_target")),
-            max_turns=data.get("max_turns"),
+            initial_speaker=parsed["initial_speaker"],
+            transitions=[_transition_from_dict(t, reg) for t in (parsed.get("transitions") or [])],
+            default_target=reg.target_from_dict(parsed.get("default_target")),
+            max_turns=parsed.get("max_turns"),
         )
 
     # ── Convenience factories ──────────────────────────────────────
@@ -453,6 +456,6 @@ def _transition_from_dict(data: dict[str, Any], registry: TransitionRegistry) ->
 def _dataclass_args(obj: object) -> dict[str, Any]:
     """``asdict`` for the instance fields only — ``ClassVar``s are skipped
     automatically by ``dataclasses.fields``."""
-    if not hasattr(obj, "__dataclass_fields__"):
+    if not is_dataclass(obj) or isinstance(obj, type):
         return {}
     return asdict(obj)

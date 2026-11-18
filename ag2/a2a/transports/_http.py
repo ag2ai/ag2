@@ -122,7 +122,7 @@ def make_httpx_client(
     return httpx.AsyncClient(headers=dict(headers) if headers else None, timeout=timeout)
 
 
-def make_a2a_client(  # type: ignore[no-any-unimported]
+def make_a2a_client(
     *,
     card: AgentCard,
     httpx_client: httpx.AsyncClient,

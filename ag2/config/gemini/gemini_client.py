@@ -11,6 +11,7 @@ from uuid import uuid4
 import google.auth
 import google.genai as genai
 import httpx
+import httpx2
 from fast_depends.library.serializer import SerializerProto
 from google.genai import types
 from google.oauth2 import service_account
@@ -31,6 +32,7 @@ from ag2.events import (
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
+from ._compat import build_http_options
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
 from .mappers import (
     build_system_instruction,
@@ -43,6 +45,12 @@ from .mappers import (
 )
 
 ThinkingLevel = Literal["low", "medium", "high"]
+
+GeminiApiVersion = Literal["v1", "v1beta"]
+"""Gemini Developer API versions. `v1beta` also serves the `-latest` aliases and some `-preview` models."""
+
+VertexAIApiVersion = Literal["v1", "v1beta1"]
+"""Vertex AI API versions."""
 
 
 class CreateConfig(TypedDict, total=False):
@@ -95,14 +103,15 @@ class GeminiClient(LLMClient):
         credentials: google.auth.credentials.Credentials | str | None = None,
         project: str | None = None,
         location: str | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx.AsyncClient | httpx2.AsyncClient | None = None,
+        api_version: GeminiApiVersion | VertexAIApiVersion | None = None,
         streaming: bool = False,
         create_config: CreateConfig | None = None,
         cached_content: str | None = None,
     ) -> None:
         # A string indicates a json credentials file, load into credentials
         resolved_credentials = _credentials_from_file(credentials) if isinstance(credentials, str) else credentials
-        http_options = types.HttpOptions(httpx_async_client=http_client) if http_client is not None else None
+        http_options = build_http_options(http_client, api_version)
         self._client = genai.Client(
             vertexai=vertexai,
             api_key=api_key,

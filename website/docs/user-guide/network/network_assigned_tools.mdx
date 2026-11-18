@@ -87,7 +87,7 @@ def tools_for(
     self,
     client: AgentClient,
     metadata: ChannelMetadata,
-    state: AdapterState,
+    state: StateT,  # the adapter's own state type
     participant_id: str,
 ) -> list[Tool]: ...
 ```

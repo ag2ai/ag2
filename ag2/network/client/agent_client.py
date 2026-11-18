@@ -26,8 +26,10 @@ includes ``NetworkContextPolicy``.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import TYPE_CHECKING
+
+from pydantic import JsonValue
 
 from ag2.agent import Agent
 
@@ -205,7 +207,7 @@ class AgentClient:
         type: str,
         target: str | list[str],
         ttl: str | int | None = None,
-        knobs: dict[str, object] | None = None,
+        knobs: Mapping[str, JsonValue] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> Channel:
