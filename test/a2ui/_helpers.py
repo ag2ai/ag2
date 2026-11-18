@@ -14,13 +14,7 @@ def validating_parser(
 ) -> A2UIResponseParser:
     """A parser that validates against the protocol version's schemas and the given custom catalog."""
     manager = A2UISchemaManager(protocol_version=protocol_version, custom_catalog=custom_catalog)
-    return A2UIResponseParser(
-        protocol=manager.protocol,
-        server_to_client_schema=manager.server_to_client_schema,
-        schema_registry=manager.build_schema_registry(),
-        component_types=manager.component_types(),
-        catalog_ids=manager.catalog_ids,
-    )
+    return A2UIResponseParser.validating(manager.protocol, manager.validation_schemas())
 
 
 def extracting_parser(protocol_version: A2UIVersion = "v0.9") -> A2UIResponseParser:

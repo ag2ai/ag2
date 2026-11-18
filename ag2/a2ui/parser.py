@@ -24,7 +24,7 @@ from ._types import (
 from ._versions import A2UIProtocol
 from .constants import A2UI_JSON_CLOSE_TAG, A2UI_JSON_OPEN_TAG
 from .diagnostics import MessageChecker
-from .schema_manager import _registry_for_surface_catalog, _registry_for_unknown_catalog
+from .schema_manager import A2UIValidationSchemas, _registry_for_surface_catalog, _registry_for_unknown_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +258,17 @@ class A2UIResponseParser:
         self._registry = schema_registry
         self._component_types = component_types
         self._catalog_ids = catalog_ids
+
+    @classmethod
+    def validating(cls, protocol: A2UIProtocol, schemas: A2UIValidationSchemas) -> "A2UIResponseParser":
+        """A parser that validates every message against ``schemas``."""
+        return cls(
+            protocol=protocol,
+            server_to_client_schema=schemas.server_to_client_schema,
+            schema_registry=schemas.schema_registry,
+            component_types=schemas.component_types,
+            catalog_ids=schemas.catalog_ids,
+        )
 
     @property
     def protocol(self) -> A2UIProtocol:

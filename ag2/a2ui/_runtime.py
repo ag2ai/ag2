@@ -161,13 +161,7 @@ def _build_offer(
     middleware: Middleware
     validator: A2UIResponseParser | None = None
     if settings.validate_responses:
-        parser = A2UIResponseParser(
-            protocol=schema_manager.protocol,
-            server_to_client_schema=schema_manager.server_to_client_schema,
-            schema_registry=schema_manager.build_schema_registry(),
-            component_types=schema_manager.component_types(),
-            catalog_ids=schema_manager.catalog_ids,
-        )
+        parser = A2UIResponseParser.validating(schema_manager.protocol, schema_manager.validation_schemas())
         middleware = Middleware(A2UIValidationMiddleware, parser=parser, max_retries=settings.validation_retries)
         validator = parser
     else:

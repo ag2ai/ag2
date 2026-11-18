@@ -7,6 +7,7 @@
 import copy
 import os
 from collections.abc import Collection
+from dataclasses import dataclass
 from urllib.parse import urljoin
 
 from referencing import Registry, Resource
@@ -36,6 +37,20 @@ from ._custom_catalog import _load_custom_catalog, _xid_property_names
 from ._json import _as_object, _resource
 from ._prompt import _prompt_section
 from ._spec import _vendored_spec
+
+
+@dataclass(frozen=True, slots=True)
+class A2UIValidationSchemas:
+    """Everything a validating :class:`~ag2.a2ui.parser.A2UIResponseParser` checks responses against."""
+
+    server_to_client_schema: JsonSchema
+    """The message schema responses are validated against."""
+    schema_registry: Registry
+    """The registry ``$ref``s in ``server_to_client_schema`` resolve against."""
+    component_types: ComponentTypes
+    """How each component type of the served catalogs references and nests other components."""
+    catalog_ids: tuple[str, ...]
+    """Every catalog a surface may name."""
 
 
 class A2UISchemaManager:
@@ -149,25 +164,23 @@ class A2UISchemaManager:
         self._ensure_loaded()
         return tuple(self._catalog.by_id)
 
-    @property
-    def server_to_client_schema(self) -> JsonSchema:
-        """The message schema responses are validated against."""
+    def validation_schemas(self) -> A2UIValidationSchemas:
+        """The schemas, registry and component types responses are validated against."""
         self._ensure_loaded()
-        return self._validation_schema
+        return A2UIValidationSchemas(
+            server_to_client_schema=self._validation_schema,
+            schema_registry=self._schema_registry(),
+            component_types=self._component_types(),
+            catalog_ids=self.catalog_ids,
+        )
 
-    def component_types(self) -> ComponentTypes:
-        """How each component type of the served catalogs references and nests other components."""
-        self._ensure_loaded()
+    def _component_types(self) -> ComponentTypes:
         return component_types(
             *self._catalog.by_id.values(), documents={"basic_catalog.json": self._spec.basic_catalog}
         )
 
-    def build_schema_registry(self) -> Registry:
-        """The registry ``$ref``s in :attr:`server_to_client_schema` resolve against.
-
-        Each resource sits under its own ``$id``; the alias table below adds the other names the specs use.
-        """
-        self._ensure_loaded()
+    def _schema_registry(self) -> Registry:
+        """Each resource sits under its own ``$id``; the alias table below adds the other names the specs use."""
         base = self._protocol.schema_base_uri
         common_types = _resource(self._common_types)
         catalogs = self._catalog.by_id
@@ -222,4 +235,4 @@ class A2UISchemaManager:
         )
 
 
-__all__ = ("A2UISchemaManager",)
+__all__ = ("A2UISchemaManager", "A2UIValidationSchemas")

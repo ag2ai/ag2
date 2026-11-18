@@ -18,8 +18,7 @@ from ag2.events import BaseEvent, Input, ModelMessage, ModelRequest, ModelRespon
 
 from ._types import A2UIVersion, JsonObject, JsonValue
 from .actions import A2UIEventAction
-from .capabilities import A2UIClientCapabilities
-from .incoming import A2UIIncomingParseResult, A2UIRendererInput, read_renderer_input
+from .incoming import A2UIRendererInput, read_renderer_input
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +46,6 @@ class A2UIServerRequest:
     prompt: list[str] = field(default_factory=list)
     variables: dict[str, Any] = field(default_factory=dict)
     renderer: A2UIRendererInput = field(default_factory=A2UIRendererInput)
-
-    @property
-    def client_capabilities(self) -> A2UIClientCapabilities | None:
-        return self.renderer.capabilities
-
-    @property
-    def client_interactions(self) -> tuple[A2UIIncomingParseResult, ...]:
-        return self.renderer.interactions
-
-    @property
-    def client_data_model(self) -> dict[str, JsonObject] | None:
-        return self.renderer.data_model
 
 
 def parse_request(

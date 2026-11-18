@@ -17,7 +17,7 @@ def _no_actions(name: str) -> None:
 class TestParseRequestCapabilities:
     def test_absent_capabilities_is_none(self) -> None:
         req = parse_request({"messages": []}, resolve_action=_no_actions)
-        assert req.client_capabilities is None
+        assert req.renderer.capabilities is None
 
     def test_capabilities_parsed_for_version(self) -> None:
         body = {
@@ -25,14 +25,14 @@ class TestParseRequestCapabilities:
             "a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
         }
         req = parse_request(body, resolve_action=_no_actions, version_key="v1.0")
-        assert req.client_capabilities == A2UIClientCapabilities(
+        assert req.renderer.capabilities == A2UIClientCapabilities(
             supported_catalog_ids=["https://x.example/c.json"], inline_catalogs=[]
         )
 
     def test_capabilities_version_mismatch_is_none(self) -> None:
         body = {"messages": [], "a2uiClientCapabilities": {"v1.0": {"supportedCatalogIds": ["x"]}}}
         req = parse_request(body, resolve_action=_no_actions)  # default version_key "v0.9"
-        assert req.client_capabilities is None
+        assert req.renderer.capabilities is None
 
 
 class TestParseRequestShape:
@@ -243,7 +243,7 @@ class TestParseRequestActions:
             version_key="v1.0",
         )
         assert req.current_inputs == []
-        assert len(req.client_interactions) == 1
+        assert len(req.renderer.interactions) == 1
 
     def test_function_response_without_call_id_is_dropped(self) -> None:
         req = parse_request(

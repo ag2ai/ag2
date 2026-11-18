@@ -132,7 +132,8 @@ def _prompt_section(
                 custom_id = str(catalog.custom["$id"])
                 comp_section += (
                     f"**Custom catalog** (`{custom_id}`): {', '.join(sorted(mixed_in))}\n\n"
-                    f'These are not in the surface\'s default catalog: give each of them `"@catalogId": "{custom_id}"`, '
+                    "These are not in the surface's default catalog: "
+                    f'give each of them `"@catalogId": "{custom_id}"`, '
                     f'and each call to one of this catalog\'s functions `"catalogId": "{custom_id}"`.\n\n'
                 )
                 comp_section += _component_lines(spec, mixed_in, envelope)
