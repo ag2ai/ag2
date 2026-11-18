@@ -69,6 +69,24 @@ async def test_mock_llm_answer():
     assert res.body == "This is a mocked response."
 ```
 
+### Share one script across asks
+
+Each `ask` replays the script from its first turn. When the code under test asks the same agent several times and every ask needs its own answer, pass `persistent=True`: all asks then read one script in order.
+
+```python linenums="1"
+import pytest
+
+from ag2 import Agent
+from ag2.testing import TestConfig
+
+@pytest.mark.asyncio
+async def test_two_asks():
+    agent = Agent("test_agent", config=TestConfig("first", "second", persistent=True))
+
+    assert (await agent.ask("Hi!")).body == "first"
+    assert (await agent.ask("Hi again!")).body == "second"
+```
+
 ## How to test tool execution
 
 You can also use `TestConfig` to yield tool calls. This allows you to test both successful tool execution and error handling. By providing a `ToolCallEvent` as the first response and a string as the final response, you can simulate a complete agent-tool interaction loop.

@@ -157,11 +157,15 @@ class PathTriage(BaseModel):
 
 
 class SharedAlias(BaseModel):
+    model_config = ConfigDict(validate_by_name=True)
+
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="flag")
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="flag")
 
 
 class AliasOfAnotherField(BaseModel):
+    model_config = ConfigDict(validate_by_name=True)
+
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
 

@@ -8,6 +8,8 @@ Scripted comparators keep the aggregation math deterministic and independent of
 any LLM; the dual-order swap is unit-tested separately in test_pairwise_judge.
 """
 
+from typing import Literal
+
 import pytest
 
 from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
@@ -29,7 +31,7 @@ def _source(label: str) -> InMemoryTraceSource:
 class _Scripted:
     """A PairwiseComparator that returns a fixed winner per task_id."""
 
-    def __init__(self, key: str, wins: dict[str, str]) -> None:
+    def __init__(self, key: str, wins: dict[str, Literal["a", "b", "tie"]]) -> None:
         self.key = key
         self._wins = wins
 

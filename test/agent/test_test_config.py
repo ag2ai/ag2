@@ -97,3 +97,23 @@ async def test_tracking_config_preserves_tools_iterable(iterable_type: str) -> N
     expected = [ModelCall(prompt=(), tools=tuple(schemas), dependencies={}, variables={}, messages=(request,))]
     assert config.calls == expected
     assert wrapped.calls == expected
+
+
+@pytest.mark.asyncio()
+async def test_each_ask_replays_the_script_by_default() -> None:
+    agent = Agent("", config=TestConfig("first", "second"))
+
+    first = await agent.ask("Hi!")
+    second = await agent.ask("Hi again!")
+
+    assert [first.body, second.body] == ["first", "first"]
+
+
+@pytest.mark.asyncio()
+async def test_persistent_script_continues_across_asks() -> None:
+    agent = Agent("", config=TestConfig("first", "second", persistent=True))
+
+    first = await agent.ask("Hi!")
+    second = await agent.ask("Hi again!")
+
+    assert [first.body, second.body] == ["first", "second"]

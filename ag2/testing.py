@@ -213,6 +213,7 @@ class TestConfig(ModelConfig):
         model: str | None = None,
         raise_tool_errors: bool = True,
         files: TestFilesClient | None = None,
+        persistent: bool = False,
     ) -> None:
         """Script the LLM, one :data:`Turn` per positional event.
 
@@ -230,8 +231,17 @@ class TestConfig(ModelConfig):
         asserting this double's behaviour rather than the agent's.
 
         ``files`` backs ``FilesAPI(config)``; without it the Files API is unsupported.
+
+        By default every ``ask`` replays the script from its first turn. With
+        ``persistent=True`` all asks share one script and each reads on where
+        the previous one stopped — for code that asks the same agent several
+        times, such as a judge called once per order::
+
+            TestConfig("first", "second", persistent=True)
         """
         self.events = events
+        self._persistent = persistent
+        self._client: TestClient | None = None
         self._files = files
         self._provider = provider
         self._model = model
@@ -253,7 +263,11 @@ class TestConfig(ModelConfig):
         return self
 
     def create(self) -> TestClient:
-        return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        if not self._persistent:
+            return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        if self._client is None:
+            self._client = TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        return self._client
 
     def create_files_client(self) -> "FilesClient":
         if self._files is None:

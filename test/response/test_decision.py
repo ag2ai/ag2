@@ -109,9 +109,17 @@ class Provider(ABC):
     @abstractmethod
     def asked(self) -> Asked: ...
 
-    async def ask(self, schema: Any, answer: dict[str, Any], *, prompt: str | None = None, **config: Any) -> Any:
+    async def ask(
+        self,
+        schema: Any,
+        answer: dict[str, Any],
+        *,
+        prompt: str | None = None,
+        descriptions: dict[str, str] | None = None,
+    ) -> Any:
         self.answer = answer
-        agent = Agent("a", prompt=prompt or [], config=self._config(**config), response_schema=schema)
+        config = self._config(**{self.describe: descriptions}) if descriptions else self._config()
+        agent = Agent("a", prompt=prompt or [], config=config, response_schema=schema)
         return await (await agent.ask("hi")).content()
 
 
@@ -247,7 +255,7 @@ class TestPrecedence:
         schema = Annotated[Department, Question(options={"billing": "Money", "technical": "Code"})]
 
         await provider.ask(
-            schema, provider.choice("billing", ("billing", "technical")), **{provider.describe: {"billing": "Cash"}}
+            schema, provider.choice("billing", ("billing", "technical")), descriptions={"billing": "Cash"}
         )
 
         assert provider.asked().options == {"billing": "Cash", "technical": "Code"}
