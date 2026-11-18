@@ -78,11 +78,10 @@ class A2UIOffer:
             and isinstance(message, dict)
             and "agentFunctionResponse" in message
         ]
-        logger.warning(
-            "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from %s.",
-            len(messages) - len(kept),
-            source,
-        )
+        if dropped := len(messages) - len(kept):
+            logger.warning(
+                "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from %s.", dropped, source
+            )
         return kept
 
 

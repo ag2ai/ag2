@@ -6,7 +6,7 @@
 
 import re
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
 from ._types import JsonObject, JsonValue
@@ -39,8 +39,8 @@ class ComponentType:
     """The component types it may contain; ``None`` allows any."""
 
 
-ComponentTypes: TypeAlias = Mapping[str, ComponentType]
-"""Each component type the catalogs define, by component type."""
+ComponentTypes: TypeAlias = Mapping[tuple[str, str], ComponentType]
+"""Each component type the catalogs define, by catalog id and component type: two catalogs may define one type."""
 
 _SURFACE = "Surface"
 """The reserved container ``createSurface`` creates; a surface's ``root`` is always its child (v1.0)."""
@@ -51,17 +51,18 @@ def component_types(*catalogs: JsonObject, documents: Mapping[str, JsonObject] |
 
     As the spec says, only a property whose schema ``$ref``s ``ComponentId``, ``Child`` or ``ChildList`` is a
     reference; a plain string is static text. Like the official SDK, an inline object schema with ``componentId``
-    and ``path`` (or ``dataBinding``) also counts, as a template child list. A later catalog's component wins over
-    an earlier one's of the same type. ``documents`` resolves a ``$ref`` into another file (``basic_catalog.json``).
+    and ``path`` (or ``dataBinding``) also counts, as a template child list. Each catalog's types are keyed by its
+    ``$id``. ``documents`` resolves a ``$ref`` into another file (``basic_catalog.json``).
     ``allowedParents`` / ``allowedChildren`` are the v1.0 composition constraints (a2ui_protocol.md, "Composition
     validation rules").
     """
-    types: dict[str, ComponentType] = {}
+    types: dict[tuple[str, str], ComponentType] = {}
     for catalog in catalogs:
+        catalog_id = str(catalog.get("$id"))
         components = catalog.get("components")
         for key, definition in components.items() if isinstance(components, dict) else ():
             found = dict.fromkeys(_references_in(definition, (), catalog, frozenset(), documents or {}))
-            types[_component_type(definition) or key] = ComponentType(
+            types[catalog_id, _component_type(definition) or key] = ComponentType(
                 references=tuple(found),
                 allowed_parents=_names(definition, "allowedParents"),
                 allowed_children=_names(definition, "allowedChildren"),
@@ -138,34 +139,76 @@ def component_graph_errors(messages: Sequence[JsonObject], types: ComponentTypes
     Wherever both ends of a reference are in this response, the composition constraints apply, and a ``root`` sits
     under ``Surface``, on any surface: "the component with ``"id": "root"`` mounts as the child of the surface's
     canonical ``Surface`` container" (v1.0 a2ui_protocol.md, ``updateComponents``).
+
+    A ``deleteSurface`` ends a surface: one created again under its id starts empty ("to reconfigure them, the
+    surface must be deleted and recreated", ``createSurface``). Each component's type is read from its own
+    ``@catalogId`` or its surface's ``catalogId`` (v1.0 "Mixable catalogs and component resolution logic").
     """
-    created: set[str] = set()
-    surfaces: dict[str, list[list[JsonObject]]] = {}
+    surfaces: list[_Surface] = []
+    current: dict[str, _Surface] = {}
     for message in messages:
-        for key in ("createSurface", "updateComponents"):
-            payload = message.get(key)
+        for key, payload in message.items():
             if not isinstance(payload, dict) or not isinstance(surface_id := payload.get("surfaceId"), str):
                 continue
+            if key == "deleteSurface":
+                current.pop(surface_id, None)
+                continue
+            if key not in ("createSurface", "updateComponents"):
+                continue
+            if (surface := current.get(surface_id)) is None:
+                surface = current[surface_id] = _Surface(surface_id)
+                surfaces.append(surface)
             if key == "createSurface":
-                created.add(surface_id)
+                surface.created = True
+                catalog_id = payload.get("catalogId")
+                surface.catalog_id = catalog_id if isinstance(catalog_id, str) else None
             listed = payload.get("components")
-            surfaces.setdefault(surface_id, []).append([
-                c for c in (listed if isinstance(listed, list) else ()) if isinstance(c, dict)
-            ])
+            surface.batches.append([c for c in (listed if isinstance(listed, list) else ()) if isinstance(c, dict)])
     errors: list[str] = []
-    for surface_id, components in surfaces.items():
-        errors.extend(_surface_errors(surface_id, components, types, complete=surface_id in created))
+    for surface in surfaces:
+        errors.extend(_surface_errors(surface, types))
     return errors
 
 
-def _surface_errors(
-    surface_id: str, batches: list[list[JsonObject]], types: ComponentTypes, *, complete: bool
-) -> Iterator[str]:
-    """``batches`` holds each message's components; a later message may update an earlier one's by id."""
-    prefix = f"Surface '{surface_id}':"
+@dataclass(slots=True)
+class _Surface:
+    """One surface's components in a response, from its creation (or first update) until it is deleted."""
+
+    surface_id: str
+    created: bool = False
+    """Whether this response creates it; a surface from an earlier turn may be updated partially."""
+    catalog_id: str | None = None
+    """The ``catalogId`` its ``createSurface`` names, if it is created here and names one."""
+    batches: list[list[JsonObject]] = field(default_factory=list)
+    """Each message's components; a later message may update an earlier one's by id."""
+
+
+def _type_of(component: JsonObject, surface: _Surface, types: ComponentTypes) -> ComponentType | None:
+    """The definition ``component`` resolves to: in its ``@catalogId``, else in its surface's catalog.
+
+    Where neither names a catalog the agent serves (a surface from an earlier turn, whose catalog this response
+    does not show), any served catalog's definition of the type is used; the schema check reports a component that
+    no catalog resolves.
+    """
+    name = component.get("component")
+    if not isinstance(name, str):
+        return None
+    own = component.get("@catalogId")
+    catalog_id = own if isinstance(own, str) else surface.catalog_id if surface.created else None
+    if catalog_id is not None and (found := types.get((catalog_id, name))) is not None:
+        return found
+    if catalog_id is not None and any(known == catalog_id for known, _ in types):
+        return None
+    candidates = [definition for (_, type_name), definition in types.items() if type_name == name]
+    return candidates[-1] if candidates else None
+
+
+def _surface_errors(surface: _Surface, types: ComponentTypes) -> Iterator[str]:
+    prefix = f"Surface '{surface.surface_id}':"
+    complete = surface.created
     edges: dict[str, list[str]] = {}
-    kinds: dict[str, str] = {}
-    for components in batches:
+    kinds: dict[str, tuple[str, ComponentType | None]] = {}
+    for components in surface.batches:
         in_message: set[str] = set()
         for component in components:
             component_id = component.get("id")
@@ -176,9 +219,9 @@ def _surface_errors(
                 continue
             in_message.add(component_id)
             component_type = component.get("component")
-            known = types.get(component_type) if isinstance(component_type, str) else None
+            known = _type_of(component, surface, types)
             if isinstance(component_type, str):
-                kinds[component_id] = component_type
+                kinds[component_id] = (component_type, known)
             edges[component_id] = list(_referenced_ids(component, known.references if known else ()))
 
     if complete:
@@ -196,39 +239,37 @@ def _surface_errors(
             if component_id not in reachable:
                 yield f"{prefix} component '{component_id}' is not reachable from 'root'"
 
-    yield from _composition_errors(prefix, edges, kinds, types)
+    yield from _composition_errors(prefix, edges, kinds)
 
 
 def _composition_errors(
     prefix: str,
     edges: Mapping[str, list[str]],
-    kinds: Mapping[str, str],
-    types: ComponentTypes,
+    kinds: Mapping[str, tuple[str, ComponentType | None]],
 ) -> Iterator[str]:
     """Each parent and child whose types the catalog's ``allowedParents`` / ``allowedChildren`` do not let nest.
 
     The renderer rejects these with ``UNALLOWED_PARENT`` / ``UNALLOWED_CHILD``. ``root`` is the child of the
     surface's ``Surface`` container.
     """
-    pairs: list[tuple[str, str, str]] = []
+    pairs: list[tuple[str, tuple[str, ComponentType | None], str]] = []
     if "root" in kinds:
-        pairs.append((_SURFACE, _SURFACE, "root"))
+        pairs.append((_SURFACE, (_SURFACE, None), "root"))
     for parent_id, targets in edges.items():
-        parent_type = kinds.get(parent_id)
-        if parent_type is not None:
-            pairs.extend((parent_id, parent_type, target) for target in targets)
-    for parent_id, parent_type, child_id in pairs:
-        child_type = kinds.get(child_id)
-        if child_type is None:
+        parent_kind = kinds.get(parent_id)
+        if parent_kind is not None:
+            pairs.extend((parent_id, parent_kind, target) for target in targets)
+    for parent_id, (parent_type, parent), child_id in pairs:
+        child_kind = kinds.get(child_id)
+        if child_kind is None:
             continue
-        child = types.get(child_type)
+        child_type, child = child_kind
         if child is not None and child.allowed_parents is not None and parent_type not in child.allowed_parents:
             allowed = ", ".join(map(repr, sorted(child.allowed_parents))) or "none"
             yield (
                 f"{prefix} component '{child_id}' ({child_type}) cannot be placed in '{parent_id}' ({parent_type}): "
                 f"its allowedParents are {allowed}"
             )
-        parent = types.get(parent_type)
         if parent is not None and parent.allowed_children is not None and child_type not in parent.allowed_children:
             allowed = ", ".join(map(repr, sorted(parent.allowed_children))) or "none"
             yield (
@@ -301,13 +342,15 @@ def _cycles(edges: Mapping[str, list[str]]) -> Iterator[list[str]]:
 _SURFACE_UPDATES = ("updateComponents", "updateDataModel")
 
 
-def surface_lifecycle_errors(messages: Sequence[JsonObject]) -> list[str]:
+def surface_lifecycle_errors(messages: Sequence[JsonObject], *, lifetime_unique_ids: bool) -> list[str]:
     """Check, in message order, that each surface is created before it is updated and not created twice.
 
     A surface must be created before ``updateComponents`` / ``updateDataModel`` reach it, and creating an existing
     surface without deleting it first is an integrity error (a2ui_protocol.md, ``createSurface``). A surface this
-    response never creates may come from an earlier turn, so updates to it are accepted until it is deleted.
+    response never creates may come from an earlier turn, so updates to it are accepted until it is deleted. With
+    ``lifetime_unique_ids`` (v0.9, v1.0) the hint for a duplicate also offers a new ``surfaceId``.
     """
+    remedy = "send deleteSurface before creating it again" + (", or use a new surfaceId" if lifetime_unique_ids else "")
     errors: list[str] = []
     # Per surface: the last ``createSurface`` / ``deleteSurface``, or the first update while neither has happened.
     last: dict[str, tuple[str, int]] = {}
@@ -320,7 +363,7 @@ def surface_lifecycle_errors(messages: Sequence[JsonObject]) -> list[str]:
                 if event == "createSurface":
                     errors.append(
                         f"Operation {index}: surface '{surface_id}' already exists (operation {at} created it); "
-                        "send deleteSurface before creating it again"
+                        + remedy
                     )
                 elif event in _SURFACE_UPDATES:
                     errors.append(

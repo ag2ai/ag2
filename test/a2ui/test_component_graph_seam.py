@@ -312,3 +312,118 @@ async def test_schema_and_graph_errors_are_reported_in_one_retry() -> None:
     assert len(turn.feedback) == 1
     assert "not of type 'array'" in turn.feedback[0]
     assert "- Surface 's': component 'a' is not reachable from 'root'\n" in turn.feedback[0]
+
+
+def _delete(version: str, surface_id: str = "s") -> dict[str, Any]:
+    return {"version": WIRE_VERSION[version], "deleteSurface": {"surfaceId": surface_id}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("version", VERSIONS)
+class TestRecreatedSurface:
+    # "to reconfigure them, the surface must be deleted and recreated" (a2ui_protocol.md, createSurface): the new
+    # surface starts empty, so its tree is checked on its own.
+    async def test_is_checked_without_the_deleted_surfaces_components(self, version: str) -> None:
+        messages = [
+            _create(version),
+            _update(version, {"id": "root", "component": "Column", "children": ["old"]}, _text("old")),
+            _delete(version),
+            _create(version),
+            _update(version, _text("root")),
+        ]
+
+        turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=version)
+
+        assert turn.feedback == []
+        assert turn.ui == messages
+
+    async def test_needs_its_own_root(self, version: str) -> None:
+        messages = [
+            _create(version),
+            _update(version, _text("root")),
+            _delete(version),
+            _create(version),
+            _update(version, {"id": "card", "component": "Card", "child": "label"}, _text("label")),
+        ]
+
+        turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=version)
+
+        assert turn.errors == [
+            [
+                "- No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to "
+                "have a 'root' node.",
+            ]
+        ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("version", "hint"),
+    [
+        ("v0.9", "send deleteSurface before creating it again, or use a new surfaceId"),
+        ("v0.9.1", "send deleteSurface before creating it again"),
+        ("v1.0", "send deleteSurface before creating it again, or use a new surfaceId"),
+    ],
+)
+async def test_creating_an_existing_surface_names_the_versions_remedy(version: str, hint: str) -> None:
+    # v0.9 and v1.0: "`surfaceId` must be globally unique for the renderer's lifetime"; v0.9.1 relaxed that to the
+    # active surfaces (v0_9_1 evolution_guide.md, "Surface ID Uniqueness Relaxation").
+    messages = [_create(version), _update(version, _text("root")), _create(version)]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version=version)
+
+    assert turn.errors == [[f"- Operation 2: surface 's' already exists (operation 0 created it); {hint}"]]
+
+
+_COLUMN_CATALOG_ID = "https://example.com/columns.json"
+_COLUMN_CATALOG = {
+    "catalogId": _COLUMN_CATALOG_ID,
+    "protocolVersion": "1.0",
+    "components": {
+        "Column": {
+            "type": "object",
+            "properties": {
+                "component": {"const": "Column"},
+                "children": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["component"],
+        }
+    },
+}
+
+
+@pytest.mark.asyncio
+class TestSameTypeInTwoCatalogs:
+    # A component resolves against its own `@catalogId` or its surface's `catalogId`, with no fallback (v1.0
+    # a2ui_protocol.md, "Mixable catalogs and component resolution logic"); a custom `Column` is another type.
+    async def test_a_basic_surface_uses_the_basic_definition(self) -> None:
+        messages = [
+            _create("v1.0"),
+            _update("v1.0", {"id": "root", "component": "Column", "children": ["t"]}, _text("t")),
+        ]
+
+        turn = await serve_turn(a2ui_reply(messages), protocol_version="v1.0", custom_catalog=_COLUMN_CATALOG)
+
+        assert turn.feedback == []
+        assert turn.ui == messages
+
+    async def test_a_basic_surface_reports_a_dangling_basic_reference(self) -> None:
+        messages = [_create("v1.0"), _update("v1.0", {"id": "root", "component": "Column", "children": ["missing"]})]
+
+        turn = await serve_turn(
+            a2ui_reply(messages), "Plain text.", protocol_version="v1.0", custom_catalog=_COLUMN_CATALOG
+        )
+
+        assert turn.errors == [["- Surface 's': component 'root' references missing component 'missing'"]]
+
+    async def test_a_custom_surface_uses_the_custom_definition(self) -> None:
+        # The custom `children` is a plain string list, not a ChildList: its items are not component references.
+        messages = [
+            _create("v1.0", catalog_id=_COLUMN_CATALOG_ID),
+            _update("v1.0", {"id": "root", "component": "Column", "children": ["just text"]}),
+        ]
+
+        turn = await serve_turn(a2ui_reply(messages), protocol_version="v1.0", custom_catalog=_COLUMN_CATALOG)
+
+        assert turn.feedback == []
+        assert turn.ui == messages

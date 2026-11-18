@@ -85,6 +85,11 @@ class A2UIProtocol:
     turn" (v1_0 a2ui_protocol.md, "Renderer capabilities"; the A2A extension's "Capability scoping" states it for
     A2A). Every ag2 transport carries them per request. Before v1.0 the capabilities are optional."""
 
+    lifetime_unique_surface_ids: bool
+    """A ``surfaceId`` "must be globally unique for the renderer's lifetime" (v0.9 and v1.0 a2ui_protocol.md,
+    ``createSurface``); v0.9.1 limits that to the active surfaces ("Surface ID Uniqueness Relaxation"). Either way a
+    surface may be deleted and created again, so a new id is only one more remedy for a duplicate ``createSurface``."""
+
     @property
     def server_to_client_keys(self) -> frozenset[str]:
         """The payload key of each message kind an agent may stream in this version."""
@@ -124,6 +129,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         function_rpc=False,
         entity_naming_rules=False,
         turn_scoped_capabilities=False,
+        lifetime_unique_surface_ids=True,
     ),
     "v0.9.1": A2UIProtocol(
         version="v0.9.1",
@@ -145,6 +151,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         function_rpc=False,
         entity_naming_rules=False,
         turn_scoped_capabilities=False,
+        lifetime_unique_surface_ids=False,
     ),
     "v1.0": A2UIProtocol(
         version="v1.0",
@@ -166,6 +173,7 @@ PROTOCOLS: dict[A2UIVersion, A2UIProtocol] = {
         function_rpc=True,
         entity_naming_rules=True,
         turn_scoped_capabilities=True,
+        lifetime_unique_surface_ids=True,
     ),
 }
 

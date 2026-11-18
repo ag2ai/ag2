@@ -130,23 +130,26 @@ def _missing_root_errors(objects: Sequence[JsonValue]) -> list[str]:
 
     The spec asks for a ``root`` in one of a surface's component lists, so a partial update to a surface created
     earlier (by an earlier turn or a server-side handler) needs none. v1.0's ``createSurface`` may carry the
-    initial components itself.
+    initial components itself. A surface deleted and created again needs a ``root`` of its own.
     """
-    created: dict[str, list[JsonValue]] = {}
+    created: list[tuple[str, list[JsonValue]]] = []
+    current: dict[str, list[JsonValue]] = {}
     for op in objects:
-        payload = op.get("createSurface") if isinstance(op, dict) else None
-        surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
-        if isinstance(surface_id, str):
-            created.setdefault(surface_id, []).extend(_components_of(payload))
-    for op in objects:
-        payload = op.get("updateComponents") if isinstance(op, dict) else None
-        surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
-        if isinstance(surface_id, str) and surface_id in created:
-            created[surface_id].extend(_components_of(payload))
+        for key, payload in op.items() if isinstance(op, dict) else ():
+            surface_id = payload.get("surfaceId") if isinstance(payload, dict) else None
+            if not isinstance(surface_id, str):
+                continue
+            if key == "createSurface" and surface_id not in current:
+                current[surface_id] = []
+                created.append((surface_id, current[surface_id]))
+            if key == "deleteSurface":
+                current.pop(surface_id, None)
+            elif key in ("createSurface", "updateComponents") and surface_id in current:
+                current[surface_id].extend(_components_of(payload))
     return [
         f"No component with id 'root' found on surface '{surface_id}' — "
         "the A2UI spec requires the component tree to have a 'root' node."
-        for surface_id, components in created.items()
+        for surface_id, components in created
         if components and not any(isinstance(c, dict) and c.get("id") == "root" for c in components)
     ]
 
@@ -389,7 +392,7 @@ class A2UIResponseParser:
 
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
-        errors.extend(surface_lifecycle_errors(objects))
+        errors.extend(surface_lifecycle_errors(objects, lifetime_unique_ids=self._protocol.lifetime_unique_surface_ids))
         # A surface on an unknown catalog gets that one error: its components have no catalog to be judged by.
         checkable: Sequence[JsonObject] = objects
         if self._catalog_ids is not None:

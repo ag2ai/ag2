@@ -38,8 +38,10 @@ Each turn gets an `A2UIOffer`, built from the renderer's capabilities for the se
 - With no catalog in common the turn **runs without A2UI** and logs a warning, where the SDK raises. The prompt has no
   A2UI section, server-side handlers still run but their surface messages are dropped, and any A2UI the model emits
   anyway is extracted from the prose and dropped. A `callAgentFunction` still gets its `agentFunctionResponse` (L1486):
-  the renderer has not withdrawn A2UI, only shares no catalog, and it is waiting for the answer. The user still gets a
-  text answer, which a request error would not give them.
+  the renderer has not withdrawn A2UI, only shares no catalog, and it is waiting for the answer. The call can only
+  name one of the renderer's catalogs, so its handler is matched by `@call` name alone (ADR 0040), and
+  `UNKNOWN_FUNCTION` means only that no handler has that name (L1486). The user still gets a text answer, which a
+  request error would not give them.
 - Inline catalogs are never offered. ag2 has no opt-in for them, and serving a catalog the renderer defines would
   validate UI against a schema the deployment did not review.
 

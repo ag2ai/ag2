@@ -50,8 +50,9 @@ Each catalog is validated as written; nothing is merged.
   and the prompt tells the model to give custom components `@catalogId` and custom function calls `catalogId`.
 - A `callAgentFunction` is matched to an `@a2ui_action` handler by its `@call` name. Its `catalogId`, which the
   renderer MUST set to the catalog the call resolved to (L1495), may be absent or any catalog the turn offers
-  (ADR 0041). This is ag2's choice: an `@a2ui_action` handler is not declared in any catalog, and the renderer
-  routes undeclared functions to the agent (L1484), so the spec ties the handler to no catalog.
+  (ADR 0041); on a turn with no catalog in common it may name any catalog, and the handler is matched by name
+  alone. This is ag2's choice: an `@a2ui_action` handler is not declared in any catalog, and the renderer routes
+  undeclared functions to the agent (L1484), so the spec ties the handler to no catalog.
 
 ## Consequences
 
@@ -60,6 +61,8 @@ Each catalog is validated as written; nothing is merged.
   `anyComponent` and `anyFunction` in any `$defs`) and only the root keys `catalog_definition.json` allows. In v0.9 a catalog that relied on the merge must declare the basic
   components it uses (`"Text": {"$ref": "basic_catalog.json#/components/Text"}`). In v1.0 basic components on a
   surface created with the custom id need `@catalogId`.
-- The component graph reads references from every served catalog, following `$ref`s into `basic_catalog.json`; when
-  both v1.0 catalogs define a component type, the custom definition decides which properties are references.
+- The component graph reads references from every served catalog, following `$ref`s into `basic_catalog.json`. Each
+  catalog's types are kept apart: a component's references come from the definition in its `@catalogId`, else in its
+  surface's `catalogId`, so a custom v1.0 `Column` does not change a basic `Column`. Only on a surface from an earlier
+  turn, whose catalog the response does not show, is a type looked up by name in any served catalog.
 - The capability note in the prompt checks only the catalog surfaces are created with, not every served catalog.

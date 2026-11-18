@@ -89,6 +89,21 @@ async def test_prompt_and_validator_narrow_to_the_catalog_the_renderer_names(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("supported", "has_rules"), [(_CUSTOM_ID, True), (_BASIC_ID, False)], ids=["custom", "basic"])
+async def test_custom_catalog_rules_follow_the_custom_catalog(supported: str, has_rules: bool) -> None:
+    turn = await serve_turn(
+        "Plain text.",
+        body=_body(supported),
+        protocol_version="v1.0",
+        custom_catalog=_CUSTOM,
+        custom_catalog_rules="Use MyWidget sparingly.",
+    )
+
+    prompt = "\n".join(turn.model_calls[0].prompt)
+    assert ("Use MyWidget sparingly." in prompt) is has_rules
+
+
+@pytest.mark.asyncio
 async def test_a_renderer_naming_every_catalog_is_offered_all_of_them() -> None:
     turn = await serve_turn(
         a2ui_reply(_surface(_CUSTOM_ID, _WIDGET)),
@@ -175,6 +190,51 @@ async def test_no_catalog_in_common_still_answers_a_function_call(caplog: pytest
     assert called == ["lookup"]
     assert turn.ui == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}}]
     assert "dropping 1 A2UI message(s) from handlers" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_no_catalog_in_common_drops_nothing_without_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    @a2ui_action
+    def lookup() -> None:
+        return None
+
+    with caplog.at_level(logging.WARNING, logger="ag2.a2ui"):
+        turn = await serve_turn(
+            body={**_body("https://unknown.example/c.json"), "messages": [], "a2ui": [_FUNCTION_CALL]},
+            actions=[lookup],
+            protocol_version="v1.0",
+        )
+
+    assert turn.ui == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}}]
+    assert "dropping" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_no_catalog_in_common_answers_a_call_that_names_the_renderers_catalog() -> None:
+    # The renderer "MUST set `catalogId` to the catalog the call resolved to" (v1.0 a2ui_protocol.md,
+    # "callAgentFunction"), here one the agent does not serve; the agent answers UNKNOWN_FUNCTION only when it "does
+    # not recognize the function name", and an `@a2ui_action` handler belongs to no catalog (ADR 0040).
+    renderer_catalog = "https://unknown.example/c.json"
+    call = {
+        "version": "1.0",
+        "callAgentFunction": {
+            "surfaceId": "s",
+            "functionCallId": "fc-1",
+            "callFunction": {"@call": "lookup", "catalogId": renderer_catalog, "args": {"q": "x"}},
+        },
+    }
+
+    @a2ui_action
+    def lookup(q: str) -> dict[str, Any]:
+        return {"hit": q}
+
+    turn = await serve_turn(
+        body={**_body(renderer_catalog), "messages": [], "a2ui": [call]},
+        actions=[lookup],
+        protocol_version="v1.0",
+    )
+
+    assert turn.ui == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": {"hit": "x"}}}]
 
 
 @pytest.mark.asyncio

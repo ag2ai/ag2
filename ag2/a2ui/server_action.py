@@ -186,7 +186,7 @@ async def run_agent_function(
     call: A2UIIncomingFunctionCall,
     *,
     protocol: A2UIProtocol,
-    catalog_ids: Collection[str],
+    catalog_ids: Collection[str] | None,
     context: ConversationContext,
     validator: A2UIResponseParser | None = None,
 ) -> list[ServerToClientMessage]:
@@ -198,8 +198,10 @@ async def run_agent_function(
         call: The parsed incoming call; its ``args`` become the handler's keyword arguments.
         protocol: The served protocol version. A version without function RPC
             cannot answer the call, so it is logged and answered with nothing.
-        catalog_ids: Every catalog the server has. A call naming another catalog does not
-            select a local action merely because its function name matches.
+        catalog_ids: The catalogs the turn offers. A call naming another catalog does not
+            select a local action merely because its function name matches. ``None`` accepts a call
+            naming any catalog: on a turn with no catalog in common the renderer can only name its own,
+            and a handler belongs to no catalog (ADR 0040), so it is matched by name alone.
         context: The conversation context supplying dependencies, variables, and
             the ``dependency_provider`` (see :func:`build_server_action_context`).
         validator: Checks the messages the handler returns; invalid ones fail the call
@@ -227,7 +229,9 @@ async def run_agent_function(
             )
         ]
 
-    if action is None or (call.catalog_id is not None and call.catalog_id not in catalog_ids):
+    if action is None or (
+        catalog_ids is not None and call.catalog_id is not None and call.catalog_id not in catalog_ids
+    ):
         return [
             _function_response(
                 call.function_call_id,
@@ -316,7 +320,7 @@ async def run_client_interactions(
             runtime.server_actions.get(call.call),
             call,
             protocol=runtime.protocol,
-            catalog_ids=offer.catalog_ids,
+            catalog_ids=offer.catalog_ids if offer.sends_ui else None,
             context=context,
             validator=offer.message_validator,
         )

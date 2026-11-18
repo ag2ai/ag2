@@ -17,7 +17,7 @@ from a2a.types import Message, Part, TaskState
 
 from ag2.a2a.executor import AgentExecutor, _TaskWriter
 from ag2.a2a.extension import CONTEXT_UPDATE_METADATA_KEY
-from ag2.a2a.mappers import ParsedMessage, struct_to_dict
+from ag2.a2a.mappers import ParsedMessage, part_data_to_python, struct_to_dict
 from ag2.agent import Agent
 from ag2.context import strip_reserved_variables
 from ag2.stream import MemoryStream
@@ -29,7 +29,7 @@ from .._types import A2UIVersion, JsonSchema, JsonValue, ServerToClientMessage
 from ..actions import A2UIAction
 from ..incoming import A2UIRendererInput, read_renderer_input
 from .extension import try_activate_a2ui_extension
-from .parts import create_a2ui_parts, get_a2ui_data
+from .parts import create_a2ui_parts, is_a2ui_part
 
 logger = logging.getLogger(__name__)
 
@@ -298,21 +298,24 @@ class A2UIAgentExecutor(AgentExecutor):
 
 
 def _extract_a2ui_envelopes(part: Part) -> list[JsonValue] | None:
-    """The envelopes an A2UI DataPart carries for the agent, or ``None`` when ``part`` carries none to consume.
+    """The envelopes an A2UI DataPart carries for the agent, or ``None`` when ``part`` is not an A2UI DataPart.
 
-    Those carry ``action``, ``callAgentFunction``, ``rendererFunctionResponse`` or ``error``. The A2A extension
-    says ``data`` "MUST be an array of messages", so a DataPart meant for the agent whose ``data`` is a single
-    envelope (or a ``{"messages": [...]}`` wrapper) is consumed with a warning and yields none.
+    Those carry ``action``, ``callAgentFunction``, ``rendererFunctionResponse`` or ``error``. Every A2UI DataPart
+    is consumed, so none reaches the agent raw. The A2A extension says ``data`` "MUST be an array of messages", so
+    one whose ``data`` is not an array yields none. In an array each message is processed on its own, and the
+    receiver "MUST continue processing the remaining messages in the list" ("Processing Rules"), so an entry that
+    is not a renderer-to-agent message is dropped with a warning and the rest are kept.
     """
-    data = get_a2ui_data(part)
-    if data is None:
+    if not is_a2ui_part(part):
         return None
+    data = part_data_to_python(part)
     if not isinstance(data, list):
-        if is_client_envelope(data) or "messages" in data:
-            logger.warning("Dropping an A2UI DataPart whose 'data' is not an array of messages.")
-            return []
-        return None
-    return [entry for entry in data if is_client_envelope(entry)] or None
+        logger.warning("Dropping an A2UI DataPart whose 'data' is not an array of messages.")
+        return []
+    envelopes: list[JsonValue] = [entry for entry in data if is_client_envelope(entry)]
+    if dropped := len(data) - len(envelopes):
+        logger.warning("Dropping %d A2UI DataPart entry(ies): not a renderer-to-agent message.", dropped)
+    return envelopes
 
 
 __all__ = ("A2UIAgentExecutor",)

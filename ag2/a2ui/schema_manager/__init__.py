@@ -140,6 +140,8 @@ class A2UISchemaManager:
                 served_basic = None
             if served_custom is not None and str(served_custom["$id"]) not in self._served:
                 served_custom = None
+        # The custom catalog's rules describe its components, so they leave the prompt with it.
+        self._prompt_rules = self._custom_catalog_rules if custom is None or served_custom is not None else ""
         catalog = _AgentCatalogs(basic=served_basic, custom=served_custom, mixable=protocol.per_surface_catalogs)
         if protocol.per_surface_catalogs:
             common_types = _with_catalog_function_dispatch(common_types, catalog.by_id, catalog.surface_catalog)
@@ -228,7 +230,7 @@ class A2UISchemaManager:
             self._spec,
             self._catalog,
             self._common_types,
-            self._custom_catalog_rules,
+            self._prompt_rules,
             include_schema=include_schema,
             include_rules=include_rules,
             actions=actions,

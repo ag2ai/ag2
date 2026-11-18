@@ -143,6 +143,21 @@ def _check_entity_names(catalog: JsonSchema) -> None:
             _check_entity_name("argument name", argument, owner=f"function {name!r}")
 
 
+def _check_component_discriminators(catalog: JsonSchema) -> None:
+    """Reject a v1.0 catalog whose component declares a ``component`` const other than its key.
+
+    v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4: the const must be "matching the key under which it is
+    defined". The prompt names components by key and the validator by const, so a mismatch would be unusable.
+    """
+    for name, definition in _as_object(catalog.get("components")).items():
+        discriminator = _as_object(_as_object(_as_object(definition).get("properties")).get("component"))
+        if "const" in discriminator and discriminator["const"] != name:
+            raise ValueError(
+                f'Invalid custom catalog: component {name!r} declares "component": {discriminator["const"]!r}; '
+                f"it must be {name!r}, the key it is defined under"
+            )
+
+
 def _check_entity_name(kind: str, name: str, *, owner: str | None = None) -> None:
     if not _is_identifier_key(name):
         of_owner = f" of {owner}" if owner else ""
@@ -169,6 +184,7 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
         _check_entity_names(catalog)
     if protocol.catalog_definition_file is not None:
         _check_catalog_definition(catalog, protocol)
+        _check_component_discriminators(catalog)
     if protocol.restricted_catalog_refs:
         _check_catalog_references(catalog)
     return {**catalog, "$id": catalog_id}

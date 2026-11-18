@@ -16,7 +16,7 @@ or invoke the agent yourself. Like an agent tool, the function may declare
 
 A button the LLM draws that has **no** registered action still works: its click
 is rewritten into a generic prompt so the agent can react (see
-:func:`~ag2.a2ui.incoming.iter_incoming_prompts`). So "the agent reacts
+:func:`~ag2.a2ui.incoming.incoming_prompts`). So "the agent reacts
 to a click" needs no decorator at all; an action is only for running
 deterministic server logic on click.
 """

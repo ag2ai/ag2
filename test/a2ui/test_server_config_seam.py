@@ -284,6 +284,20 @@ def test_v1_custom_catalog_constraints_follow_the_catalog_definition(catalog: di
         _server(protocol_version="v1.0", custom_catalog={"catalogId": _CATALOG_ID, "protocolVersion": "1.0", **catalog})
 
 
+def test_v1_custom_catalog_component_const_must_match_its_key() -> None:
+    # v1_0 a2ui_protocol.md, "Catalog Schema Rules", 4. Component Discriminator Rule: the `component` const must be
+    # "matching the key under which it is defined".
+    catalog = {"catalogId": _CATALOG_ID, "protocolVersion": "1.0", "components": {"Gauge": _component("Meter")}}
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Invalid custom catalog: component 'Gauge' declares \"component\": 'Meter'; it must be 'Gauge'"
+        ),
+    ):
+        _server(protocol_version="v1.0", custom_catalog=catalog)
+
+
 def test_v09_custom_catalog_names_are_not_restricted() -> None:
     # The v0.9 spec sets no naming rule for catalog entities.
     _server(custom_catalog={"catalogId": _CATALOG_ID, "components": {"my-widget": _component("my-widget")}})

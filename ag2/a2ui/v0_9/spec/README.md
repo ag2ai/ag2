@@ -33,7 +33,7 @@ two places only:
 
 - the messages' `version` field accepts the enum `["v0.9", "v0.9.1"]` instead of `const: "v0.9"`
   (in `server_to_client.json`, `client_to_server.json` and `client_data_model.json`).
-  `ag2/a2ui/schema_manager.py` (`_accept_wire_versions`) applies that widening at load time to
+  `ag2/a2ui/schema_manager/_spec.py` (`_accept_wire_versions`) applies that widening at load time to
   `server_to_client.json`, the only one of the three ag2 validates against;
 - upstream's v0.9.1 basic catalog lacks `List.listStyle` (a2ui-project/a2ui#3956 changed only the v0.9 copy).
   ag2 accepts and describes `listStyle` for v0.9.1 too. Both copies carry the same catalog `$id` (`v0_9`), so

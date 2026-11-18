@@ -22,7 +22,7 @@ from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts
 from ag2.a2ui.constants import A2UI_MIME_TYPE
-from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
+from ag2.events import DataInput, TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final.function_tool import FunctionToolSchema
@@ -183,6 +183,29 @@ class TestIncomingA2UIDataParts:
 
         assert "not an array of messages" in caplog.text
         assert "user@example.com" not in synthesized
+
+    @pytest.mark.parametrize(
+        ("data", "reaches_agent"),
+        [([ACTION_ENVELOPE, "junk"], True), ([], False)],
+        ids=["mixed-list", "empty-list"],
+    )
+    async def test_an_a2ui_part_is_always_consumed(
+        self, data: list[Any], reaches_agent: bool, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The A2A extension's "Processing Rules": a receiver "MUST continue processing the remaining messages in the
+        # list" when one fails, so a non-object entry is dropped, and the part itself never reaches the agent raw.
+        config = CapturingConfig()
+        client = client_for(Agent(name="ui_agent", config=config), validate_responses=False)
+
+        with caplog.at_level("WARNING"):
+            await client.ask(
+                "go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [data_part(data, media_type=A2UI_MIME_TYPE)]}
+            )
+
+        received = [part for message in config.messages[-1] for part in getattr(message, "parts", None) or []]
+        assert not any(isinstance(part, DataInput) for part in received)
+        assert ("user@example.com" in synthesized_text(config.messages[-1])) is reaches_agent
+        assert ("not a renderer-to-agent message" in caplog.text) is reaches_agent
 
     async def test_entries_the_renderer_does_not_send_are_skipped(self) -> None:
         synthesized = await self._ask(create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE]))

@@ -1932,7 +1932,7 @@
      }
     }
    ],
-   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again, or use a new surfaceId"
   },
   {
    "id": "v0.9:update_before_create",
@@ -5452,7 +5452,7 @@
      }
     }
    ],
-   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again, or use a new surfaceId"
   },
   {
    "id": "v1.0:update_before_create",
