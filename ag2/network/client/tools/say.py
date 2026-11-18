@@ -18,6 +18,7 @@ helper a non-AG2 bridge would call to drive a turn manually.
 from typing import TYPE_CHECKING
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ..channel import Channel
 from ..inject import AgentClientInject, ChannelInject
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 __all__ = ("make_say_tool",)
 
 
-def make_say_tool(agent_client: "AgentClient") -> object:
+def make_say_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``say`` tool.
 
     The closure captures ``agent_client`` once at registration; the

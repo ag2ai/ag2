@@ -14,9 +14,11 @@ flat surface keeps the LLM's tool list short — ``say`` and
 """
 
 import contextlib
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from ag2.tools import tool
+from ag2.tools.final import FunctionTool
 
 from ...envelope import (
     EV_CHANNEL_CLOSED,
@@ -77,7 +79,7 @@ async def _available_target_names(client: "AgentClient") -> list[str]:
     return sorted(names)
 
 
-def make_delegate_tool(agent_client: "AgentClient") -> object:
+def make_delegate_tool(agent_client: "AgentClient") -> FunctionTool:
     """Return a closure-bound ``delegate`` tool."""
 
     @tool
@@ -199,7 +201,7 @@ def make_delegate_tool(agent_client: "AgentClient") -> object:
     return delegate
 
 
-def _reply_or_terminal_predicate(target_id: str):
+def _reply_or_terminal_predicate(target_id: str) -> Callable[[Envelope], bool]:
     """Match the respondent's substantive reply OR any terminal channel event."""
 
     def matches(envelope: Envelope) -> bool:
