@@ -55,7 +55,7 @@ class MemoryStorage(Storage):
         self.__data[context.stream.id].append(event)
 
     async def get_history(self, stream_id: "StreamId") -> Iterable["BaseEvent"]:
-        return self.__data[stream_id]
+        return list(self.__data.get(stream_id, ()))
 
     async def set_history(self, stream_id: "StreamId", events: Iterable["BaseEvent"]) -> None:
         self.__data[stream_id] = list(events)
