@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from copy import copy
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, get_args
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeAlias, get_args
 
 from typing_extensions import dataclass_transform
 
@@ -330,7 +330,7 @@ class BaseEvent(metaclass=_ConditionMeta):
         return event_to_dict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BaseEvent":
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """Reconstruct an event from a serialized dictionary.
 
         Filters input to only fields known by this class (via MRO Field

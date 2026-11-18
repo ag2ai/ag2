@@ -20,10 +20,7 @@ class TestObserverAlertCreation:
         assert s.severity == "custom"  # Accepts any string
 
     def test_severity_values(self) -> None:
-        assert Severity.INFO == "info"
-        assert Severity.WARNING == "warning"
-        assert Severity.CRITICAL == "critical"
-        assert Severity.FATAL == "fatal"
+        assert list(Severity) == ["info", "warning", "critical", "fatal"]
 
 
 class TestHaltEvent:

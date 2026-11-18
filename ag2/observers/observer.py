@@ -214,6 +214,17 @@ def observer(
 ) -> SimpleObserver: ...
 
 
+@overload
+def observer(
+    condition: None = None,
+    *,
+    callback: Callable[..., Any],
+    interrupt: bool = False,
+    sync_to_thread: bool = True,
+    timeout: float | None = None,
+) -> SimpleObserver: ...
+
+
 def observer(
     condition: ClassInfo | Condition | None = None,
     callback: Callable[..., Any] | None = None,

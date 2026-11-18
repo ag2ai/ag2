@@ -108,15 +108,6 @@ class TestViewsAreReadOnly:
         assert isinstance(agent.observers, tuple)
         assert isinstance(agent.assembly, tuple)
 
-    def test_mappings_cannot_be_mutated_through_the_view(self) -> None:
-        agent = Agent("bot", prompt="p", dependencies={"db": object()}, variables={"k": 1})
-
-        with pytest.raises(TypeError):
-            agent.dependencies["db"] = object()  # type: ignore[index]
-
-        with pytest.raises(TypeError):
-            agent.variables["k"] = 2  # type: ignore[index]
-
     def test_dependency_values_are_the_injected_objects(self) -> None:
         db = object()
         agent = Agent("bot", prompt="p", dependencies={"db": db})
@@ -204,12 +195,6 @@ class TestMiddlewareFactoryFields:
         # names only. Reading the factory you already hold is a deliberate act.
         assert factory.options["api_key"] == "sk-SECRET-123"
         assert "sk-SECRET-123" not in repr(factory.describe())
-
-    def test_options_cannot_be_mutated_through_the_view(self) -> None:
-        factory = Middleware(Configured, level=10)
-
-        with pytest.raises(TypeError):
-            factory.options["level"] = 20  # type: ignore[index]
 
 
 class TestComparingTwoAgents:

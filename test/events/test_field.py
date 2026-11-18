@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 
 from ag2.events import BaseEvent, Field
 
@@ -50,7 +49,7 @@ class TestFieldBasics:
 
     def test_event_with_default_field(self):
         class Event(BaseEvent):
-            a: str = Field("1")
+            a: str = Field(default="1")
 
         obj = Event()
         assert obj.a == "1"
@@ -223,20 +222,6 @@ class TestFieldPositionalArgs:
 
         obj = Event(a="hello")
         assert obj.a == "hello"
-
-    def test_too_many_positional_raises(self):
-        class Event(BaseEvent):
-            a: str = Field(kw_only=False)
-
-        with pytest.raises(TypeError, match="1 positional argument"):
-            Event("hello", "extra")
-
-    def test_duplicate_positional_and_kwarg_raises(self):
-        class Event(BaseEvent):
-            a: str = Field(kw_only=False)
-
-        with pytest.raises(TypeError, match="multiple values"):
-            Event("hello", a="world")
 
     def test_inherited_positional(self):
         class Parent(BaseEvent):

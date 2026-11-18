@@ -92,6 +92,7 @@ async def test_callback_timeout_through_observer_helpers(registration: str, filt
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["event", "cadence_count", "cadence_timer", "interval", "delay", "composite"])
 async def test_base_observer_timeout_is_logged_for_every_trigger(kind: str, caplog: pytest.LogCaptureFixture) -> None:
+    watch: Watch
     if kind == "event":
         watch = EventWatch(ModelMessage)
     elif kind == "cadence_count":

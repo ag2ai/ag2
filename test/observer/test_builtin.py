@@ -15,6 +15,7 @@ from ag2.events import (
     ObserverStarted,
     Severity,
     ToolCallEvent,
+    ToolCallsEvent,
     Usage,
     UsageEvent,
 )
@@ -227,7 +228,10 @@ class TestTokenMonitor:
         worker = Agent(
             "worker",
             config=TestConfig(
-                ModelResponse(usage=_BILLED, tool_calls=[{"id": "1", "name": "flaky", "arguments": "{}"}]),
+                ModelResponse(
+                    usage=_BILLED,
+                    tool_calls=ToolCallsEvent([ToolCallEvent(name="_flaky", arguments="{}")]),
+                ),
             ),
             tools=[_flaky],
         )
@@ -235,6 +239,7 @@ class TestTokenMonitor:
         result = await run_task(worker, "go", parent_context=ctx)
 
         assert result.completed is False
+        assert isinstance(result.error, RuntimeError)
         assert monitor.total_tokens == 110
 
     async def test_failed_subtask_alone_trips_the_warning(self) -> None:
@@ -250,13 +255,17 @@ class TestTokenMonitor:
         worker = Agent(
             "worker",
             config=TestConfig(
-                ModelResponse(usage=_BILLED, tool_calls=[{"id": "1", "name": "flaky", "arguments": "{}"}]),
+                ModelResponse(
+                    usage=_BILLED,
+                    tool_calls=ToolCallsEvent([ToolCallEvent(name="_flaky", arguments="{}")]),
+                ),
             ),
             tools=[_flaky],
         )
 
-        await run_task(worker, "go", parent_context=ctx)
+        result = await run_task(worker, "go", parent_context=ctx)
 
+        assert isinstance(result.error, RuntimeError)
         assert [s.severity for s in signals] == [Severity.WARNING]
 
     async def test_repeated_delegations_do_not_inflate_the_total(self) -> None:

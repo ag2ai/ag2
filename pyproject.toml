@@ -448,12 +448,17 @@ files = [
     "test/__init__.py",
     "test/_helpers.py",
     "test/_serving.py",
+    "test/ag_ui",
     "test/beta",
     "test/conftest.py",
     "test/dynamic",
+    "test/events",
     "test/files",
     "test/knowledge",
+    "test/mcp_ui",
+    "test/observer",
     "test/orchestration",
+    "test/policies",
     "test/spec",
     "test/stream",
     "test/test_agent_composition.py",
@@ -486,6 +491,8 @@ warn_return_any = true
 show_error_codes = true
 
 warn_unused_ignores = true
+# `google-auth` ships `py.typed` but leaves `AnonymousCredentials.__init__` unannotated.
+untyped_calls_exclude = ["google.auth.credentials"]
 
 disallow_incomplete_defs = true
 disallow_untyped_decorators = true

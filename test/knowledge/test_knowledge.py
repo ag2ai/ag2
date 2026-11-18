@@ -821,6 +821,13 @@ class _FakeLock:
         self.released.append(name)
 
 
+class _ExplodingStore(MemoryKnowledgeStore):
+    """A store whose writes fail, to check the lock is released on an inner error."""
+
+    async def write(self, path: str, content: str) -> None:
+        raise ValueError("boom")
+
+
 @pytest.mark.asyncio
 class TestLockedKnowledgeStore:
     async def test_read_bypasses_lock(self) -> None:
@@ -855,12 +862,8 @@ class TestLockedKnowledgeStore:
         assert await inner.read("/test.txt") is None
 
     async def test_write_releases_on_inner_exception(self) -> None:
-        class ExplodingStore:
-            async def write(self, path: str, content: str) -> None:
-                raise ValueError("boom")
-
         lock = _FakeLock()
-        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+        locked = LockedKnowledgeStore(_ExplodingStore(), lock)
 
         with pytest.raises(ValueError, match="boom"):
             await locked.write("/test.txt", "hello")
@@ -957,12 +960,8 @@ class TestLockedKnowledgeStore:
 
     @pytest.mark.parametrize("alias", ["log/events.jsonl", "//log//events.jsonl/", "/log/events.jsonl/"])
     async def test_aliased_path_releases_the_canonical_lock_on_inner_exception(self, alias: str) -> None:
-        class ExplodingStore:
-            async def write(self, path: str, content: str) -> None:
-                raise ValueError("boom")
-
         lock = _FakeLock()
-        locked = LockedKnowledgeStore(ExplodingStore(), lock)  # type: ignore[arg-type]
+        locked = LockedKnowledgeStore(_ExplodingStore(), lock)
 
         with pytest.raises(ValueError, match="boom"):
             await locked.write(alias, "hello")
