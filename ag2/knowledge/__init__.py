@@ -23,12 +23,44 @@ from .base import (
     NoopChangeSubscription,
 )
 from .bootstrap import DefaultBootstrap, StoreBootstrap
-from .constants import CONVERSATIONS_PREFIX, LOG_PREFIX, WORKING_MEMORY_PATH
+from .constants import CONVERSATIONS_PREFIX, FACTS_PREFIX, INDEX_PREFIX, LOG_PREFIX, WORKING_MEMORY_PATH
+from .fact_aggregate import (
+    CandidateMatch,
+    ExtractedFact,
+    ExtractedFacts,
+    ExtractionReport,
+    FactDecision,
+    FactExtractionAggregate,
+    FactReconciler,
+    HeuristicReconciler,
+    ModelReconciler,
+    ScoredFact,
+    StaticFactExtractor,
+)
+from .facts import Fact, FactKind, FactSource, FactStatus, FactStore
 from .locked import LockedKnowledgeStore
 from .log import EventLogWriter
 from .memory import MemoryKnowledgeStore
 from .plugin import KnowledgePlugin
 from .redis import RedisKnowledgeStore
+from .retrieval import (
+    CallableEmbedder,
+    Embedder,
+    HashingEmbedder,
+    InMemoryIndex,
+    IndexEntry,
+    IndexSyncReport,
+    KnowledgeIndexer,
+    MemoryIndex,
+    MemoryRetriever,
+    RetrievedMemory,
+    ScoredEntry,
+    StoreBackedIndex,
+    chunk_id,
+    chunk_markdown,
+    meta_hash,
+    text_hash,
+)
 from .sqlite import SqliteKnowledgeStore
 
 try:
@@ -38,19 +70,53 @@ except ImportError as e:
 
 __all__ = [
     "CONVERSATIONS_PREFIX",
+    "FACTS_PREFIX",
+    "INDEX_PREFIX",
     "LOG_PREFIX",
     "WORKING_MEMORY_PATH",
+    "CallableEmbedder",
+    "CandidateMatch",
     "ChangeCallback",
     "ChangeSubscription",
     "DefaultBootstrap",
     "DiskKnowledgeStore",
+    "Embedder",
     "EventLogWriter",
+    "ExtractedFact",
+    "ExtractedFacts",
+    "ExtractionReport",
+    "Fact",
+    "FactDecision",
+    "FactExtractionAggregate",
+    "FactKind",
+    "FactReconciler",
+    "FactSource",
+    "FactStatus",
+    "FactStore",
+    "HashingEmbedder",
+    "HeuristicReconciler",
+    "InMemoryIndex",
+    "IndexEntry",
+    "IndexSyncReport",
+    "KnowledgeIndexer",
     "KnowledgePlugin",
     "KnowledgeStore",
     "LockedKnowledgeStore",
+    "MemoryIndex",
     "MemoryKnowledgeStore",
+    "MemoryRetriever",
+    "ModelReconciler",
     "NoopChangeSubscription",
     "RedisKnowledgeStore",
+    "RetrievedMemory",
+    "ScoredEntry",
+    "ScoredFact",
     "SqliteKnowledgeStore",
+    "StaticFactExtractor",
+    "StoreBackedIndex",
     "StoreBootstrap",
+    "chunk_id",
+    "chunk_markdown",
+    "meta_hash",
+    "text_hash",
 ]

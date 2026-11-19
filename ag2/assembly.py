@@ -93,7 +93,7 @@ class AssemblerMiddleware(BaseMiddleware):
         # Reduction policies should come AFTER injection policies
         # because injections add context that reduction should then trim.
         reduction = {"sliding_window", "token_budget"}
-        injection = {"episodic_memory", "working_memory", "topic_inbox", "alert"}
+        injection = {"episodic_memory", "working_memory", "topic_inbox", "alert", "retrieval_memory"}
 
         for i, name in enumerate(names):
             if name in reduction:
