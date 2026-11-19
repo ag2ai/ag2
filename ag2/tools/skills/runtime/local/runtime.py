@@ -37,7 +37,10 @@ class LocalRuntime(SkillRuntime):
     Args:
         dir:         Directory where skills are installed.
                      ``None`` → ``.agents/skills`` (default).
+                     A leading ``~`` is expanded to the user's home directory.
         cleanup:     If ``True``, the install directory is deleted at process exit.
+                     With a ``~`` path this is the expanded directory, e.g. the
+                     shared ``~/.agents/skills``; use a dedicated directory instead.
         timeout:     Per-command timeout in seconds. Defaults to 60.
         max_output:  Maximum characters returned from a script run. Defaults to 100,000.
         blocked:     Command prefixes that are not allowed to run. Empty list → nothing blocked.
@@ -46,7 +49,7 @@ class LocalRuntime(SkillRuntime):
                      is not covered — not a security boundary on its own.
         extra_paths: Additional read-only directories to scan for skills.
                      Installed skills always go to *dir*; these paths are only
-                     used for discovery.
+                     used for discovery. A leading ``~`` is expanded here too.
         sandbox:     Execution backend for ``run_skill_script``. ``None`` → a local
                      subprocess rooted at the skill's ``scripts/`` directory. Pass a
                      :class:`~ag2.tools.sandbox.Sandbox` /
@@ -78,7 +81,7 @@ class LocalRuntime(SkillRuntime):
     sandbox: "Sandbox | SandboxFactory | None" = None
 
     def __post_init__(self) -> None:
-        self._install_dir = Path(self.dir) if self.dir is not None else Path(".agents/skills")
+        self._install_dir = Path(self.dir).expanduser() if self.dir is not None else Path(".agents/skills")
         self._extra: list[Path] = [Path(p) for p in self.extra_paths] if self.extra_paths else []
         # Lenient discovery: a single non-compliant skill (e.g. authored for
         # another client) is skipped with a warning instead of aborting the whole
