@@ -557,6 +557,8 @@ To configure a model, import the specific provider's configuration class and ini
     )
     ```
 
+    `ag2[gemini]` requires `google-genai>=1.68.0,<4`; 1.4.0 will require `google-genai>=3`. See [Gemini API Version and HTTP Client](#gemini-api-version-and-http-client) for what changed in `google-genai` 3.x.
+
 === "Amazon Bedrock"
     ```python linenums="1"
     from ag2.config import BedrockConfig
@@ -975,6 +977,41 @@ config = GeminiConfig(
 ```
 
 A response cut short then reports `response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
+
+### Gemini API Version and HTTP Client
+
+`ag2[gemini]` accepts `google-genai` 2.x and 3.x. Two defaults change with 3.x.
+
+!!! warning "google-genai 2.x support is removed in 1.4.0"
+
+    With `google-genai` 2.x installed, `config.create()` and `config.create_files_client()` on `GeminiConfig` and `VertexAIConfig` emit a `DeprecationWarning`. 1.4.0 requires `google-genai>=3`; upgrade with `pip install -U "google-genai>=3,<4"`.
+
+**API version.** `google-genai` 3.x sends Developer API requests to `v1`; 2.x sent them to `v1beta`. AG2 follows the installed SDK. The `-latest` aliases (such as `gemini-flash-latest`) and some `-preview` models exist only on `v1beta`, so with 3.x a request for one of them fails until you set `api_version`:
+
+```python
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.1-pro-preview",
+    api_version="v1beta",
+)
+```
+
+`GeminiConfig` takes `"v1"` or `"v1beta"`; `VertexAIConfig` takes `"v1"` or `"v1beta1"`, and Vertex AI keeps `v1beta1` as its default on both SDK majors. With `api_version` left unset, `google-genai` 3.x also reads the `GOOGLE_GENAI_API_VERSION` environment variable.
+
+**HTTP client.** `google-genai` 3.x is built on [`httpx2`](https://pypi.org/project/httpx2/), so `http_client` takes an `httpx2.AsyncClient`, like `AnthropicConfig`. An `httpx.AsyncClient` keeps working with both SDK majors:
+
+```python
+import httpx2
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.6-flash",
+    http_client=httpx2.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+With `google-genai` 2.x, an `httpx2` client raises `TypeError` when `config.create()` builds the client.
 
 ### Ollama Configuration
 
@@ -5091,6 +5128,26 @@ async def test_mock_llm_answer():
     # The agent returns the mocked response
     assert res.body == "This is a mocked response."
 ```
+
+### Share one script across asks
+
+Each `ask` replays the script from its first turn. When the code under test asks the same agent several times and every ask needs its own answer, pass `persistent=True`: all asks then read one script in order.
+
+```python
+import pytest
+
+from ag2 import Agent
+from ag2.testing import TestConfig
+
+@pytest.mark.asyncio
+async def test_two_asks():
+    agent = Agent("test_agent", config=TestConfig("first", "second", persistent=True))
+
+    assert (await agent.ask("Hi!")).body == "first"
+    assert (await agent.ask("Hi again!")).body == "second"
+```
+
+Every agent built from the same persistent config reads that one script. Concurrent asks take turns in whatever order they reach the model, so script them only when the order does not matter.
 
 ## How to test tool execution
 
@@ -9626,7 +9683,7 @@ async def whoami(ctx: MCPRequestContext) -> str:
 
 ## UI resource types
 
-`ag2.mcp_ui` provides three builders, one per MCP-UI content type. Each returns an `mcp.types.EmbeddedResource` - a valid `tools/call` content block - and each `uri` **must** start with `ui://`.
+`ag2.mcp_ui` provides three builders, one per MCP-UI content type. Each returns an `mcp_ui_server.UIResource` (an `mcp.types.EmbeddedResource`) - a valid `tools/call` content block - and each `uri` **must** start with `ui://`.
 
 | Builder | Content type | Client renders it as |
 |---|---|---|
@@ -13222,6 +13279,8 @@ A comparator decides the winner of one pair. Two kinds ship - an LLM judge, and 
 
 - **`pairwise_judge(config, criterion=, key=)`** - an LLM. It judges each pair in **both orders** (A-then-B and B-then-A) and only counts a win when the verdict is consistent, which cancels position bias. Like `agent_judge`, it renders the gold answer as a `## Reference` section by default; pass `include_reference=False` for criteria that must compare the responses on their own (e.g. grounding) without seeing the reference.
 - **`human_pairwise(...)` / `human_labels(...)`** - a person decides. Covered next.
+
+To test code built on pairwise results - tallies, win-rates, agreement - without a judge model, script the winners with `TestComparator` from `ag2.testing`: `TestComparator("quality", {"t1": "b", "t2": "a"})`. Tasks it has no winner for come out as a tie.
 
 ## Human comparison
 
@@ -22325,7 +22384,7 @@ def tools_for(
     self,
     client: AgentClient,
     metadata: ChannelMetadata,
-    state: AdapterState,
+    state: StateT,  # the adapter's own state type
     participant_id: str,
 ) -> list[Tool]: ...
 ```
@@ -22405,18 +22464,18 @@ An adapter exposes **three concentric layers** of surface:
 3. **LLM tools** - what the *AG2 agent loop* sees: `tools_for`. The presentation layer; the default handler merges its result with the identity-level tools `NetworkPlugin` attaches. Adapters that take no LLM input (e.g. workflow, where handoff tools are user-authored) return `[]`.
 
 ```python
-class ChannelAdapter(Protocol):
+class ChannelAdapter(Protocol[StateT]):
     manifest: ChannelManifest
 
     # Layer 1 - capabilities (hub-called)
-    def initial_state(self, metadata: ChannelMetadata) -> AdapterState: ...
-    def fold(self, envelope: Envelope, state: AdapterState) -> AdapterState: ...
+    def initial_state(self, metadata: ChannelMetadata) -> StateT: ...
+    def fold(self, envelope: Envelope, state: StateT) -> StateT: ...
     def validate_create(self, metadata: ChannelMetadata) -> None: ...
     def validate_send(
-        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: StateT
     ) -> None: ...
     def on_accepted(
-        self, metadata: ChannelMetadata, envelope: Envelope, state: AdapterState
+        self, metadata: ChannelMetadata, envelope: Envelope, state: StateT
     ) -> AdapterResult: ...
 
     # Layer 2 - envelope helpers (any client)
@@ -22426,16 +22485,18 @@ class ChannelAdapter(Protocol):
     ) -> Envelope: ...
     def build_packet_envelope(
         self, channel_id: str, sender_id: str, body: str, *,
-        handoff: Handoff | None = None, context_set: dict | None = None,
+        handoff: Handoff | None = None, context_set: Mapping[str, JsonValue] | None = None,
         audience: list[str] | None = None, causation_id: str | None = None,
     ) -> Envelope: ...
 
     # Layer 3 - LLM tools (agent loop)
     def tools_for(
         self, client: AgentClient, metadata: ChannelMetadata,
-        state: AdapterState, participant_id: str,
+        state: StateT, participant_id: str,
     ) -> list[Tool]: ...
 ```
+
+The protocol is generic over the state the adapter folds: a concrete adapter defines its own state dataclass (for example `ConsultingState`) and takes it in every `state` parameter, so `ConsultingAdapter` is a `ChannelAdapter[ConsultingState]`.
 
 Each method runs at a specific moment:
 
@@ -22471,15 +22532,17 @@ env = adapter.build_packet_envelope(
     channel_id=channel.channel_id,
     sender_id=alice.agent_id,
     body="alice opens the discussion",
+    context_set={"stage": "draft"},
 )
 await hub.post_envelope(env)
 
 # The workflow's transition graph advanced state purely from the bridge-supplied envelope.
-state = hub.adapter_state(channel.channel_id)
-assert state.expected_next_speaker == bob.agent_id
+state = hub.adapter_state(channel.channel_id, WorkflowState)
+assert state is not None and state.expected_next_speaker == bob.agent_id
+assert state.context_vars == {"stage": "draft"}
 ```
 
-`hub.adapter_for(channel_id)` returns the bound adapter; `hub.adapter_state(channel_id)` returns the current fold state (and stays available after the channel closes - useful for post-mortem inspection). A bridge that pre-builds envelopes offline can skip the adapter lookup entirely and call `default_build_packet_envelope(...)` directly.
+`hub.adapter_for(channel_id)` returns the bound adapter; `hub.adapter_state(channel_id, WorkflowState)` returns the current fold state typed as the class you name, and raises `TypeError` if the channel folds another state class. Without the class it returns it as `AdapterState`, the empty Protocol every fold state satisfies. `context_set` lands in the packet's `context_updates`, so a `ContextEquals` rule sees it on the same fold. The state stays available after the channel closes, which is useful for post-mortem inspection. A bridge that pre-builds envelopes offline can skip the adapter lookup entirely and call `default_build_packet_envelope(...)` directly.
 
 ## Channel Lifecycle
 
@@ -22685,7 +22748,7 @@ class ConversationState:
     last_speaker_id: str | None = None
 ```
 
-Minimal - just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `hub._adapter_states[channel_id]` (the underscore is intentional - operator API).
+Minimal - just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `hub.adapter_state(channel_id, ConversationState)`.
 
 ## Closing
 
@@ -22986,7 +23049,7 @@ class DiscussionState:
     turn_count: int = 0
 ```
 
-Read via `hub._adapter_states[channel_id]`. The order is fixed at create time by sorting participants on `Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
+Read it via `hub.adapter_state(channel_id, DiscussionState)`. The order is fixed at create time by sorting participants on `Participant.order`; round-robin advances by `(current_index + 1) % len(participant_order)`.
 
 ## Customising the Ordering
 
@@ -23404,7 +23467,7 @@ Custom targets and conditions persist via `TransitionGraph.to_dict()` - the `nam
 
 ## Packet execution model
 
-Each `Agent.ask` round on a workflow channel commits to the WAL atomically as a single `EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `ToolCalled` rules, or a pre-resolved `routing.target` from a typed `Handoff` return), the round's body text, and a reserved `context_updates` slot. State mutations from tool calls (via `set_context(channel, ...)`) land as separate `EV_CONTEXT_SET` envelopes during tool execution - they're folded before the packet, so a `ContextEquals` rule on the same fold sees the just-set value.
+Each `Agent.ask` round on a workflow channel commits to the WAL atomically as a single `EV_PACKET` envelope. The packet carries the agent's routing decision (`routing.tool` matched against `ToolCalled` rules, or a pre-resolved `routing.target` from a typed `Handoff` return), the round's body text, and an optional `context_updates` mutation (`{"set": {...}, "delete": [...]}`, filled by `build_packet_envelope(context_set=...)`). A packet whose `routing` or `context_updates` has the wrong shape is rejected with `ProtocolError` before it reaches the WAL. State mutations from tool calls (via `set_context(channel, ...)`) land as separate `EV_CONTEXT_SET` envelopes during tool execution - they're folded before the packet, so a `ContextEquals` rule on the same fold sees the just-set value.
 
 ### External side-effects and packet retry
 
