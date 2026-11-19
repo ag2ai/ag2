@@ -6,6 +6,8 @@ import asyncio
 import contextlib
 import os
 import shutil
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,11 @@ from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 
 from .base import ChangeCallback, ChangeSubscription, NoopChangeSubscription, _normalize
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - DiskKnowledgeStore is POSIX-only
+    fcntl = None  # type: ignore[assignment]
 
 
 async def _deliver(callback: ChangeCallback, path: str) -> None:
@@ -165,9 +172,41 @@ class DiskKnowledgeStore:
         return target.read_text(encoding="utf-8")
 
     async def write(self, path: str, content: str) -> None:
+        await asyncio.to_thread(self._sync_write, path, content)
+
+    @contextmanager
+    def _mutation_lock(self) -> Generator[None]:
+        if fcntl is None:
+            raise RuntimeError("DiskKnowledgeStore mutations require a POSIX filesystem")
+        self._root.mkdir(parents=True, exist_ok=True)
+        # Lock the stable root directory inode, without adding user-visible files.
+        descriptor = os.open(self._root, os.O_RDONLY)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(descriptor)
+
+    def _sync_write(self, path: str, content: str) -> None:
+        with self._mutation_lock():
+            self._write_unlocked(path, content)
+
+    def _write_unlocked(self, path: str, content: str) -> None:
         target = self._resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        return await asyncio.to_thread(self._sync_compare_and_swap, path, expected, content)
+
+    def _sync_compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        with self._mutation_lock():
+            target = self._resolve(path)
+            current = target.read_text(encoding="utf-8") if target.is_file() else None
+            if current != expected:
+                return False
+            self._write_unlocked(path, content)
+            return True
 
     async def list(self, path: str = "/") -> list[str]:
         target = self._resolve(path)
@@ -192,11 +231,26 @@ class DiskKnowledgeStore:
             current = current.parent
 
     async def delete(self, path: str) -> None:
+        await asyncio.to_thread(self._sync_delete, path)
+
+    def _sync_delete(self, path: str) -> None:
+        with self._mutation_lock():
+            self._delete_unlocked(path)
+
+    def _delete_unlocked(self, path: str) -> None:
         target = self._resolve(path)
         if target.is_file():
             target.unlink()
         elif target.is_dir():
-            shutil.rmtree(target)
+            if target == self._root.resolve():
+                # Keep the root inode stable for other handles' advisory locks.
+                for child in target.iterdir():
+                    if child.is_dir() and not child.is_symlink():
+                        shutil.rmtree(child)
+                    else:
+                        child.unlink()
+            else:
+                shutil.rmtree(target)
         else:
             return
         self._prune_empty_parents(target.parent, self._root.resolve())
@@ -205,6 +259,13 @@ class DiskKnowledgeStore:
         return self._resolve(path).exists()
 
     async def append(self, path: str, content: str) -> int:
+        return await asyncio.to_thread(self._sync_append, path, content)
+
+    def _sync_append(self, path: str, content: str) -> int:
+        with self._mutation_lock():
+            return self._append_unlocked(path, content)
+
+    def _append_unlocked(self, path: str, content: str) -> int:
         target = self._resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         payload = content.encode("utf-8")

@@ -50,6 +50,15 @@ class MemoryKnowledgeStore:
         self._data[normalized] = content
         await self._notify(normalized)
 
+    async def compare_and_swap(self, path: str, expected: str | None, content: str) -> bool:
+        normalized = _normalize(path)
+        # No suspension between the comparison and mutation on this event loop.
+        if self._data.get(normalized) != expected:
+            return False
+        self._data[normalized] = content
+        await self._notify(normalized)
+        return True
+
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
 
