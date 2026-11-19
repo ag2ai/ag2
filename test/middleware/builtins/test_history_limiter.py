@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Context
+from ag2 import Agent, Context, MemoryStream, tool
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
@@ -22,6 +22,7 @@ from ag2.events import (
     ToolResultsEvent,
 )
 from ag2.middleware import HistoryLimiter
+from ag2.testing import TestConfig, TrackingConfig
 from test._helpers import DurableReasoning
 
 
@@ -67,7 +68,7 @@ async def test_history_limiter_saves_first_turn(mock: MagicMock) -> None:
 
 
 @pytest.mark.asyncio()
-async def test_no_history_limiter(mock: MagicMock) -> None:
+async def test_one_event_limit_keeps_latest_user_request(mock: MagicMock) -> None:
     history_limiter = HistoryLimiter(max_events=1)
 
     middleware = history_limiter(ModelRequest([TextInput("turn 3")]), mock)
@@ -85,7 +86,7 @@ async def test_no_history_limiter(mock: MagicMock) -> None:
 
     await middleware.on_llm_call(llm_call, events, mock)
 
-    mock.llm_call.assert_called_once_with([ModelRequest([TextInput("turn 1")])])
+    mock.llm_call.assert_called_once_with([ModelRequest([TextInput("turn 3")])])
 
 
 @pytest.mark.asyncio()
@@ -191,3 +192,25 @@ async def test_history_limiter_keeps_an_intact_builtin_group(mock: MagicMock) ->
     await middleware.on_llm_call(llm_call, events, mock)
 
     mock.llm_call.assert_called_once_with([events[0], *events[2:]])
+
+
+@pytest.mark.asyncio
+async def test_single_event_limit_keeps_current_request_and_its_tool_round() -> None:
+    @tool
+    async def lookup() -> str:
+        """Find the requested item."""
+        return "found it"
+
+    config = TrackingConfig(TestConfig(ToolCallEvent(name="lookup", arguments="{}"), "done"))
+    agent = Agent("assistant", config=config, middleware=[HistoryLimiter(max_events=1)], tools=[lookup])
+    stream = MemoryStream()
+
+    await Agent("previous", config=TestConfig("first answer")).ask("old question", stream=stream)
+    reply = await agent.ask("current question", stream=stream)
+
+    current_request = ModelRequest([TextInput("current question")])
+    assert config.calls[0].messages == (current_request,)
+    sent_after_tool = config.calls[1].messages
+    assert [event for event in sent_after_tool if isinstance(event, ModelRequest)] == [current_request]
+    assert any(isinstance(event, ToolResultsEvent) for event in sent_after_tool)
+    assert reply.body == "done"
