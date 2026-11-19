@@ -1157,7 +1157,7 @@ class TestParseWithMarkdownFences:
 
     @pytest.mark.parametrize("opening", ["```json ", "```"])
     def test_parse_single_line_fence_with_standalone_closing_fence(self, opening: str) -> None:
-        parser = A2UIResponseParser(version_string="v0.9")
+        parser = extracting_parser()
         response = (
             f"Here is your UI.\n<a2ui-json>\n{opening}"
             '[{"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}]\n```\n</a2ui-json>'
