@@ -234,6 +234,16 @@ agent = Agent(
 )
 ```
 
+To bound the bill rather than the tokens, install the `pricing` extra (`#!bash pip install "ag2[pricing]"`) and pass `#!python max_usd`. Each `UsageEvent` is then priced at list price for its provider and model, with cache reads, cache writes (5-minute / 1-hour on Anthropic, default / 12-hour on OpenAI) and long-context tiers at their own rates, and a `CRITICAL` alert fires once the total reaches `max_usd`. Spend the price catalog has no row for (a local model, for instance) is not counted, and the first such call raises a `WARNING` alert naming the model.
+
+```python linenums="1"
+monitor = TokenMonitor(max_usd=0.50)
+agent = Agent("assistant", config=OpenAICompletionsConfig(model="gpt-5"), observers=[monitor])
+
+await agent.ask("Summarize the attached report.")
+print(f"${monitor.total_usd:.4f}")
+```
+
 ### ObserverAlert
 
 Both built-ins (and any `BaseObserver` you write) emit `ObserverAlert` events on the stream. Subscribe to them like any other event:

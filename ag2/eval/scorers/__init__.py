@@ -36,7 +36,7 @@ scorecard::
 
 from .attribution import ERROR_MODES, Attribution, failure_attribution
 from .correctness import final_answer_matches
-from .cost import token_budget
+from .cost import cost_budget, token_budget
 from .human_pairwise import export_pairwise_cases, human_labels, human_pairwise
 from .judge import Verdict, agent_judge
 from .pairwise_judge import PairwiseVerdict, pairwise_judge
@@ -49,6 +49,7 @@ __all__ = (
     "PairwiseVerdict",
     "Verdict",
     "agent_judge",
+    "cost_budget",
     "export_pairwise_cases",
     "failure_attribution",
     "final_answer_matches",
