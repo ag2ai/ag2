@@ -2,8 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
 from ag2.config import OllamaConfig
 from ag2.config.ollama import OllamaClient
+from ag2.exceptions import FilesAPIUnsupportedError
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -47,3 +50,10 @@ def test_defaults() -> None:
 def test_host_can_be_overridden() -> None:
     config = OllamaConfig(model="qwen3.5:latest", host="http://remote:11434")
     assert config.host == "http://remote:11434"
+
+
+def test_files_api_is_unsupported() -> None:
+    config = OllamaConfig(model="qwen3.5:latest")
+
+    with pytest.raises(FilesAPIUnsupportedError, match="OllamaConfig does not support Files API"):
+        config.create_files_client()

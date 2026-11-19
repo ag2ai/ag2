@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar
 
 import acp
-import httpx
+import httpx2
 import websockets
 from acp.core import ClientSideConnection
 from acp.http.client import AcpHttpStatusError, create_http_stream
@@ -101,11 +101,11 @@ class ACPRemoteConfig(ACPConfig):
     # A dropped SSE stream or closed socket reaches the caller as
     # ``ConnectionError`` (the SDK rejects pending requests with one); a POST
     # rejected before any JSON-RPC response exists surfaces as the SDK's own
-    # status error or an httpx/websockets failure.
+    # status error or an httpx2/websockets failure.
     _transport_errors: ClassVar[tuple[type[BaseException], ...]] = (
         ConnectionError,
         AcpHttpStatusError,
-        httpx.HTTPError,
+        httpx2.HTTPError,
         websockets.WebSocketException,
     )
 

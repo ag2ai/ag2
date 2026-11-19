@@ -22,7 +22,7 @@ class TestParseRequestCapabilities:
     def test_capabilities_parsed_for_version(self) -> None:
         body = {
             "messages": [],
-            "a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
+            "a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": ["https://x.example/c.json"]}},
         }
         req = parse_request(body, resolve_action=_no_actions, version_key="v1.0")
         assert req.client_capabilities == A2UIClientCapabilities(
@@ -199,7 +199,7 @@ class TestParseRequestActions:
                 "messages": [],
                 "a2ui": [
                     {
-                        "version": "v1.0",
+                        "version": "1.0",
                         "rendererFunctionResponse": {"functionCallId": "fc-1", "value": [1920, 1080]},
                     }
                 ],
@@ -217,7 +217,7 @@ class TestParseRequestActions:
                 "messages": [],
                 "a2ui": [
                     {
-                        "version": "v1.0",
+                        "version": "1.0",
                         "callAgentFunction": {
                             "surfaceId": "s1",
                             "functionCallId": "fc-1",
@@ -236,7 +236,7 @@ class TestParseRequestActions:
         req = parse_request(
             {
                 "messages": [],
-                "a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"value": True}}],
+                "a2ui": [{"version": "1.0", "rendererFunctionResponse": {"value": True}}],
             },
             resolve_action=_no_actions,
         )

@@ -21,6 +21,7 @@ from typing_extensions import Unpack, deprecated
 
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.events import Input
+from ag2.exceptions import FilesAPIUnsupportedError
 
 from .files import OpenAIFilesClient
 from .openai_client import CreateOptions, Modality, OpenAIClient, ReasoningEffort, ServiceTier, Verbosity
@@ -345,7 +346,10 @@ class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
 
 @dataclass(slots=True)
 class OpenAIDecisionsConfig(ModelConfig):
-    """OpenAI's Decisions API: one typed question per call, taken from the agent's ``response_schema``."""
+    """OpenAI's Decisions API: typed questions taken from the agent's ``response_schema``, sent in one request.
+
+    A scalar schema is one question; a flat class is one question per field.
+    """
 
     model: str = "gpt-6-luna"
     api_key: str | None = None
@@ -361,7 +365,7 @@ class OpenAIDecisionsConfig(ModelConfig):
     # A ``bool`` schema is ``True`` once the predicate's probability reaches this.
     boolean_threshold: float = 0.5
     # Option descriptions keyed by choice value or score level as a string; they
-    # outrank the docstrings under ``Enum`` members.
+    # outrank the docstrings under ``Enum`` members. Single-question schemas only.
     descriptions: Mapping[str, str] | None = None
     # What the question carries after the agent prompt: a string, or a sequence of
     # strings, inputs (``ImageInput``, ``DataInput``, ...) and SDK parts
@@ -398,4 +402,4 @@ class OpenAIDecisionsConfig(ModelConfig):
 
     def create_files_client(self) -> "FilesClient":
         # The endpoint takes inline data URLs only; an uploaded ``file_id`` is rejected.
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)

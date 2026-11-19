@@ -95,10 +95,10 @@ async def _mcp_session(
     """
     if isinstance(config, MCPStdioServerConfig):
         params = StdioServerParameters(
-            command=config.command,  # type: ignore[arg-type]
+            command=config.command,
             args=list(config.args or []),  # type: ignore[arg-type]
-            env=config.env,  # type: ignore[arg-type]
-            cwd=config.cwd,  # type: ignore[arg-type]
+            env=config.env,
+            cwd=config.cwd,
             encoding=config.encoding,
         )
         async with (
@@ -229,7 +229,7 @@ class _MCPProxyTool(Tool):
             await context.send(result)
 
         # ``Event.field == value`` builds a Condition at runtime; mypy sees ``bool``.
-        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))  # type: ignore[arg-type]
+        stack.enter_context(context.stream.where(ToolCallEvent.name == self.name).sub_scope(execute))
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent | ToolErrorEvent":
         try:

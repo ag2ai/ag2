@@ -246,10 +246,7 @@ indistinguishable from an id that was never issued — and is answered the same 
     is running elsewhere is refused. Across processes it is the client's contract to
     keep, and a client that spawns one agent process per turn keeps it by construction.
 
-Over stdio and WebSocket this all just works. The ACP SDK's HTTP/SSE server, as of 0.12,
-does not register a *loaded* session's stream the way it does a new one, so a
-`#!python session/prompt` on a loaded session over that transport is answered with a 404 —
-serve resumable sessions over one of the other two.
+This works the same over stdio, WebSocket and HTTP/SSE.
 
 ## Cancelling
 
@@ -489,7 +486,6 @@ inside the test process — genuine protocol, no subprocess to manage and no por
 Pair it with `#!python TestConfig` so no provider is called.
 
 ```python linenums="1"
-import acp
 import pytest
 from acp import schema
 
@@ -506,7 +502,7 @@ async def test_the_agent_answers() -> None:
         session = await client.new_session(cwd=".")
         response = await client.prompt(
             session_id=session.session_id,
-            prompt=[acp.text_block("what's 100 + 100")],
+            prompt=[schema.TextContentBlock(type="text", text="what's 100 + 100")],
         )
 
     assert response.stop_reason == "end_turn"

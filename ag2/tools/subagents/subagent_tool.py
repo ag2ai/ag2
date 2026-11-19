@@ -4,7 +4,7 @@
 
 from collections.abc import Callable, Iterable
 from copy import copy, deepcopy
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from ag2.annotations import Context
 from ag2.middleware.base import ToolMiddleware
@@ -16,7 +16,7 @@ from .run_task import run_task
 if TYPE_CHECKING:
     from ag2.agent import Agent
 
-StreamFactory: TypeAlias = Callable[["Agent", Context], Stream]
+StreamFactory: TypeAlias = Callable[["Agent[Any]", Context], Stream]
 StreamOrFactory: TypeAlias = Stream | StreamFactory
 
 
@@ -25,7 +25,7 @@ class SubagentTool(FunctionTool):
 
     __slots__ = ("agent",)
 
-    def __init__(self, agent: "Agent", delegate: FunctionTool) -> None:
+    def __init__(self, agent: "Agent[Any]", delegate: FunctionTool) -> None:
         function = delegate.schema.function
         super().__init__(
             delegate.model,
@@ -47,7 +47,7 @@ class SubagentTool(FunctionTool):
 
 
 def subagent_tool(
-    agent: "Agent",
+    agent: "Agent[Any]",
     *,
     description: str,
     name: str | None = None,

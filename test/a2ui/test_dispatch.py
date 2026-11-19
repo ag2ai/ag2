@@ -150,7 +150,7 @@ class TestStreamTurn:
 
     async def test_renderer_function_response_keeps_its_correlation_id(self) -> None:
         call_block = (
-            '<a2ui-json>\n[{"version": "v1.0", "callRendererFunction": {"surfaceId": "s1", '
+            '<a2ui-json>\n[{"version": "1.0", "callRendererFunction": {"surfaceId": "s1", '
             '"functionCallId": "fc-7", "callFunction": {"@call": "getLocation"}}}]\n</a2ui-json>'
         )
         agent = Agent(name="t", config=TestConfig(call_block))
@@ -166,7 +166,7 @@ class TestStreamTurn:
 
         messages = await _post_turn(
             app,
-            {"a2ui": [{"version": "v1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}]},
+            {"a2ui": [{"version": "1.0", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}]},
         )
 
         assert messages == [{"text": "Recorded."}]
@@ -182,7 +182,7 @@ class TestStreamTurn:
         ["null", '"text"', '{"functionCallId": "fc-1", "callFunction": "getLocation"}', '{"functionCallId": 7}'],
     )
     async def test_malformed_renderer_call_does_not_fail_the_turn(self, payload: str) -> None:
-        response = f'Checking.\n<a2ui-json>\n[{{"version": "v1.0", "callRendererFunction": {payload}}}]\n</a2ui-json>'
+        response = f'Checking.\n<a2ui-json>\n[{{"version": "1.0", "callRendererFunction": {payload}}}]\n</a2ui-json>'
         config = TrackingConfig(TestConfig(response))
         app = A2UIServer(
             Agent(name="t", config=config),
@@ -268,7 +268,7 @@ class TestServerActions:
             validate_responses=False,
         )
         req = parse_request(
-            {"a2ui": [_server_action_envelope("typeahead", {"prefix": "app"}, version="v1.0")]},
+            {"a2ui": [_server_action_envelope("typeahead", {"prefix": "app"}, version="1.0")]},
             resolve_action=rt.get_action,
             version_key="v1.0",
         )
@@ -304,7 +304,7 @@ class TestServerActions:
         ]
 
 
-def _call_envelope(name: str, args: dict[str, Any], *, version: str = "v1.0", call_id: str = "fc-1") -> dict[str, Any]:
+def _call_envelope(name: str, args: dict[str, Any], *, version: str = "1.0", call_id: str = "fc-1") -> dict[str, Any]:
     return {
         "version": version,
         "callAgentFunction": {
@@ -354,7 +354,7 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {"functionCallId": "fc-1", "value": ["apple", "application"]},
             },
         ]
@@ -368,7 +368,7 @@ class TestCallAgentFunction:
 
         assert config.calls == []
         assert messages == [
-            {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}},
+            {"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}},
         ]
 
     async def test_models_are_serialized_to_json(self) -> None:
@@ -384,7 +384,7 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {"functionCallId": "fc-1", "value": {"id": "PRV-1"}},
             },
         ]
@@ -395,7 +395,7 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
                     "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'missing'."},
@@ -413,7 +413,7 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
                     "error": {
@@ -434,7 +434,7 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "agentFunctionResponse": {
                     "functionCallId": "fc-1",
                     "error": {"code": "FUNCTION_FAILED", "message": "Function 'boom' failed."},
@@ -452,10 +452,10 @@ class TestCallAgentFunction:
         assert config.calls == []
         assert messages == [
             {
-                "version": "v1.0",
+                "version": "1.0",
                 "updateDataModel": {"surfaceId": "cart", "path": "/count", "value": 3},
             },
-            {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}},
+            {"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": None}},
         ]
 
     async def test_call_before_v1_0_is_left_to_the_agent_unanswered(self) -> None:
@@ -481,6 +481,6 @@ class TestCallAgentFunction:
 
         assert len(config.calls) == 1
         assert messages == [
-            {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": "a"}},
+            {"version": "1.0", "agentFunctionResponse": {"functionCallId": "fc-1", "value": "a"}},
             {"text": "ok"},
         ]

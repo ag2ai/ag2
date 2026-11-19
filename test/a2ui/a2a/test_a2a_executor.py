@@ -67,12 +67,12 @@ ERROR_ENVELOPE = {
 }
 
 FUNCTION_RESPONSE_ENVELOPE = {
-    "version": "v1.0",
+    "version": "1.0",
     "rendererFunctionResponse": {"functionCallId": "fc-1", "value": True},
 }
 
 CALL_AGENT_FUNCTION_ENVELOPE = {
-    "version": "v1.0",
+    "version": "1.0",
     "callAgentFunction": {
         "surfaceId": "s1",
         "functionCallId": "fc-7",
@@ -83,7 +83,7 @@ CALL_AGENT_FUNCTION_ENVELOPE = {
 # A server→client callRendererFunction the LLM may emit inside <a2ui-json>. ``openUrl`` is
 # ``rendererOnly`` in the basic catalog, so tests using this block turn validation off.
 _CALL_RENDERER_FUNCTION_BLOCK = (
-    '[{"version":"v1.0","callRendererFunction":{"functionCallId":"fc-1",'
+    '[{"version":"1.0","callRendererFunction":{"functionCallId":"fc-1",'
     '"callFunction":{"@call":"openUrl","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",'
     '"args":{"url":"https://example.com"}}}}]'
 )
@@ -121,7 +121,7 @@ class _FunctionRoundTrip(ClientCallInterceptor):
             return
         if not self._sent_call:
             envelope = {
-                "version": "v1.0",
+                "version": "1.0",
                 "callAgentFunction": {
                     "surfaceId": "s",
                     "functionCallId": "agent-1",
@@ -131,7 +131,7 @@ class _FunctionRoundTrip(ClientCallInterceptor):
             self._sent_call = True
         else:
             envelope = {
-                "version": "v1.0",
+                "version": "1.0",
                 "rendererFunctionResponse": {"functionCallId": "renderer-1", "value": "Berlin"},
             }
         del message.parts[:]
@@ -387,7 +387,7 @@ class TestCallAgentFunction:
         assert payloads == [
             [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
                 }
             ]
@@ -424,7 +424,7 @@ class TestCallAgentFunction:
         assert payloads == [
             [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "agentFunctionResponse": {"functionCallId": "fc-7", "value": {"valid": True, "id": "PRV-102"}},
                 }
             ]
@@ -447,7 +447,7 @@ class TestCallAgentFunction:
         assert payloads == [
             [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "agentFunctionResponse": {
                         "functionCallId": "fc-7",
                         "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function 'verify_provider'."},
@@ -463,7 +463,7 @@ class TestCallAgentFunction:
         def obtain_location() -> dict:
             calls.append("called")
             return {
-                "version": "v1.0",
+                "version": "1.0",
                 "callRendererFunction": {
                     "functionCallId": "renderer-1",
                     "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
@@ -497,13 +497,13 @@ class TestCallAgentFunction:
         assert payloads == [
             [
                 {
-                    "version": "v1.0",
+                    "version": "1.0",
                     "callRendererFunction": {
                         "functionCallId": "renderer-1",
                         "callFunction": {"@call": "getLocation", "catalogId": "https://example.com/device"},
                     },
                 },
-                {"version": "v1.0", "agentFunctionResponse": {"functionCallId": "agent-1", "value": None}},
+                {"version": "1.0", "agentFunctionResponse": {"functionCallId": "agent-1", "value": None}},
             ]
         ]
 
@@ -553,7 +553,7 @@ class TestCallAgentFunction:
                             IsPartialDict({
                                 "data": [
                                     {
-                                        "version": "v1.0",
+                                        "version": "1.0",
                                         "agentFunctionResponse": {"functionCallId": "fc-7", "value": True},
                                     },
                                 ],
@@ -609,10 +609,23 @@ class TestCapabilitiesNegotiation:
         assert "## A2UI Client Capabilities" in prompt
         assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
 
+    async def test_v0_9_1_client_caps_are_read_under_the_v0_9_key(self) -> None:
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        caps = {"a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        client = client_for(
+            agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v0.9.1", validate_responses=False
+        )
+
+        await client.ask("hi")
+
+        [record] = config.calls
+        assert "did NOT list" in "\n".join(record.prompt)
+
     async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
         agent = Agent(name="ui_agent", config=config)
-        caps = {"a2uiRendererCapabilities": {"v1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        caps = {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
         client = client_for(
             agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0", validate_responses=False
         )
@@ -625,7 +638,7 @@ class TestCapabilitiesNegotiation:
     async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
         agent = Agent(name="ui_agent", config=config)
-        data_model = {"a2uiRendererDataModel": {"version": "v1.0", "surfaces": {"form": {"name": "Ann"}}}}
+        data_model = {"a2uiRendererDataModel": {"version": "1.0", "surfaces": {"form": {"name": "Ann"}}}}
         client = client_for(
             agent, interceptors=[MetadataInterceptor(data_model)], protocol_version="v1.0", validate_responses=False
         )

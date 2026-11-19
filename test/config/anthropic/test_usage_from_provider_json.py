@@ -171,6 +171,74 @@ class TestMeasuredZero:
         assert usage == Usage(prompt_tokens=12, completion_tokens=8, total_tokens=20)
 
 
+class TestCacheWriteRetention:
+    async def test_1h_writes_are_reported_as_extended_cache_writes(self) -> None:
+        usage = await _usage_of(
+            _message({
+                "input_tokens": 12,
+                "output_tokens": 8,
+                "cache_creation_input_tokens": 1000,
+                "cache_creation": {"ephemeral_1h_input_tokens": 800, "ephemeral_5m_input_tokens": 200},
+            })
+        )
+
+        assert usage == Usage(
+            prompt_tokens=1012,
+            completion_tokens=8,
+            total_tokens=1020,
+            cache_creation_input_tokens=1000,
+            cache_creation_extended_input_tokens=800,
+        )
+
+    async def test_a_streaming_call_reports_them_from_the_final_message(self) -> None:
+        usage = await _usage_of(
+            _stream_events(
+                {
+                    "input_tokens": 12,
+                    "output_tokens": 1,
+                    "cache_creation_input_tokens": 1000,
+                    "cache_creation": {"ephemeral_1h_input_tokens": 800, "ephemeral_5m_input_tokens": 200},
+                },
+                {"output_tokens": 8},
+            ),
+            streaming=True,
+        )
+
+        assert usage == Usage(
+            prompt_tokens=1012,
+            completion_tokens=8,
+            total_tokens=1020,
+            cache_creation_input_tokens=1000,
+            cache_creation_extended_input_tokens=800,
+        )
+
+    async def test_an_absent_breakdown_leaves_extended_writes_absent(self) -> None:
+        usage = await _usage_of(_message({"input_tokens": 12, "output_tokens": 8, "cache_creation_input_tokens": 1000}))
+
+        assert usage == Usage(
+            prompt_tokens=1012, completion_tokens=8, total_tokens=1020, cache_creation_input_tokens=1000
+        )
+
+
+async def test_cache_reads_and_writes_both_join_the_input() -> None:
+    usage = await _usage_of(
+        _message({
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "cache_creation_input_tokens": 100,
+            "cache_read_input_tokens": 50,
+        })
+    )
+
+    assert usage == Usage(
+        prompt_tokens=162,
+        completion_tokens=8,
+        total_tokens=170,
+        cache_creation_input_tokens=100,
+        cache_read_input_tokens=50,
+    )
+
+
 async def test_request_counts_and_routing_labels_do_not_enter_usage() -> None:
     """``server_tool_use`` counts tool *requests*; ``service_tier`` and ``inference_geo``
     are labels. ``Usage`` carries token counts only, so the payload carrying them changes
@@ -219,6 +287,7 @@ class TestTheShapeTheApiSends:
             completion_tokens=269,
             total_tokens=305,
             cache_creation_input_tokens=0,
+            cache_creation_extended_input_tokens=0,
             cache_read_input_tokens=0,
             thinking_tokens=45,
         )
@@ -231,6 +300,7 @@ class TestTheShapeTheApiSends:
             completion_tokens=4,
             total_tokens=20,
             cache_creation_input_tokens=0,
+            cache_creation_extended_input_tokens=0,
             cache_read_input_tokens=0,
             thinking_tokens=0,
         )

@@ -56,7 +56,7 @@ async def evaluate_traces(
     source: TraceSource,
     *,
     scorers: Iterable[Scorer],
-    store_dir: str | os.PathLike[str],
+    store_dir: str | os.PathLike[str] | None,
     suite: Suite | None = None,
     budgets: BudgetThresholds | None = None,
     concurrency: int = 4,
@@ -70,7 +70,8 @@ async def evaluate_traces(
     Args:
         source: Where the traces come from (in-memory, disk, or cloud).
         scorers: Scorer instances; each runs once per trace.
-        store_dir: Directory the run JSON is written to as ``<run_id>.json``.
+        store_dir: Directory the run JSON is written to as ``<run_id>.json``;
+            ``None`` grades without persisting.
         suite: Optional dataset to join traces to by ``TraceRef.task_id`` for
             reference-based scorers. When omitted, a suite is synthesized from
             the traces and scoring is reference-free.

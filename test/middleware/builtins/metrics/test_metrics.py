@@ -70,6 +70,7 @@ async def test_records_llm_call_and_token_success_metrics(
                     total_tokens=15,
                     cache_read_input_tokens=3,
                     cache_creation_input_tokens=2,
+                    cache_creation_extended_input_tokens=1,
                     thinking_tokens=296,
                 ),
                 provider="response-provider",
@@ -99,6 +100,12 @@ async def test_records_llm_call_and_token_success_metrics(
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "cache_read_input"}) == 3.0
     assert (
         registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "cache_creation_input"}) == 2.0
+    )
+    assert (
+        registry.get_sample_value(
+            "ag2_llm_tokens_total", {**token_labels, "token_type": "cache_creation_extended_input"}
+        )
+        == 1.0
     )
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "thinking"}) == 296.0
 
@@ -246,7 +253,13 @@ async def test_normalizes_missing_llm_labels_and_omits_zero_tokens(registry: Col
         config=TestConfig(
             ModelResponse(
                 ModelMessage("Hello!"),
-                usage=Usage(prompt_tokens=0, completion_tokens=5, cache_read_input_tokens=0, thinking_tokens=0),
+                usage=Usage(
+                    prompt_tokens=0,
+                    completion_tokens=5,
+                    cache_read_input_tokens=0,
+                    cache_creation_extended_input_tokens=0,
+                    thinking_tokens=0,
+                ),
                 finish_reason=None,
             ),
             provider=ModelProvider.OPENAI,
@@ -270,6 +283,12 @@ async def test_normalizes_missing_llm_labels_and_omits_zero_tokens(registry: Col
     assert registry.get_sample_value("ag2_llm_calls_total", llm_success_labels) == 1.0
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "input"}) is None
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "cache_read_input"}) is None
+    assert (
+        registry.get_sample_value(
+            "ag2_llm_tokens_total", {**token_labels, "token_type": "cache_creation_extended_input"}
+        )
+        is None
+    )
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "thinking"}) is None
     assert registry.get_sample_value("ag2_llm_tokens_total", {**token_labels, "token_type": "output"}) == 5.0
 

@@ -17,6 +17,13 @@ from .incoming import sanitize_for_prompt
 A2UI_CLIENT_DATA_MODEL_METADATA_KEY = "a2uiClientDataModel"
 A2UI_RENDERER_DATA_MODEL_METADATA_KEY = "a2uiRendererDataModel"
 
+# The metadata key each protocol version's data model is read from (v1.0 renamed the client "renderer").
+_DATA_MODEL_METADATA_KEY: dict[A2UIVersion, str] = {
+    "v0.9": A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
+    "v0.9.1": A2UI_CLIENT_DATA_MODEL_METADATA_KEY,
+    "v1.0": A2UI_RENDERER_DATA_MODEL_METADATA_KEY,
+}
+
 
 def parse_client_data_model(
     metadata: Mapping[str, JsonValue] | None,
@@ -30,8 +37,7 @@ def parse_client_data_model(
     """
     if not metadata:
         return None
-    key = A2UI_RENDERER_DATA_MODEL_METADATA_KEY if version_key == "v1.0" else A2UI_CLIENT_DATA_MODEL_METADATA_KEY
-    envelope = metadata.get(key)
+    envelope = metadata.get(_DATA_MODEL_METADATA_KEY[version_key])
     surfaces = envelope.get("surfaces") if isinstance(envelope, dict) else None
     if not isinstance(surfaces, dict):
         return None

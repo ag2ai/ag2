@@ -9,7 +9,7 @@ from ag2.a2ui.data_model import data_model_to_prompt, parse_client_data_model
 
 class TestParseClientDataModel:
     def test_v1_0_reads_the_renderer_key(self) -> None:
-        metadata = {"a2uiRendererDataModel": {"version": "v1.0", "surfaces": {"s1": {"a": 1}}}}
+        metadata = {"a2uiRendererDataModel": {"version": "1.0", "surfaces": {"s1": {"a": 1}}}}
         assert parse_client_data_model(metadata, version_key="v1.0") == {"s1": {"a": 1}}
 
     def test_v0_9_reads_the_client_key(self) -> None:
@@ -17,7 +17,7 @@ class TestParseClientDataModel:
         assert parse_client_data_model(metadata, version_key="v0.9") == {"s1": {"a": 1}}
 
     def test_a_key_of_the_other_era_is_ignored(self) -> None:
-        metadata = {"a2uiClientDataModel": {"version": "v1.0", "surfaces": {"s1": {"a": 1}}}}
+        metadata = {"a2uiClientDataModel": {"version": "1.0", "surfaces": {"s1": {"a": 1}}}}
         assert parse_client_data_model(metadata, version_key="v1.0") is None
 
     def test_non_object_surfaces_are_dropped(self) -> None:

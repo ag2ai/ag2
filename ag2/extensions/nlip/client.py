@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 import httpx
 from fast_depends.library.serializer import SerializerProto
@@ -52,7 +53,7 @@ class NlipClient(LLMClient):
         context: ConversationContext,
         *,
         tools: Iterable[ToolSchema],
-        response_schema: ResponseProto | None,
+        response_schema: ResponseProto[Any] | None,
         serializer: SerializerProto,
     ) -> ModelResponse:
         if response_schema is not None:

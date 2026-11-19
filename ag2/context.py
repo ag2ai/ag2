@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable, Coroutine, Mapping, MutableMapping
 from contextlib import AbstractAsyncContextManager, AbstractContextManager, suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, cast, overload, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, TypeVar, cast, overload, runtime_checkable
 from uuid import UUID
 
 import anyio.from_thread
@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 StreamId: TypeAlias = UUID
 SubId: TypeAlias = UUID
+
+_EventT = TypeVar("_EventT", bound=BaseEvent)
 
 
 @runtime_checkable
@@ -64,9 +66,10 @@ class Stream(Protocol):
 
         The task is not awaited by the agent loop. Tasks deliver their results
         via ``self.enqueue(...)`` — anything enqueued while an ``ask`` is live
-        feeds the next model call; anything enqueued after ``ask`` returned
-        sits in ``pending_messages`` and is consumed by the next ``ask`` on
-        the same stream.
+        feeds the next model call; anything enqueued after ``ask`` returned,
+        or while a turn ends without another model call (a ``final`` tool
+        result or a client-tool handoff), sits in ``pending_messages`` and is
+        consumed by the next ``ask`` on the same stream.
         """
         ...
 
@@ -121,6 +124,13 @@ class Stream(Protocol):
         timeout: float | None = None,
     ) -> AbstractContextManager[None]: ...
 
+    @overload
+    def get(
+        self,
+        condition: type[_EventT],
+    ) -> AbstractAsyncContextManager[asyncio.Future[_EventT]]: ...
+
+    @overload
     def get(
         self,
         condition: ClassInfo | Condition,

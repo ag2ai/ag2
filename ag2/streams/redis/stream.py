@@ -69,7 +69,7 @@ class RedisStream(MemoryStream):
         self._serializer = serializer
         self._channel = f"{prefix}:pubsub:{self.id}"
         self._instance_id = str(uuid4())
-        self._listener_task: asyncio.Task | None = None
+        self._listener_task: asyncio.Task[None] | None = None
         self._listener_ready = asyncio.Event()
         self._pubsub_redis = aioredis.from_url(redis_url)
         self._publish_redis = aioredis.from_url(redis_url)
@@ -107,7 +107,7 @@ class RedisStream(MemoryStream):
             # try; this cleanup still runs on cancellation so the pub/sub
             # subscription is always released.
             await pubsub.unsubscribe(self._channel)
-            await pubsub.aclose()
+            await pubsub.aclose()  # type: ignore[no-untyped-call]  # unannotated in redis-py
 
     @staticmethod
     def _split_origin(raw: bytes) -> tuple[str | None, bytes]:

@@ -89,7 +89,7 @@ A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an i
 {
   "a2ui": [
     {
-      "version": "v1.0",
+      "version": "1.0",
       "callAgentFunction": {
         "surfaceId": "s1",
         "functionCallId": "verify-1",
@@ -101,8 +101,10 @@ A v1.0 renderer that needs a *value* back — verifying an id, a typeahead, an i
 ```
 
 ```json
-{"version": "v1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true}}}
+{"version": "1.0", "agentFunctionResponse": {"functionCallId": "verify-1", "value": {"valid": true}}}
 ```
+
+`#!python verify_provider` does not have to be in the renderer's catalog: a renderer with no local implementation of a function routes the call to the agent. A renderer that rejects functions its catalogs don't name must declare the agent's functions, without implementing them.
 
 Over [AG-UI](/docs/user-guide/a2ui/server#serving-over-ag-ui-copilotkit) the same envelope rides `#!python forwardedProps.a2uiAction` (or in a list under `#!python forwardedProps.a2ui`), and the `#!python agentFunctionResponse` comes back in the run's `#!python ACTIVITY_SNAPSHOT`.
 

@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ag2.annotations import Context
     from ag2.events import BaseEvent, ToolCallEvent
-    from ag2.middleware.base import ToolExecution
+    from ag2.middleware.base import AgentTurn, ToolExecution
 
-from ag2.events import ToolErrorEvent, ToolResultEvent
+from ag2.events import ModelMessage, ModelResponse, ToolErrorEvent, ToolResultEvent
 from ag2.events.input_events import DataInput, TextInput
 from ag2.extensions.tealtiger.types import (
     ARG_TYPES_BY_NAME,
@@ -310,13 +310,13 @@ class _TealTigerPerTurn(BaseMiddleware):
 
     async def on_turn(
         self,
-        call_next: Callable[..., Any],
+        call_next: "AgentTurn",
         event: "BaseEvent",
         context: "Context",
-    ) -> Any:
+    ) -> ModelResponse:
         """Kill switch enforcement at the turn level.
 
-        ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent.
+        ENFORCE mode: frozen agent's turn is answered with the denial instead of the model.
         MONITOR mode: frozen agent is logged but allowed through.
         OBSERVE mode: no evaluation, pass through.
         """
@@ -341,11 +341,13 @@ class _TealTigerPerTurn(BaseMiddleware):
                 self._factory.on_decision(decision)
 
             if self._factory.mode == GovernanceMode.ENFORCE:
-                return ToolErrorEvent.from_call(
-                    event,
-                    error=Exception(
-                        f"[GOVERNANCE DENIED] Agent '{agent_name}' is frozen (kill switch active). All actions blocked."
-                    ),
+                return ModelResponse(
+                    message=ModelMessage(
+                        content=(
+                            f"[GOVERNANCE DENIED] Agent '{agent_name}' is frozen (kill switch active). "
+                            "All actions blocked."
+                        )
+                    )
                 )
             # MONITOR: record but allow through
 
@@ -549,7 +551,6 @@ class _TealTigerPerTurn(BaseMiddleware):
         error stays an error: a blocked error result is replaced with a sanitized
         governance error, never turned into a success.
         """
-        is_error = isinstance(result, ToolErrorEvent)
         # ToolResultEvent covers both successful results and ToolErrorEvent
         # (a subclass): a tool that raises with an SSN or credential in its
         # message leaks it into model context just as a returned value would,
@@ -618,7 +619,7 @@ class _TealTigerPerTurn(BaseMiddleware):
                 _rewrite_part(part, lambda text: self._redact(text, categories, redact_secrets))
             # An error result also carries the exception itself; `str(error)` reaches
             # the model independently of the parts, so redact it in place too.
-            if is_error:
+            if isinstance(result, ToolErrorEvent):
                 self._redact_error(result, categories, redact_secrets)
 
             # Detection runs over the joined parts, redaction over each part alone, so a

@@ -30,6 +30,7 @@ from typing import Any
 
 from ag2.events import ModelResponse
 
+from .._types import Side, Winner, other_side
 from ..dataset import Suite, Task
 from ..pairwise import PairwiseComparator, PairwiseOutcome
 from ..sources import TraceRef, TraceSource
@@ -168,13 +169,21 @@ class _HumanInline:
         )
 
 
-def _deblind(preferred: Any, first_variant: str) -> str:
-    other = "b" if first_variant == "a" else "a"
+def _deblind(preferred: Any, first_variant: str) -> Winner:
+    first = _as_side(first_variant)
     if str(preferred) == "1":
-        return first_variant
+        return first
     if str(preferred) == "2":
-        return other
+        return other_side(first)
     return "tie"
+
+
+def _as_side(value: str) -> Side:
+    if value == "a":
+        return "a"
+    if value == "b":
+        return "b"
+    raise ValueError(f"first_variant must be 'a' or 'b', got {value!r}")
 
 
 def _final_text(trace: Trace) -> str:

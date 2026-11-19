@@ -22,6 +22,8 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_PACKET,
     AgentTarget,
+    ConsultingState,
+    ContextEquals,
     FromSpeaker,
     Handoff,
     Hub,
@@ -174,6 +176,98 @@ async def test_bridge_uses_module_level_default_helper_directly() -> None:
 
     state = hub.adapter_state(channel.channel_id)
     assert state.expected_next_speaker == bob.agent_id
+
+    await alice_hc.close()
+    await bob_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_packet_context_set_routes_the_same_round() -> None:
+    """``build_packet_envelope(context_set=...)`` updates ``context_vars``
+    before the next speaker is selected, so a ``ContextEquals`` rule
+    matches the value the same packet sets."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+
+    triage_hc = HubClient(link, hub=hub)
+    security_hc = HubClient(link, hub=hub)
+    legal_hc = HubClient(link, hub=hub)
+    triage = await triage_hc.register_human(Passport(name="triage"))
+    security = await security_hc.register_human(Passport(name="security"))
+    legal = await legal_hc.register_human(Passport(name="legal"))
+
+    graph = TransitionGraph(
+        initial_speaker=triage.agent_id,
+        transitions=[
+            Transition(
+                when=ContextEquals(key="route", value="security"),
+                then=AgentTarget(security.agent_id),
+            ),
+            Transition(
+                when=FromSpeaker(triage.agent_id),
+                then=AgentTarget(legal.agent_id),
+            ),
+        ],
+        default_target=TerminateTarget(reason="bridge_done"),
+        max_turns=4,
+    )
+    channel = await triage.open(
+        type=WORKFLOW_TYPE,
+        target=[security.agent_id, legal.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    adapter = hub.adapter_for(channel.channel_id)
+    await hub.post_envelope(
+        adapter.build_packet_envelope(
+            channel_id=channel.channel_id,
+            sender_id=triage.agent_id,
+            body="needs a security review",
+            context_set={"route": "security"},
+        )
+    )
+
+    state = hub.adapter_state(channel.channel_id, WorkflowState)
+    assert state is not None
+    assert (state.context_vars, state.expected_next_speaker) == ({"route": "security"}, security.agent_id)
+
+    await triage_hc.close()
+    await security_hc.close()
+    await legal_hc.close()
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_adapter_state_is_typed_by_the_requested_state_class() -> None:
+    """``adapter_state(channel_id, StateClass)`` returns the state as that
+    class from both ``Hub`` and ``HubClient``, and rejects another class."""
+    store = MemoryKnowledgeStore()
+    hub = await Hub.open(store, ttl_sweep_interval=0)
+    link = LocalLink(hub)
+    alice_hc = HubClient(link, hub=hub)
+    bob_hc = HubClient(link, hub=hub)
+    alice = await alice_hc.register_human(Passport(name="alice"))
+    bob = await bob_hc.register_human(Passport(name="bob"))
+    graph = TransitionGraph(
+        initial_speaker=alice.agent_id,
+        transitions=[Transition(when=FromSpeaker(alice.agent_id), then=AgentTarget(bob.agent_id))],
+        default_target=TerminateTarget(reason="bridge_done"),
+        max_turns=4,
+    )
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    state = hub.adapter_state(channel.channel_id, WorkflowState)
+    assert state is hub.adapter_state(channel.channel_id)
+    assert state is await alice_hc.adapter_state(channel.channel_id, WorkflowState)
+    with pytest.raises(TypeError, match="not ConsultingState"):
+        hub.adapter_state(channel.channel_id, ConsultingState)
+    assert hub.adapter_state("no-such-channel", WorkflowState) is None
 
     await alice_hc.close()
     await bob_hc.close()

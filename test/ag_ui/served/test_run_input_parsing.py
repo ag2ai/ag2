@@ -30,6 +30,40 @@ pytestmark = pytest.mark.asyncio
 
 _RUN: dict[str, Any] = {"threadId": "t1", "runId": "r1", "messages": []}
 
+
+def _data_source_input(value: str) -> dict[str, Any]:
+    return {
+        **_RUN,
+        "messages": [
+            {
+                "id": "m1",
+                "role": "user",
+                "content": [{"type": "image", "source": {"type": "data", "value": value, "mimeType": "image/png"}}],
+            }
+        ],
+    }
+
+
+def _encrypted_value_input(value: str) -> dict[str, Any]:
+    return {
+        **_RUN,
+        "messages": [
+            {
+                "id": "m1",
+                "role": "assistant",
+                "toolCalls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {"name": "search", "arguments": "{}"},
+                        "encryptedValue": value,
+                    }
+                ],
+            }
+        ],
+    }
+
+
 _EVERY_ROLE: list[dict[str, Any]] = [
     {"id": "1", "role": "developer", "content": "be brief"},
     {"id": "2", "role": "system", "content": "you are an agent"},
@@ -48,6 +82,8 @@ _EVERY_ROLE: list[dict[str, Any]] = [
 _VALID_INPUTS: dict[str, dict[str, Any]] = {
     "minimal": _RUN,
     "every-role": {**_RUN, "messages": _EVERY_ROLE},
+    "base64-data-source": _data_source_input("aGk="),
+    "base64-encrypted-value": _encrypted_value_input("aGk="),
     "full": {
         **_RUN,
         "runId": "r2",
@@ -73,33 +109,10 @@ _INVALID_INPUTS: dict[str, dict[str, Any]] = {
     "tools-item-not-a-tool": {**_RUN, "tools": [42]},
     "context-item-not-a-context": {**_RUN, "context": [42]},
     "resume-item-not-a-resume-entry": {**_RUN, "resume": [42]},
-    "data-source-not-base64": {
-        **_RUN,
-        "messages": [
-            {
-                "id": "m1",
-                "role": "user",
-                "content": [{"type": "image", "source": {"type": "data", "value": "a", "mimeType": "image/png"}}],
-            }
-        ],
-    },
-    "encrypted-value-not-base64": {
-        **_RUN,
-        "messages": [
-            {
-                "id": "m1",
-                "role": "assistant",
-                "toolCalls": [
-                    {
-                        "id": "c1",
-                        "type": "function",
-                        "function": {"name": "search", "arguments": "{}"},
-                        "encryptedValue": "a",
-                    }
-                ],
-            }
-        ],
-    },
+    "data-source-not-base64": _data_source_input("a"),
+    "encrypted-value-not-base64": _encrypted_value_input("a"),
+    "data-source-base64-invalid-character": _data_source_input("aG!k="),
+    "encrypted-value-base64-invalid-character": _encrypted_value_input("aG!k="),
 }
 
 

@@ -8,7 +8,7 @@ import base64
 import importlib
 from dataclasses import fields, is_dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -21,7 +21,7 @@ def _is_event_instance(value: Any) -> bool:
     return hasattr(type(value), "_event_fields_")
 
 
-def _is_event_class(obj: Any) -> bool:
+def _is_event_class(obj: Any) -> "TypeGuard[type[BaseEvent]]":
     return isinstance(obj, type) and hasattr(obj, "_event_fields_")
 
 
@@ -156,7 +156,7 @@ def _resolve_event_type(type_name: str, event_registry: Any | None = None) -> "t
     Tries the registry first (if provided), then falls back to import-based resolution.
     """
     if event_registry is not None:
-        cls = event_registry.resolve(type_name)
+        cls: type[BaseEvent] | None = event_registry.resolve(type_name)
         if cls is not None:
             return cls
     return import_event_class(type_name)

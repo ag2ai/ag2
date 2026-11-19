@@ -7,9 +7,9 @@ from ag2.exceptions import missing_optional_dependency
 try:
     from .redis import RedisStorage, RedisStream, Serializer
 except ImportError as e:
-    RedisStorage = missing_optional_dependency("RedisStorage", "redis", e)
-    RedisStream = missing_optional_dependency("RedisStream", "redis", e)
-    Serializer = missing_optional_dependency("Serializer", "redis", e)
+    RedisStorage = missing_optional_dependency("RedisStorage", "redis", e)  # type: ignore[misc]
+    RedisStream = missing_optional_dependency("RedisStream", "redis", e)  # type: ignore[misc]
+    Serializer = missing_optional_dependency("Serializer", "redis", e)  # type: ignore[misc]
 
 __all__ = (
     "RedisStorage",

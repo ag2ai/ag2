@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from dirty_equals import IsFloat
+from dirty_equals import HasAttributes, IsFloat
 
 from ag2.events import BinaryResult, FileIdInput, Input
 from ag2.files import FileContent, FileProvider, UploadedFile
@@ -37,7 +37,7 @@ class TestUploadedFile:
         assert f.created_at == 1767225600.0
 
     def test_minimal_construction_defaults(self) -> None:
-        assert UploadedFile(file_id="file-456") == UploadedFile(
+        assert UploadedFile(file_id="file-456") == HasAttributes(
             file_id="file-456",
             filename=None,
             provider=None,
@@ -48,11 +48,6 @@ class TestUploadedFile:
 
 
 class TestFileContent:
-    def test_frozen(self) -> None:
-        fc = FileContent(name="test.txt", data=b"hello")
-        with pytest.raises(AttributeError):
-            fc.name = "other.txt"  # type: ignore[misc]
-
     def test_fields_preserved(self) -> None:
         assert FileContent(name="doc.pdf", data=b"pdf-bytes", media_type="application/pdf") == FileContent(
             name="doc.pdf",

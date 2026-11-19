@@ -58,7 +58,7 @@ def _inherited_dependencies(parent: Mapping[Any, Any], worker_keys: Collection[A
 
 
 async def run_task(
-    agent: "Agent",
+    agent: "Agent[Any]",
     objective: str,
     *,
     parent_context: Context,

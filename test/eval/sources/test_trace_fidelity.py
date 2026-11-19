@@ -12,9 +12,8 @@ a divergence between what telemetry emits and what scorers expect surfaces here
 rather than silently scoring a replayed trace incorrectly.
 """
 
-import json
-
 import pytest
+from dirty_equals import HasAttributes, IsInstance, IsJson, IsStr
 
 pytest.importorskip("opentelemetry.sdk")
 
@@ -30,6 +29,7 @@ from ag2.eval.trace import TokenUsage, Trace
 from ag2.events import (
     ModelMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -165,13 +165,11 @@ async def test_structured_tool_result_survives_the_span_round_trip(otel_provider
 
     spans = readable_spans_to_trace(exporter.get_finished_spans())
 
-    results = spans.events_of(ToolResultEvent)
-    assert len(results) == 1
-    parts = results[0].result.parts
-    assert len(parts) == 1
+    [result] = spans.events_of(ToolResultEvent)
     # One text part holding the JSON: the shape judge/attribution scorers read.
-    assert json.loads(parts[0].content) == {"city": "Oslo", "temp_c": 12}
-    assert parts[0].metadata == {}
+    assert result.result.parts == [
+        IsInstance(TextInput) & HasAttributes(content=IsJson({"city": "Oslo", "temp_c": 12}), metadata={})
+    ]
 
 
 @pytest.mark.asyncio()
@@ -195,9 +193,11 @@ async def test_truncated_tool_result_is_flagged_on_the_reconstructed_part(otel_p
 
     await agent.ask("Dump")
 
-    part = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)[0].result.parts[0]
-    assert part.content.endswith("...[truncated]")
-    assert part.metadata == {"truncated": True}
+    [result] = readable_spans_to_trace(exporter.get_finished_spans()).events_of(ToolResultEvent)
+    assert result.result.parts == [
+        IsInstance(TextInput)
+        & HasAttributes(content=IsStr(regex=r"(?s).*\.\.\.\[truncated\]"), metadata={"truncated": True})
+    ]
 
 
 @pytest.mark.asyncio()
@@ -232,6 +232,34 @@ async def test_accounting_events_survive_the_span_round_trip(otel_provider) -> N
 
     assert accounting(spans) == accounting(live)
     assert accounting(spans) == [("model_call", Usage(prompt_tokens=11, completion_tokens=4, total_tokens=15))]
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("extended", (pytest.param(300, id="extended-writes"), pytest.param(0, id="measured-zero")))
+async def test_extended_cache_writes_survive_the_span_round_trip(otel_provider, extended: int) -> None:
+    """A usage reloaded from traces keeps the extended-retention share of cache writes.
+
+    A measured ``0`` stays ``0``: it says the provider reported the breakdown and
+    nothing was written with extended retention, which ``None`` would not.
+    """
+    exporter, provider = otel_provider
+    usage = Usage(
+        prompt_tokens=11,
+        completion_tokens=4,
+        total_tokens=15,
+        cache_creation_input_tokens=1200,
+        cache_creation_extended_input_tokens=extended,
+    )
+    agent = Agent(
+        "assistant",
+        config=TestConfig(ModelResponse(ModelMessage("Hello there!"), usage=usage)),
+        middleware=[TelemetryMiddleware(tracer_provider=provider, agent_name="assistant", model_name="mock")],
+    )
+
+    await agent.ask("Hi")
+
+    trace = readable_spans_to_trace(exporter.get_finished_spans())
+    assert [e.usage for e in trace.events_of(UsageEvent)] == [usage]
 
 
 @pytest.mark.asyncio()

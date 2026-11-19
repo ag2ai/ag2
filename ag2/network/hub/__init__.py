@@ -75,7 +75,7 @@ from .listener import BaseHubListener, HubListener
 try:
     from .telemetry import HubTelemetryListener
 except ImportError as e:
-    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)
+    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)  # type: ignore[misc]
 
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",

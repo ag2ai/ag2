@@ -35,11 +35,42 @@ if __name__ == "__main__":
 
 That is the whole of the common case. The agent is exposed as one tool — `ask` — that runs `Agent.ask()` and returns the reply; conversations are kept, and questions the agent raises reach the human behind the calling client. Everything below is opt-in on top of it.
 
+Point a client at **`http://127.0.0.1:8000/mcp`** — exactly the `path` you configured (default `"/mcp"`). It answers there directly. `/mcp/` is answered with a `307` redirect to it, which costs a round trip and which not every client follows, so configure the path without the trailing slash.
+
 The server is also mountable into a host Starlette/FastAPI app, since it is an ordinary ASGI app.
 
 ---
 
 ## Recipes
+
+### Let a browser-based host connect
+
+Hosts that run in a browser — the MCP Inspector, the ext-apps `basic-host`, a web chat — send a CORS preflight before their requests, and the server sends no CORS headers of its own. Wrap the server in Starlette's `CORSMiddleware`:
+
+```python linenums="1"
+import uvicorn
+from starlette.middleware.cors import CORSMiddleware
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.mcp import MCPServer
+
+agent = Agent("assistant", config=AnthropicConfig(model="claude-haiku-4-5-20251001"))
+app = CORSMiddleware(
+    MCPServer(agent),
+    allow_origins=["http://localhost:6274"],  # the host page's origin, e.g. the MCP Inspector
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=[
+        "content-type", "mcp-protocol-version", "mcp-session-id", "last-event-id", "mcp-method", "mcp-name",
+    ],
+    expose_headers=["mcp-session-id"],
+)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+```
+
+Wrap the server itself rather than mounting it into a `Starlette(middleware=[...])` app: `CORSMiddleware` passes the ASGI `lifespan` through, so the server's session manager still starts. The listed headers cover `mcp-protocol-version`, `mcp-session-id` for session-based clients, and `last-event-id` when a host resumes a dropped stream. Clients using protocol `2026-07-28` also send `mcp-method`, plus `mcp-name` for requests such as `tools/call` and `resources/read`; omitting these from `allow_headers` makes their browser preflight fail. Exposing `mcp-session-id` on responses lets session-based clients read their session ID and send it on subsequent requests. List the host's exact origin rather than `"*"`: a server reachable from any page can be driven by any page.
 
 ### Serve over stdio instead
 
@@ -588,7 +619,7 @@ The shared key only makes the state *verifiable* everywhere; the run it names is
 | `tools` | `()` | deterministic `@mcp_tool` tools served next to `ask` |
 | `apps` | `()` | MCP Apps whose tools and interactive documents are served together |
 | `extensions` | `None` | protocol extensions advertised by the server |
-| `path` | `"/mcp"` | the HTTP endpoint path |
+| `path` | `"/mcp"` | the HTTP endpoint path, answered directly; a trailing-slash spelling is redirected to it |
 | `stateless` | `False` | stop the HTTP transport issuing an `mcp-session-id` |
 | `json_response` | `False` | answer with JSON rather than SSE |
 | `transport` | `None` | a `TransportConfig` of streamable-HTTP settings; omitting it is a default-constructed one |
@@ -620,6 +651,10 @@ Non-positive bounds are refused when the `TransportConfig` is constructed.
 
 Usually produced by `@mcp_tool`. Constructed directly it takes `name`, `description`, `handler`, `input_schema`, `title`, `annotations`, `output_schema`, and `meta` — and nothing else; resolver metadata is the decorator's own state, not a constructor argument.
 
+A tool made by `@mcp_tool` (or `@app.tool`) stays callable as the function it wraps, so a unit test can call it directly — `#!python await increment(1, by=2)` — with nothing MCP-specific in the way: no schema validation, no resolver, no result mapping. One constructed from a `handler` wraps no function; drive it with `#!python await tool.call(arguments)`.
+
+It is not an agent tool. `Agent(tools=[...])` refuses one with a `TypeError` that names the fix: serve it with `MCPServer(tools=...)` / `apps=...`, or decorate the function with `@tool` to give it to an agent.
+
 ### Names re-exported from `ag2.mcp`
 
 `MCPServer`, `SessionConfig`, `TransportConfig`, `MCPFunctionTool`, `mcp_tool`, `MCPApp`, `AppSandbox`, `Resource`, `ResourceTemplate`, `Prompt`, `PromptArgument`, `PromptMessage`, `AskContext`, `ContextProvider`, `ExtensionMap`, `client_extension`, `build_ask_tool`, and the five curated MCP SDK names `Resolve`, `Elicit`, `Sample`, `ListRoots`, `RequestStateSecurity`.
@@ -630,8 +665,8 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 
 ## Beyond the conversational tool
 
-- **MCP-UI** — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for returning renderable UI from a `@mcp_tool`.
 - **MCP Apps** — pass `apps=[MCPApp(...)]` to serve an interactive document and its bound tools together; see [MCP Apps](/docs/user-guide/tools/mcp_apps).
+- **MCP-UI (legacy)** — see [MCP-UI (legacy embedded resources)](/docs/user-guide/tools/mcp_ui) for clients that render only MCP-UI resources; use [MCP Apps](/docs/user-guide/tools/mcp_apps) for new work.
 - **Structured custom tools** — a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
 - **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.

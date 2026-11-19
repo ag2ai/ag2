@@ -107,6 +107,13 @@ class WebFetchUrlSourceToolNotFoundError(ToolExecutionError):
         )
 
 
+class FilesAPIUnsupportedError(AG2Error, NotImplementedError):
+    """Raised when a model config has no Files API client."""
+
+    def __init__(self, config_name: str) -> None:
+        super().__init__(f"{config_name} does not support Files API.")
+
+
 class UnsupportedInputError(AG2Error):
     """Raised when an input type is not supported by a provider."""
 

@@ -27,6 +27,7 @@ from ag2.config import ModelConfig
 from ag2.events import ModelResponse
 from ag2.middleware.base import MiddlewareFactory
 
+from .._types import Side, Winner, other_side
 from ..dataset import Task
 from ..pairwise import PairwiseComparator, PairwiseOutcome
 from ..trace import Trace
@@ -76,7 +77,7 @@ def pairwise_judge(
             ``False``, a single call is used (faster, position-biased).
         middleware: Middleware for the judge agent (e.g. ``TelemetryMiddleware``).
     """
-    judge = Agent(
+    judge: Agent[PairwiseVerdict] = Agent(
         f"pairwise_judge_{key}",
         _system_prompt(criterion),
         config=config,
@@ -92,7 +93,14 @@ class _PairwiseJudge:
     """A :class:`PairwiseComparator` backed by a judge :class:`Agent`."""
 
     def __init__(
-        self, judge: Agent, key: str, *, include_trace: bool, include_reference: bool, retries: int, swap: bool
+        self,
+        judge: Agent[PairwiseVerdict],
+        key: str,
+        *,
+        include_trace: bool,
+        include_reference: bool,
+        retries: int,
+        swap: bool,
     ) -> None:
         self._judge = judge
         self.key = key
@@ -114,12 +122,12 @@ class _PairwiseJudge:
         v1 = await self._verdict(task, reference_outputs, answer_a, answer_b, trace_a, trace_b)
         if not self._swap:
             return PairwiseOutcome(
-                winner=_pref_to_ab(v1.preferred, "a", "b"), reasoning=v1.reasoning, detail={"order1": v1.preferred}
+                winner=_pref_to_ab(v1.preferred, "a"), reasoning=v1.reasoning, detail={"order1": v1.preferred}
             )
 
         v2 = await self._verdict(task, reference_outputs, answer_b, answer_a, trace_b, trace_a)
-        w1 = _pref_to_ab(v1.preferred, "a", "b")  # order 1: Response 1 = A
-        w2 = _pref_to_ab(v2.preferred, "b", "a")  # order 2: Response 1 = B
+        w1 = _pref_to_ab(v1.preferred, "a")  # order 1: Response 1 = A
+        w2 = _pref_to_ab(v2.preferred, "b")  # order 2: Response 1 = B
         winner = w1 if (w1 == w2 and w1 != "tie") else "tie"  # conservative: win only if consistent
         return PairwiseOutcome(
             winner=winner,
@@ -153,11 +161,12 @@ class _PairwiseJudge:
         )
 
 
-def _pref_to_ab(preferred: str, first: str, second: str) -> str:
+def _pref_to_ab(preferred: str, first: Side) -> Winner:
+    """Map a position-relative preference to a variant, given which variant was shown first."""
     if preferred == "first":
         return first
     if preferred == "second":
-        return second
+        return other_side(first)
     return "tie"
 
 

@@ -12,8 +12,8 @@ stream history.
 Compaction removes. Aggregation creates. They are separate concerns.
 """
 
-from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from dataclasses import asdict, dataclass
+from typing import Any, Protocol, runtime_checkable
 
 from fast_depends.pydantic import PydanticSerializer
 
@@ -146,7 +146,7 @@ class SummarizeCompact:
             pydantic_config={"arbitrary_types_allowed": True},
             use_fastdepends_errors=False,
         )
-        self.last_usage: dict = {}
+        self.last_usage: dict[str, Any] = {}
 
     async def compact(
         self,
@@ -192,7 +192,7 @@ class SummarizeCompact:
             response_schema=None,
             serializer=self._serializer,
         )
-        self.last_usage = response.usage if hasattr(response, "usage") and response.usage else {}
+        self.last_usage = asdict(response.usage) if response.usage else {}
         # The summarization call runs on a throwaway stream; surface its usage
         # onto the real agent stream so it isn't lost to monitoring.
         if response.usage:

@@ -5,6 +5,11 @@ date: 2026-10-09
 
 # 0023. `OpenAIDecisionsConfig` is decision-only and follows the TypeSafe mapping
 
+> **Amended by [0038](0038-decision-schema-class-is-several-questions-in-one-request.md):**
+> a flat class as `response_schema` is several questions, one per field, sent in one request.
+> The "one `ask()` is one question" rule in decision 1 and the "Only one question per call" consequence now hold only for a scalar schema;
+> everything else below stands.
+
 ## Context
 
 OpenAI's [Decisions API](https://developers.openai.com/api/docs/guides/decisions)

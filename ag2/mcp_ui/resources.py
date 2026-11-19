@@ -5,7 +5,7 @@
 import base64
 from typing import Any, Literal, TypeAlias
 
-from mcp.types import BlobResourceContents, EmbeddedResource, TextResourceContents
+from mcp.types import BlobResourceContents, TextResourceContents
 from mcp_ui_server import UIResource
 from mcp_ui_server.exceptions import InvalidContentError, InvalidURIError
 from mcp_ui_server.types import UI_METADATA_PREFIX
@@ -53,7 +53,7 @@ def _build(
     encoding: Encoding,
     ui_metadata: UIMetadata | None,
     metadata: UIMetadata | None,
-) -> EmbeddedResource:
+) -> UIResource:
     """Construct the UI resource contents that ``mcp-ui-server``'s builder would.
 
     Reproduces ``mcp_ui_server.create_ui_resource`` rather than calling it: that
@@ -95,7 +95,7 @@ def raw_html(
     encoding: Encoding = "text",
     ui_metadata: UIMetadata | None = None,
     metadata: UIMetadata | None = None,
-) -> EmbeddedResource:
+) -> UIResource:
     """A UI resource rendering an inline HTML string (``uri`` must start with ``ui://``)."""
     return _build(
         uri,
@@ -115,7 +115,7 @@ def external_url(
     encoding: Encoding = "text",
     ui_metadata: UIMetadata | None = None,
     metadata: UIMetadata | None = None,
-) -> EmbeddedResource:
+) -> UIResource:
     """A UI resource the client renders by embedding ``url`` in an ``iframe``."""
     return _build(
         uri,
@@ -136,7 +136,7 @@ def remote_dom(
     encoding: Encoding = "text",
     ui_metadata: UIMetadata | None = None,
     metadata: UIMetadata | None = None,
-) -> EmbeddedResource:
+) -> UIResource:
     """A UI resource carrying a Remote-DOM ``script`` the client mounts (``react`` or ``webcomponents``)."""
     _require_ui_uri(uri)
     mime_type = _REMOTE_DOM_MIME.get(framework)

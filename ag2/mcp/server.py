@@ -4,12 +4,14 @@
 
 import importlib.metadata
 import logging
+import weakref
 from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from mcp.server.apps import APP_MIME_TYPE
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware, get_access_token
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
@@ -22,6 +24,7 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import (
     CallToolRequestParams,
     CallToolResult,
+    ClientCapabilities,
     Icon,
     InputRequiredResult,
     InputResponseRequestParams,
@@ -30,12 +33,12 @@ from mcp.types import (
 )
 from starlette.applications import Starlette
 from starlette.middleware.authentication import AuthenticationMiddleware
-from starlette.routing import BaseRoute, Mount, Route
+from starlette.routing import BaseRoute, Route
 
 from ag2.agent import Agent
 from ag2.hitl import ElicitationPolicy
 
-from .apps import EXTENSION_ID, MCPApp, binds_ui, client_supports_apps, collect_apps, visible_meta
+from .apps import EXTENSION_ID, UI_META_KEY, MCPApp, binds_ui, client_supports_apps, collect_apps, visible_meta
 from .errors import MCPToolNameConflictError
 from .executor import AgentExecutor, ContextProvider
 from .extensions import ExtensionMap, validated_extensions
@@ -79,14 +82,14 @@ def _build_session_store(sessions: "bool | SessionConfig") -> SessionStore | Non
     )
 
 
-def _ui_binding_filter(ctx: "ServerRequestContext[Any, Any]") -> MetaFilter:
+def _ui_binding_filter(supports_apps: bool) -> MetaFilter:
     """A ``_meta`` filter withholding the MCP Apps binding from a client that cannot render it.
 
     Applied to every custom tool, whether it came from ``apps=`` or was
     registered by hand, so the two routes describe the same server. It is a
     no-op on a tool whose ``_meta`` has no ``ui`` key, which is most of them.
     """
-    return partial(visible_meta, supports_apps=client_supports_apps(ctx))
+    return partial(visible_meta, supports_apps=supports_apps)
 
 
 def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs: PausedRuns) -> "Lifespan[Any]":
@@ -106,6 +109,23 @@ def _session_manager_lifespan(manager: StreamableHTTPSessionManager, paused_runs
             paused_runs.reclaim_all()
 
     return lifespan
+
+
+class _StreamableEndpoint:
+    """The ASGI app answering the MCP endpoint, handed to a ``Route`` as an app.
+
+    A class rather than a function because Starlette treats a plain function
+    endpoint as a request/response handler, while the session manager speaks
+    raw ASGI.
+    """
+
+    __slots__ = ("_manager",)
+
+    def __init__(self, manager: StreamableHTTPSessionManager) -> None:
+        self._manager = manager
+
+    async def __call__(self, scope: "Scope", receive: "Receive", send: "Send") -> None:
+        await self._manager.handle_request(scope, receive, send)
 
 
 class MCPServer:
@@ -278,6 +298,8 @@ class MCPServer:
         "_prompt_provider",
         "_tool_provider",
         "_extensions",
+        "_ui_tool_names",
+        "_told_withheld",
         "_http",
     )
 
@@ -349,6 +371,12 @@ class MCPServer:
                 seen.add(tool.name)
         self._tool_provider = ToolProvider(tools) if tools else None
         self._extensions = validated_extensions(extensions) if extensions else {}
+        self._ui_tool_names = tuple(tool.name for tool in tools if tool.meta and UI_META_KEY in tool.meta)
+        # The connections already told their UI binding was withheld, so the log
+        # says it once per connection rather than on every ``tools/list``.
+        # Keyed by identity: the capabilities model is unhashable, and an entry
+        # leaves with its connection, before the id could be reused.
+        self._told_withheld: weakref.WeakValueDictionary[int, ClientCapabilities] = weakref.WeakValueDictionary()
         if binds_ui(tools):
             # Read off the tools rather than off ``apps=``, so registering an app's
             # pieces by hand yields the same server. Deliberate decoration: the
@@ -449,8 +477,36 @@ class MCPServer:
         tools = self._executor.list_tools()
         if self._tool_provider is not None:
             context = await self._request_context(ctx)
-            tools += self._tool_provider.list_mcp_tools(context, _ui_binding_filter(ctx))
+            supports_apps = client_supports_apps(ctx)
+            if not supports_apps:
+                self._tell_withheld(ctx)
+            tools += self._tool_provider.list_mcp_tools(context, _ui_binding_filter(supports_apps))
         return ListToolsResult(tools=tools)
+
+    def _tell_withheld(self, ctx: "ServerRequestContext[Any, Any]") -> None:
+        """Log, once per session, which UI bindings a client was not shown and why.
+
+        Withholding is correct (ADR 0018), but without this a server author
+        whose host renders no UI has nothing to go on. The SDK builds a fresh
+        ``ServerSession`` per request, so the connection is recognised by its
+        declared capabilities, which live as long as it does. A modern-era
+        request is its own connection, so there it is said per request.
+        """
+        if not self._ui_tool_names:
+            return
+        declared = ctx.session.client_capabilities
+        if declared is not None:
+            if self._told_withheld.get(id(declared)) is declared:
+                return
+            self._told_withheld[id(declared)] = declared
+        logger.warning(
+            "MCP Apps: the client did not advertise the %r extension with MIME type %r, so the UI binding of %s "
+            "was withheld and the host will show text only. Use a host that renders MCP Apps, or check that it "
+            "advertises the extension in its capabilities.",
+            EXTENSION_ID,
+            APP_MIME_TYPE,
+            ", ".join(repr(name) for name in self._ui_tool_names),
+        )
 
     async def _on_call_tool(
         self, ctx: "ServerRequestContext[Any, Any]", params: CallToolRequestParams
@@ -577,12 +633,9 @@ class MCPServer:
             max_request_body_size=transport.max_request_body_size,
             max_sessions=transport.max_mcp_sessions,
         )
-
-        async def handle(scope: "Scope", receive: "Receive", send: "Send") -> None:
-            await manager.handle_request(scope, receive, send)
-
+        handle = _StreamableEndpoint(manager)
         if security is None:
-            return [Mount(path, app=handle)], manager
+            return [Route(path, endpoint=handle)], manager
 
         metadata = security.to_metadata()
         resource_path = urlparse(str(metadata.resource)).path or "/"

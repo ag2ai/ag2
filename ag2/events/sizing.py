@@ -16,6 +16,7 @@ from .input_events import (
     BinaryType,
     DataInput,
     FileIdInput,
+    Input,
     ModelRequest,
     StatusObservation,
     TextInput,
@@ -43,13 +44,13 @@ _LABELS = ((ModelRequest, "User: "), (ModelResponse, "Assistant: "), (ToolResult
 
 def _modality(kind: BinaryType | str | None, media_type: str | None) -> str:
     if isinstance(kind, BinaryType) and kind != BinaryType.BINARY:
-        return kind.value
+        return str(kind.value)
     if media_type:
         return media_type.split("/", 1)[0]
     return "binary"
 
 
-def _part_pieces(parts: list) -> Iterator[_Piece]:
+def _part_pieces(parts: list[Input]) -> Iterator[_Piece]:
     for p in parts:
         if isinstance(p, TextInput):
             yield ("text", p.content)

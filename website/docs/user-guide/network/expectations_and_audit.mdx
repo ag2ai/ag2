@@ -26,13 +26,18 @@ Each evaluator implements:
 
 ```python
 class ExpectationEvaluator(Protocol):
-    name: ClassVar[str]
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]: ...
+    name: str
+
+    def evaluate(
+        self,
+        expectation: Expectation,
+        context: ExpectationContext,
+    ) -> Violation | None: ...
 ```
 
-`#!python ExpectationContext` is a small dataclass holding the metadata, WAL slice, current time, and the expectation's params. Evaluators are pure — no I/O, no mutation — so they're trivially testable.
+The `#!python Expectation` carries the declared `params` and `on_violation`. `#!python ExpectationContext` is a small dataclass holding the channel metadata, adapter state, WAL, and current time. Evaluators are pure — no I/O, no mutation — so they're trivially testable.
 
-The default registry exposes them as `#!python default_evaluators()`. Custom evaluators register similarly to custom transition targets.
+The default registry exposes them as `#!python default_evaluators()`. Custom evaluators register with `#!python hub.register_expectation_evaluator(...)` — see [Custom Evaluators](#custom-evaluators).
 
 ## Adapter-Declared Expectations
 
@@ -56,7 +61,7 @@ expectations = [
 | `on_violation` | Handler | Effect |
 |---|---|---|
 | `#!python "audit"` | `#!python AuditHandler` | Write to the audit log only. Channel continues. |
-| `#!python "warn"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `#!python "notify_channel"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
 | `#!python "auto_close"` | `#!python AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `#!python "hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
@@ -275,26 +280,30 @@ React however you like — retry, escalate, surface to a UI — by registering a
 Same shape as the built-ins:
 
 ```python linenums="1"
-from typing import ClassVar
-from ag2.network.hub import (
-    ExpectationContext,
-    ExpectationEvaluator,
-    Violation,
-)
+from ag2.network import EV_TEXT, Expectation, ExpectationContext, Violation
 
 class TooManyMessagesEvaluator:
-    name: ClassVar[str] = "too_many_messages"
+    name = "too_many_messages"
 
-    def evaluate(self, ctx: ExpectationContext) -> list[Violation]:
-        threshold = ctx.params["max"]
+    def evaluate(self, expectation: Expectation, ctx: ExpectationContext) -> Violation | None:
+        threshold = expectation.params["max"]
         text_count = sum(1 for e in ctx.wal if e.event_type == EV_TEXT)
         if text_count > threshold:
-            return [Violation(
-                expectation=self.name,
-                channel_id=ctx.channel.channel_id,
-                detail=f"text count {text_count} exceeds {threshold}",
-            )]
-        return []
+            return Violation(
+                expectation=expectation,
+                detail={"text_count": text_count, "threshold": threshold},
+            )
+        return None
 ```
 
-Register on a custom registry and pass to `#!python Hub.open(..., evaluators=registry)`. The default registry can also be mutated via the module-level `#!python register_evaluator(...)` helper.
+Register the evaluator on an open hub:
+
+```python linenums="1"
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import Hub
+
+hub = await Hub.open(MemoryKnowledgeStore())
+hub.register_expectation_evaluator(TooManyMessagesEvaluator())
+```
+
+Add an `#!python Expectation(name="too_many_messages", on_violation="audit", params={"max": 100})` to the channel adapter's manifest. The hub passes this expectation and the current context to the evaluator; return a `#!python Violation` when it fires, or `#!python None` otherwise.

@@ -4,6 +4,7 @@
 
 """ConversationPolicy — only conversation and tool events reach the LLM."""
 
+from ag2.assembly import AssemblyPolicy
 from ag2.compact import CompactionSummary
 from ag2.context import ConversationContext as Context
 from ag2.events import (
@@ -36,7 +37,7 @@ CONVERSATION_TYPES = (
 )
 
 
-class ConversationPolicy:
+class ConversationPolicy(AssemblyPolicy):
     """Only conversation and tool events reach the LLM.
 
     Opt-in policy that re-creates plain-loop semantics: only conversation

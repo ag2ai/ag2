@@ -137,8 +137,8 @@ def compute_diff(current: RunResult, baseline: RunResult, *, strict: bool = True
         if base_bools or cur_bools:
             pass_rate_deltas[key] = (_rate(base_bools), _rate(cur_bools))
 
-        base_nums = [float(base_fb[t][key].score) for t in comparable if _is_num(base_fb[t].get(key))]
-        cur_nums = [float(cur_fb[t][key].score) for t in comparable if _is_num(cur_fb[t].get(key))]
+        base_nums = [n for t in comparable if (n := _num(base_fb[t].get(key))) is not None]
+        cur_nums = [n for t in comparable if (n := _num(cur_fb[t].get(key))) is not None]
         if base_nums or cur_nums:
             mean_deltas[key] = (_mean(base_nums), _mean(cur_nums))
 
@@ -179,8 +179,10 @@ def _bool(fb: Feedback | None) -> bool | None:
     return fb.score if fb is not None and isinstance(fb.score, bool) else None
 
 
-def _is_num(fb: Feedback | None) -> bool:
-    return fb is not None and isinstance(fb.score, (int, float)) and not isinstance(fb.score, bool)
+def _num(fb: Feedback | None) -> float | None:
+    if fb is None or isinstance(fb.score, bool) or not isinstance(fb.score, (int, float)):
+        return None
+    return float(fb.score)
 
 
 def _rate(scores: list[bool]) -> float:

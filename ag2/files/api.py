@@ -20,11 +20,11 @@ class FilesAPI(FilesClient):
 
     async def upload(
         self,
-        *,
-        path: str | PathLike[str] | None = None,
         data: bytes | None = None,
         filename: str | None = None,
         purpose: str | None = None,
+        *,
+        path: str | PathLike[str] | None = None,
         **provider_options: Any,
     ) -> UploadedFile:
         """Upload a file to the provider.
@@ -33,6 +33,8 @@ class FilesAPI(FilesClient):
         forwarded to the underlying client (e.g. ``knowledge_id`` for Z.AI's
         ``retrieval`` purpose). Clients ignore options they do not recognize.
         """
+        if isinstance(data, str):
+            raise TypeError("upload() takes the file content as bytes; pass a file path as path=...")
         if path is not None:
             p = Path(path)
             data = p.read_bytes()

@@ -16,14 +16,12 @@ from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
 from .mappers import (
-    ANSWER_KEY,
     PROVIDER,
-    answer_metadata,
-    answer_to_content,
+    answers_to_reply,
     convert_state,
     normalize_usage,
     require_image_for_box,
-    response_proto_to_question,
+    response_proto_to_questions,
     tool_to_api,
 )
 
@@ -80,28 +78,22 @@ class TypeSafeClient(LLMClient):
         for t in tools:
             tool_to_api(t)
 
-        question = response_proto_to_question(
+        questions = response_proto_to_questions(
             response_schema,
             instructions="\n".join(s for s in context.prompt if s) or None,
             criteria=self._criteria,
         )
 
         state = convert_state(messages, serializer)
-        require_image_for_box(question, state)
+        for question in questions.values():
+            require_image_for_box(question, state)
 
-        response = await self._get_client().system_one(
-            state=state,
-            questions={ANSWER_KEY: question},
+        response = await self._get_client().system_one(state=state, questions=questions)
+
+        content, metadata = answers_to_reply(
+            response_schema, response.answers, boolean_threshold=self._boolean_threshold
         )
-
-        answer = response.answers.get(ANSWER_KEY)
-        if answer is None:
-            raise ValueError(f"TypeSafe returned no answer for question {ANSWER_KEY!r}.")
-
-        model_msg = ModelMessage(
-            answer_to_content(response_schema, answer, boolean_threshold=self._boolean_threshold),
-            metadata=answer_metadata(answer),
-        )
+        model_msg = ModelMessage(content, metadata=metadata)
         await context.send(model_msg)
 
         return ModelResponse(

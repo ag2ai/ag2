@@ -5,13 +5,14 @@
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, NamedTuple, Union
 
 import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
+from ag2 import Context, MemoryStream
 from ag2.response import ResponseSchema
 from ag2.response.schema import RawSchema
 from ag2.types import ClassInfo
@@ -324,7 +325,7 @@ class TestUnionSchemas:
             ),
         ],
     )
-    def test_union_schema(self, type_: ClassInfo, expected_any_of: list) -> None:  # type: ignore[type-arg]
+    def test_union_schema(self, type_: ClassInfo, expected_any_of: list[dict[str, str]]) -> None:
         schema = ResponseSchema(type_, name="Union", embed=False)
 
         assert schema.name == "Union"
@@ -348,6 +349,17 @@ class TestUnionSchemas:
                 "Success": IsPartialDict({}),
             }),
         })
+
+
+@pytest.mark.asyncio
+async def test_named_tuple_class_is_a_type_not_a_union_of_members() -> None:
+    class Point(NamedTuple):
+        x: int
+        y: int
+
+    schema = ResponseSchema(Point)
+
+    assert await schema.validate('{"data": [1, 2]}', Context(MemoryStream())) == Point(1, 2)
 
 
 class TestNameDescription:
@@ -400,8 +412,11 @@ class TestNameDescription:
 
         schema = ResponseSchema(MyModel)
 
-        assert "title" not in schema.json_schema
-        assert "description" not in schema.json_schema
+        assert schema.json_schema == {
+            "properties": {"x": {"title": "X", "type": "integer"}},
+            "required": ["x"],
+            "type": "object",
+        }
 
 
 class TestEnsureSchema:
@@ -470,12 +485,12 @@ class TestRawSchema:
         assert raw.description is None
 
     @pytest.mark.asyncio()
-    async def test_validate_returns_raw_string_with_warning(self) -> None:
+    async def test_validate_returns_raw_string_with_warning(self, context: Context) -> None:
         raw = ResponseSchema.from_schema({"type": "string"}, name="Raw")
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = await raw.validate("hello", context=None)  # type: ignore[arg-type]
+            result = await raw.validate("hello", context=context)
 
         assert result == "hello"
         assert len(w) == 1
@@ -493,9 +508,9 @@ class TestValidation:
             pytest.param(bool, '{"data": true}', True, id="bool"),
         ],
     )
-    async def test_validate_primitive(self, type_: type, json_input: str, expected: object) -> None:
+    async def test_validate_primitive(self, type_: type, json_input: str, expected: object, context: Context) -> None:
         schema = ResponseSchema(type_)
-        result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
+        result = await schema.validate(json_input, context=context)
         assert result == expected
 
     @pytest.mark.parametrize(
@@ -506,24 +521,26 @@ class TestValidation:
             pytest.param(bool, "true", True, id="bool"),
         ],
     )
-    async def test_validate_not_embedded_primitive(self, type_: type, json_input: str, expected: object) -> None:
+    async def test_validate_not_embedded_primitive(
+        self, type_: type, json_input: str, expected: object, context: Context
+    ) -> None:
         schema = ResponseSchema(type_, embed=False)
-        result = await schema.validate(json_input, context=None)  # type: ignore[arg-type]
+        result = await schema.validate(json_input, context=context)
         assert result == expected
 
-    async def test_validate_union(self) -> None:
+    async def test_validate_union(self, context: Context) -> None:
         schema = ResponseSchema(int | str)
 
-        assert await schema.validate('{"data": 42}', context=None) == 42  # type: ignore[arg-type]
-        assert await schema.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
+        assert await schema.validate('{"data": 42}', context=context) == 42
+        assert await schema.validate('{"data": "hello"}', context=context) == "hello"
 
-    async def test_validate_not_embedded_union(self) -> None:
+    async def test_validate_not_embedded_union(self, context: Context) -> None:
         schema = ResponseSchema(int | str, embed=False)
 
-        assert await schema.validate("42", context=None) == 42  # type: ignore[arg-type]
-        assert await schema.validate('"hello"', context=None) == "hello"  # type: ignore[arg-type]
+        assert await schema.validate("42", context=context) == 42
+        assert await schema.validate('"hello"', context=context) == "hello"
 
-    async def test_validate_dataclass(self) -> None:
+    async def test_validate_dataclass(self, context: Context) -> None:
         @dataclass
         class Point:
             x: int
@@ -531,26 +548,26 @@ class TestValidation:
 
         schema = ResponseSchema(Point)
 
-        result = await schema.validate('{"x": 1, "y": 2}', context=None)  # type: ignore[arg-type]
+        result = await schema.validate('{"x": 1, "y": 2}', context=context)
 
         assert result == Point(x=1, y=2)
 
-    async def test_validate_pydantic_model(self) -> None:
+    async def test_validate_pydantic_model(self, context: Context) -> None:
         class Item(BaseModel):
             name: str
             price: float
 
         schema = ResponseSchema(Item)
 
-        result = await schema.validate('{"name": "Widget", "price": 9.99}', context=None)  # type: ignore[arg-type]
+        result = await schema.validate('{"name": "Widget", "price": 9.99}', context=context)
 
         assert result == Item(name="Widget", price=9.99)
 
-    async def test_validate_invalid_json_raises(self) -> None:
+    async def test_validate_invalid_json_raises(self, context: Context) -> None:
         schema = ResponseSchema(int, embed=False)
 
         with pytest.raises(Exception):
-            await schema.validate("not a number", context=None)  # type: ignore[arg-type]
+            await schema.validate("not a number", context=context)
 
 
 @pytest.mark.asyncio()
@@ -565,42 +582,42 @@ class TestAnnotatedValidation:
             pytest.param(Annotated[int | str, "note"], '{"data": "x"}', "x", id="union"),
         ],
     )
-    async def test_validates(self, type_: ClassInfo, raw: str, expected: Any) -> None:
+    async def test_validates(self, type_: ClassInfo, raw: str, expected: Any, context: Context) -> None:
         schema = ResponseSchema(type_)
 
-        assert await schema.validate(raw, context=None) == expected  # type: ignore[arg-type]
+        assert await schema.validate(raw, context=context) == expected
 
-    async def test_annotated_str_keeps_its_constraints(self) -> None:
+    async def test_annotated_str_keeps_its_constraints(self, context: Context) -> None:
         schema = ResponseSchema(Annotated[str, Field(min_length=3)], embed=False)
 
         with pytest.raises(ValidationError):
-            await schema.validate('"x"', context=None)  # type: ignore[arg-type]
-        assert await schema.validate('"xyz"', context=None) == "xyz"  # type: ignore[arg-type]
+            await schema.validate('"x"', context=context)
+        assert await schema.validate('"xyz"', context=context) == "xyz"
 
-    async def test_enum(self) -> None:
+    async def test_enum(self, context: Context) -> None:
         class Color(Enum):
             RED = "red"
 
         schema = ResponseSchema(Annotated[Color, "note"])
 
-        assert await schema.validate('{"data": "red"}', context=None) is Color.RED  # type: ignore[arg-type]
+        assert await schema.validate('{"data": "red"}', context=context) is Color.RED
 
-    async def test_dataclass(self) -> None:
+    async def test_dataclass(self, context: Context) -> None:
         @dataclass
         class Point:
             x: int
 
         schema = ResponseSchema(Annotated[Point, "note"])
 
-        assert await schema.validate('{"x": 1}', context=None) == Point(1)  # type: ignore[arg-type]
+        assert await schema.validate('{"x": 1}', context=context) == Point(1)
 
-    async def test_model(self) -> None:
+    async def test_model(self, context: Context) -> None:
         class Point(BaseModel):
             x: int
 
         schema = ResponseSchema(Annotated[Point, "note"])
 
-        assert await schema.validate('{"x": 1}', context=None) == Point(x=1)  # type: ignore[arg-type]
+        assert await schema.validate('{"x": 1}', context=context) == Point(x=1)
 
 
 class TestAnnotatedSchemas:

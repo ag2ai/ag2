@@ -12,9 +12,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from ag2 import Agent
 from ag2.events import ToolCallEvent, ToolErrorEvent
 from ag2.extensions.tealtiger import GovernanceMode, GovernancePolicy, TealTigerMiddleware
 from ag2.extensions.tealtiger.types import TEECReceipt
+from ag2.testing import TestConfig
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
 # ─── Test fixtures ───────────────────────────────────────────────────────────
@@ -494,20 +496,16 @@ class TestReset:
 class TestOnTurn:
     @pytest.mark.asyncio
     async def test_frozen_agent_blocked_enforce(self):
-        """ENFORCE mode: frozen agent's turn is blocked with ToolErrorEvent."""
+        """ENFORCE mode: frozen agent's turn is answered with the denial, not by the model."""
         mw = TealTigerMiddleware(mode=GovernanceMode.ENFORCE)
         mw.freeze("assistant")
+        agent = Agent("assistant", config=TestConfig("model reply"), middleware=[mw])
 
-        ctx = _make_context("assistant")
-        per_turn = mw(MagicMock(), ctx)
-        call_next = AsyncMock()
-        event = MagicMock()
+        reply = await agent.ask("hello")
 
-        result = await per_turn.on_turn(call_next, event, ctx)
-
-        assert isinstance(result, ToolErrorEvent)
-        assert "AGENT_FROZEN" in str(result.error) or "frozen" in str(result.error).lower()
-        call_next.assert_not_awaited()
+        assert reply.body == (
+            "[GOVERNANCE DENIED] Agent 'assistant' is frozen (kill switch active). All actions blocked."
+        )
         assert len(mw.decisions) == 1
         assert mw.decisions[0].action == "DENY"
         assert "AGENT_FROZEN" in mw.decisions[0].reason_codes

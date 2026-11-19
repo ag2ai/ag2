@@ -130,7 +130,7 @@ class ClientModelClient(LLMClient):
         context: ConversationContext,
         *,
         tools: "Iterable[ToolSchema]" = (),
-        response_schema: ResponseProto | None = None,
+        response_schema: ResponseProto[Any] | None = None,
         serializer: SerializerProto | None = None,
     ) -> ModelResponse:
         """Ask the peer to complete this conversation, and read the answer back.

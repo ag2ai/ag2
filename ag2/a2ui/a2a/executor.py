@@ -205,7 +205,7 @@ class A2UIAgentExecutor(AgentExecutor):
                 prompts.append(fragment)
         msg = request_context.message
         if msg is not None and msg.metadata:
-            surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.version_string)
+            surfaces = parse_client_data_model(struct_to_dict(msg.metadata), version_key=self._runtime.protocol_version)
             if data_model_fragment := data_model_to_prompt(surfaces):
                 prompts.append(data_model_fragment)
         return tuple(prompts)
@@ -220,7 +220,7 @@ class A2UIAgentExecutor(AgentExecutor):
         msg = request_context.message
         if msg is None or not msg.metadata:
             return None
-        version_key = self._runtime.version_string
+        version_key = self._runtime.protocol_version
         return parse_client_capabilities(struct_to_dict(msg.metadata), version_key=version_key)
 
     async def _run_one_turn(

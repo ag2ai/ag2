@@ -14,7 +14,7 @@ from mcp.client import Client
 from mcp.server.lowlevel import Server
 from mcp.shared.memory import MessageStream, create_client_server_memory_streams
 from mcp_types.version import LATEST_MODERN_VERSION
-from starlette.types import Message
+from starlette.types import ASGIApp, Message
 
 from .server import MCPServer
 
@@ -109,12 +109,17 @@ async def _run_server(server: Server, streams: MessageStream, raise_exceptions: 
 
 
 @asynccontextmanager
-async def serve(server: MCPServer, *, base_url: str = "http://test") -> AsyncGenerator[httpx.AsyncClient]:
+async def serve(server: "MCPServer | ASGIApp", *, base_url: str = "http://test") -> AsyncGenerator[httpx.AsyncClient]:
     """Yield an ``httpx.AsyncClient`` bound to ``server`` over the in-memory ASGI transport.
 
     Drives the ASGI ``lifespan`` protocol so the streamable-HTTP session manager
     is running, the way ``uvicorn`` would (``httpx.ASGITransport`` does not).
-    Use it to exercise the HTTP transport without sockets.
+    Use it to exercise the HTTP transport without sockets. ``server`` may be an
+    :class:`MCPServer` wrapped in ASGI middleware, such as ``CORSMiddleware``,
+    as long as the middleware passes ``lifespan`` through.
+
+    The client follows redirects; pass ``follow_redirects=False`` to a request
+    to observe one.
     """
     receive_queue: asyncio.Queue[Message] = asyncio.Queue()
     send_queue: asyncio.Queue[Message] = asyncio.Queue()

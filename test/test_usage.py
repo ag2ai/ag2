@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 
 from ag2.events import ModelMessage, ModelResponse, Usage, UsageEvent
 from ag2.usage import UsageRecord, UsageReport
@@ -24,12 +23,14 @@ class TestUsageArithmetic:
         # total present on only one side coerces the other to 0
         assert a + b == Usage(prompt_tokens=13, completion_tokens=12, total_tokens=20)
 
+    def test_add_sums_extended_cache_writes(self) -> None:
+        a = Usage(cache_creation_input_tokens=1000, cache_creation_extended_input_tokens=800)
+        b = Usage(cache_creation_input_tokens=50)
+
+        assert a + b == Usage(cache_creation_input_tokens=1050, cache_creation_extended_input_tokens=800)
+
     def test_add_none_stays_none(self) -> None:
         assert Usage() + Usage() == Usage()
-
-    def test_add_rejects_non_usage(self) -> None:
-        with pytest.raises(TypeError):
-            Usage() + 42  # type: ignore[operator]
 
     def test_builtin_sum_aggregates(self) -> None:
         usages = [

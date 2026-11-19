@@ -876,19 +876,30 @@ def _count_or_absent(value: Any) -> float | None:
 def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format.
 
-    ``server_tool_use`` (a count of tool *requests*), the ``service_tier`` and
-    ``inference_geo`` labels and ``cache_creation``'s per-lifetime breakdown are
-    deliberately unmapped: ``Usage`` carries whole-call token counts only.
+    ``server_tool_use`` (a count of tool *requests*) and the ``service_tier`` and
+    ``inference_geo`` labels are deliberately unmapped: ``Usage`` carries token
+    counts only. From ``cache_creation``'s per-lifetime breakdown, the 1-hour
+    writes become ``cache_creation_extended_input_tokens``; the 5-minute rest is
+    ``cache_creation_input_tokens`` minus them.
+
+    Anthropic's ``input_tokens`` counts only the input after the last cache
+    breakpoint; reads from and writes to the cache are reported beside it. ``Usage``
+    counts the whole input in ``prompt_tokens`` (ADR 0036), so both cache counts are
+    added to it here, and ``input_tokens`` is ``prompt_tokens`` minus them.
     """
     details = raw.get("output_tokens_details") or {}
-    prompt = float(raw.get("input_tokens", 0))
+    cache_creation = raw.get("cache_creation") or {}
+    cache_read = _count_or_absent(raw.get("cache_read_input_tokens"))
+    cache_write = _count_or_absent(raw.get("cache_creation_input_tokens"))
+    prompt = float(raw.get("input_tokens", 0)) + (cache_read or 0) + (cache_write or 0)
     completion = float(raw.get("output_tokens", 0))
     return Usage(
         prompt_tokens=prompt,
         completion_tokens=completion,
         total_tokens=prompt + completion,
-        cache_creation_input_tokens=_count_or_absent(raw.get("cache_creation_input_tokens")),
-        cache_read_input_tokens=_count_or_absent(raw.get("cache_read_input_tokens")),
+        cache_creation_input_tokens=cache_write,
+        cache_creation_extended_input_tokens=_count_or_absent(cache_creation.get("ephemeral_1h_input_tokens")),
+        cache_read_input_tokens=cache_read,
         # Output tokens spent on internal reasoning — a decomposition of
         # ``output_tokens``, not an addition to it, matching the OpenAI mapper.
         thinking_tokens=_count_or_absent(details.get("thinking_tokens")),

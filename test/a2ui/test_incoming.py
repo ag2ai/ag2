@@ -58,7 +58,7 @@ class TestParseIncomingAction:
 
     def test_v1_0_action_carries_user_message_and_metadata(self) -> None:
         result = parse_incoming_message({
-            "version": "v1.0",
+            "version": "1.0",
             "action": {
                 "name": "submit",
                 "userMessage": "Submitted the form",
@@ -97,7 +97,7 @@ class TestParseIncomingAction:
 class TestParseIncomingFunctionCall:
     def test_full_function_call(self) -> None:
         result = parse_incoming_message({
-            "version": "v1.0",
+            "version": "1.0",
             "callAgentFunction": {
                 "surfaceId": "s1",
                 "functionCallId": "fc-1",
@@ -146,7 +146,7 @@ class TestParseIncomingFunctionCall:
 class TestParseIncomingFunctionResponse:
     def test_value_response(self) -> None:
         result = parse_incoming_message({
-            "version": "v1.0",
+            "version": "1.0",
             "rendererFunctionResponse": {"functionCallId": "fc-1", "value": [1920, 1080]},
         })
         assert isinstance(result, A2UIIncomingFunctionResponseResult)
@@ -230,7 +230,7 @@ class TestParseIncomingError:
 
     def test_v1_0_function_call_error(self) -> None:
         result = parse_incoming_message({
-            "version": "v1.0",
+            "version": "1.0",
             "error": {"code": "TIMEOUT", "message": "function timed out", "functionCallId": "fc-9"},
         })
         assert isinstance(result, A2UIIncomingErrorResult)

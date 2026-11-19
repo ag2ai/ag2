@@ -30,8 +30,7 @@ from test._serving import serving
 from ._helpers import JSON_HEADERS, ChunkConfig, initialize_request
 
 _HEADERS = {**JSON_HEADERS, "MCP-Protocol-Version": "2025-06-18"}
-"""The endpoint is a Starlette ``Mount``, so requests carry the canonical trailing slash."""
-_ENDPOINT = "/mcp/"
+_ENDPOINT = "/mcp"
 
 _CALL = {
     "jsonrpc": "2.0",

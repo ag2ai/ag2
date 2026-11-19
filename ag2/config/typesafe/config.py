@@ -12,6 +12,7 @@ from typesafe_sdk.constants import DEFAULT_MODEL
 from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
+from ag2.exceptions import FilesAPIUnsupportedError
 
 from .typesafe_client import TypeSafeClient
 
@@ -48,7 +49,7 @@ class TypeSafeConfig(ModelConfig):
         return ModelProvider.TYPESAFE
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)
 
     def copy(self, /, **overrides: Unpack[TypeSafeConfigOverrides]) -> "TypeSafeConfig":
         return replace(self, **overrides)

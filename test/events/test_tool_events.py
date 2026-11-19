@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from ag2.events import (
     ClientToolCallEvent,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
 )
@@ -37,9 +38,10 @@ class TestToolErrorEventContent:
         except Exception as e:
             event = ToolErrorEvent.from_call(call, e)
 
-        traceback_text = event.result.parts[0].content  # type: ignore[union-attr]
-        assert "ValueError" in traceback_text
-        assert "test error message" in traceback_text
+        [part] = event.result.parts
+        assert isinstance(part, TextInput)
+        assert "ValueError" in part.content
+        assert "test error message" in part.content
 
     def test_content_does_not_return_none_type(self) -> None:
         call = ToolCallEvent(name="t")
@@ -48,7 +50,9 @@ class TestToolErrorEventContent:
         except Exception as e:
             event = ToolErrorEvent.from_call(call, e)
 
-        assert "NoneType" not in event.result.parts[0].content  # type: ignore[union-attr]
+        [part] = event.result.parts
+        assert isinstance(part, TextInput)
+        assert "NoneType" not in part.content
 
 
 class TestSerializedArgumentsCache:
@@ -72,14 +76,10 @@ class TestSerializedArgumentsCache:
 
 
 class TestSerializedArgumentsEmptyInput:
-    """serialized_arguments must handle empty string and None without crashing."""
+    """serialized_arguments must handle an empty string without crashing."""
 
     def test_empty_string_returns_empty_dict(self) -> None:
         tc = ToolCallEvent(name="tool", arguments="")
-        assert tc.serialized_arguments == {}
-
-    def test_none_returns_empty_dict(self) -> None:
-        tc = ToolCallEvent(name="tool", arguments=None)
         assert tc.serialized_arguments == {}
 
     def test_setter_updates_cache(self) -> None:

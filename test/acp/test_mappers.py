@@ -13,12 +13,11 @@ from dirty_equals import IsPartialDict
 from ag2.acp.events import ACPAvailableCommands, ACPModeChange, ACPPlan, ACPPlanEntry
 from ag2.acp.mappers import (
     content_blocks_to_files,
-    content_blocks_to_text,
     map_session_update,
     map_usage,
 )
 from ag2.acp.types import SessionUpdate
-from ag2.events import ModelMessageChunk, ModelReasoning
+from ag2.events import ImageInput, ModelMessageChunk, ModelReasoning, TextInput
 from ag2.events.tool_events import BuiltinToolCallEvent, BuiltinToolResultEvent
 from ag2.events.types import Usage
 
@@ -142,13 +141,24 @@ def test_unhandled_updates_return_none() -> None:
     assert map_session_update(schema.UserMessageChunk(session_update="user_message_chunk", content=_text("hi"))) is None
 
 
-def test_content_blocks_to_text_concatenates() -> None:
-    text = content_blocks_to_text([
-        _text("a"),
-        schema.ImageContentBlock(type="image", data="x", mime_type="image/png"),
-        _text("b"),
-    ])
-    assert text == "ab"
+def test_tool_progress_keeps_each_content_item_as_its_own_part() -> None:
+    event = map_session_update(
+        schema.ToolCallProgress(
+            session_update="tool_call_update",
+            tool_call_id="t1",
+            status="completed",
+            content=[
+                schema.ContentToolCallContent(type="content", content=_text("a")),
+                schema.ContentToolCallContent(
+                    type="content", content=schema.ImageContentBlock(type="image", data="aW1n", mime_type="image/png")
+                ),
+                schema.ContentToolCallContent(type="content", content=_text("b")),
+            ],
+        )
+    )
+
+    assert isinstance(event, BuiltinToolResultEvent)
+    assert event.result.parts == [TextInput("a"), ImageInput(data=b"img", media_type="image/png"), TextInput("b")]
 
 
 def test_content_blocks_to_files_decodes_image() -> None:
@@ -159,22 +169,39 @@ def test_content_blocks_to_files_decodes_image() -> None:
 
 
 def test_map_usage() -> None:
+    usage = map_usage(schema.Usage(input_tokens=10, output_tokens=5, total_tokens=15, thought_tokens=3))
+    assert usage == Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15, thinking_tokens=3)
+
+
+def test_map_usage_adds_the_cache_to_the_input() -> None:
+    """ACP's ``inputTokens`` leaves out the cache, which ``totalTokens`` adds beside it.
+
+    The figures are the protocol's own example: 35000 + 12000 + 5000 + 1000 = 53000.
+    ``prompt_tokens`` is the whole input, cache included (ADR 0036).
+    """
     usage = map_usage(
         schema.Usage(
-            input_tokens=10,
-            output_tokens=5,
-            total_tokens=15,
-            cached_read_tokens=2,
-            thought_tokens=3,
+            input_tokens=35000,
+            output_tokens=12000,
+            total_tokens=53000,
+            thought_tokens=5000,
+            cached_read_tokens=5000,
+            cached_write_tokens=1000,
         )
     )
     assert usage == Usage(
-        prompt_tokens=10,
-        completion_tokens=5,
-        total_tokens=15,
-        cache_read_input_tokens=2,
-        thinking_tokens=3,
+        prompt_tokens=41000,
+        completion_tokens=12000,
+        total_tokens=53000,
+        cache_read_input_tokens=5000,
+        cache_creation_input_tokens=1000,
+        thinking_tokens=5000,
     )
+
+
+def test_map_usage_does_not_believe_a_total_below_input_plus_output() -> None:
+    usage = map_usage(schema.Usage(input_tokens=10, output_tokens=5, total_tokens=15, cached_read_tokens=20))
+    assert usage == Usage(prompt_tokens=30, completion_tokens=5, total_tokens=35, cache_read_input_tokens=20)
 
 
 def test_map_usage_none() -> None:

@@ -41,7 +41,7 @@ from acp import schema
 
 # The ``InitializeResponse.auth_methods`` union. The SDK exports no named alias
 # for it, so — as with the aliases in :mod:`ag2.acp.types` — mirror it once here.
-AuthMethod: TypeAlias = schema.EnvVarAuthMethod | schema.TerminalAuthMethod | schema.AuthMethodAgent
+AuthMethod: TypeAlias = schema.TerminalAuthMethod | schema.AuthMethodAgent
 
 __all__ = (
     "AuthMethod",

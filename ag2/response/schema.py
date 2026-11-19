@@ -5,16 +5,20 @@
 import warnings
 from dataclasses import is_dataclass
 from types import UnionType
-from typing import Annotated, Any, Union, get_args, get_origin, overload
+from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin, overload
 
 from fast_depends import Provider
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 from typing_extensions import TypeVar as TypeVar313
 
 from ag2.annotations import Context
 from ag2.types import ClassInfo
 
 from .proto import ResponseProto
+
+if TYPE_CHECKING:
+    # Runtime typing_extensions may predate TypeForm (4.13); only the checker needs it.
+    from typing_extensions import TypeForm
 
 T = TypeVar313("T", default=str)
 
@@ -23,7 +27,7 @@ class ResponseSchema(ResponseProto[T]):
     @overload
     def __init__(
         self,
-        types: type[T],
+        types: "TypeForm[T]",
         /,
         name: str | None = None,
         description: str | None = None,
@@ -32,7 +36,7 @@ class ResponseSchema(ResponseProto[T]):
 
     @overload
     def __init__(
-        self,
+        self: "ResponseSchema[Any]",
         types: ClassInfo,
         /,
         name: str | None = None,
@@ -42,7 +46,7 @@ class ResponseSchema(ResponseProto[T]):
 
     def __init__(
         self,
-        types: ClassInfo,
+        types: "TypeForm[Any] | ClassInfo",
         /,
         name: str | None = None,
         description: str | None = None,
@@ -82,19 +86,26 @@ class ResponseSchema(ResponseProto[T]):
     def ensure_schema(
         cls,
         obj: "ResponseProto[T]",
+    ) -> "ResponseProto[T]": ...
+
+    @overload
+    @classmethod
+    def ensure_schema(
+        cls,
+        obj: "TypeForm[T]",
     ) -> "ResponseSchema[T]": ...
 
     @overload
     @classmethod
     def ensure_schema(
         cls,
-        obj: "type[T]",
-    ) -> "ResponseSchema[T]": ...
+        obj: ClassInfo,
+    ) -> "ResponseSchema[Any]": ...
 
     @classmethod
     def ensure_schema(
         cls,
-        obj: "ResponseProto[T] | ClassInfo | None",
+        obj: "ResponseProto[T] | TypeForm[Any] | ClassInfo | None",
     ) -> "ResponseProto[T] | None":
         if obj is None:
             return None
@@ -118,6 +129,16 @@ class ResponseSchema(ResponseProto[T]):
         context: "Context",
         provider: "Provider | None" = None,
     ) -> T:
+        # The constructor's overloads tie `T` to `types`; only the runtime type object knows it.
+        result: T = self._decode(response)
+        return result
+
+    @property
+    def embedded(self) -> bool:
+        """Whether the value is wrapped as ``{"data": ...}`` because the type is not an object."""
+        return self._embedded_type
+
+    def _decode(self, response: str) -> Any:
         if self._adapter is None:
             return response
         result = self._adapter.validate_json(response)
@@ -155,7 +176,7 @@ class RawSchema(ResponseProto[str]):
         return response
 
 
-def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T] | None, bool]:
+def make_adapter(types: "TypeForm[Any] | ClassInfo", *, embed: bool = True) -> tuple[TypeAdapter[Any] | None, bool]:
     # Classify by the bare type, but build the adapter from the full annotated one so metadata is kept.
     bare = strip_annotated(types)
     origin = get_origin(bare)
@@ -165,13 +186,14 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
     if types is str:
         return None, True
 
-    if _is_safe_subclass(bare, (list, tuple)):
-        # Process `T1, T2]` and `(T1, T2)`
-        _final_type = Union[tuple(bare)]  # noqa: UP007
+    final_type: Any
+    if isinstance(bare, list | tuple):
+        # Process `[T1, T2]` and `(T1, T2)`
+        final_type = Union[tuple(bare)]  # noqa: UP007
 
     elif origin and origin in (Union, UnionType):
         # Process `typing.Union[T1, T2]` and `T1 | T2`
-        _final_type = types
+        final_type = types
 
     elif any((
         is_dataclass(bare),
@@ -180,35 +202,34 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[T
         _is_safe_subclass(bare, dict),
     )):
         embedded_type = False
-        _final_type = types
+        final_type = types
 
     else:
         # Process primitive types
-        _final_type = types
+        final_type = types
 
     if not embed:
         embedded_type = False
 
     if embedded_type:
+        final_type = create_model(
+            "_EmbeddedSchema",
+            __config__=ConfigDict(title="ResponseSchema"),
+            data=(final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')),
+        )
 
-        class _EmbeddedSchema(BaseModel):
-            data: Annotated[_final_type, Field(description='Response with a one-field JSON `"{"data":...}"`')]
-            model_config = {"title": "ResponseSchema"}
-
-        _final_type = _EmbeddedSchema
-
-    return TypeAdapter[T](_final_type), embedded_type
+    return TypeAdapter(final_type), embedded_type
 
 
-def strip_annotated(types: ClassInfo) -> ClassInfo:
+def strip_annotated(types: "TypeForm[Any] | ClassInfo") -> "TypeForm[Any] | ClassInfo":
     """The type under any ``Annotated`` wrappers."""
     while get_origin(types) is Annotated:
         types = get_args(types)[0]
     return types
 
 
-def _is_safe_subclass(cls: type, base: type | tuple[type, ...]) -> bool:
-    try:
-        return issubclass(cls, base)
-    except TypeError:
-        return issubclass(type(cls), base)
+def _is_safe_subclass(obj: object, base: type | tuple[type, ...]) -> bool:
+    """``issubclass`` for a class; for a typing form (``list[int]``, ``Literal[...]``) the type of the form."""
+    if isinstance(obj, type):
+        return issubclass(obj, base)
+    return isinstance(obj, base)

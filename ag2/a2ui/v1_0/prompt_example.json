@@ -1,13 +1,13 @@
 [
   {
-    "version": "v1.0",
+    "version": "{version_string}",
     "createSurface": {
       "surfaceId": "s1",
       "catalogId": "{catalog_id}"
     }
   },
   {
-    "version": "v1.0",
+    "version": "{version_string}",
     "updateComponents": {
       "surfaceId": "s1",
       "components": [

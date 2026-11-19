@@ -17,7 +17,7 @@ pytest.importorskip("typesafe_sdk")
 import httpx2
 
 from ag2 import Agent, ResponseSchema
-from ag2.config import OpenAIDecisionsConfig, TypeSafeConfig
+from ag2.config import ModelConfig, OpenAIDecisionsConfig, TypeSafeConfig
 from ag2.config.openai import UnsupportedResponseSchemaError as OpenAIUnsupported
 from ag2.config.typesafe import UnsupportedResponseSchemaError as TypeSafeUnsupported
 from ag2.response import Question
@@ -84,7 +84,6 @@ class Provider(ABC):
     """A decision provider behind a fake HTTP API; subclasses supply the wire format."""
 
     unsupported: type[Exception]
-    describe: str  # config field that overrides option descriptions
 
     def __init__(self) -> None:
         self.questions: list[Any] = []
@@ -95,7 +94,8 @@ class Provider(ABC):
     def _handle(self, request: httpx2.Request) -> httpx2.Response: ...
 
     @abstractmethod
-    def _config(self, **config: Any) -> Any: ...
+    def _config(self, descriptions: dict[str, str] | None) -> ModelConfig:
+        """The provider's config, with ``descriptions`` overriding the option descriptions."""
 
     @abstractmethod
     def predicate(self, probability: float) -> dict[str, Any]: ...
@@ -109,23 +109,29 @@ class Provider(ABC):
     @abstractmethod
     def asked(self) -> Asked: ...
 
-    async def ask(self, schema: Any, answer: dict[str, Any], *, prompt: str | None = None, **config: Any) -> Any:
+    async def ask(
+        self,
+        schema: Any,
+        answer: dict[str, Any],
+        *,
+        prompt: str | None = None,
+        descriptions: dict[str, str] | None = None,
+    ) -> Any:
         self.answer = answer
-        agent = Agent("a", prompt=prompt or [], config=self._config(**config), response_schema=schema)
+        agent = Agent("a", prompt=prompt or [], config=self._config(descriptions), response_schema=schema)
         return await (await agent.ask("hi")).content()
 
 
 class OpenAIProvider(Provider):
     unsupported = OpenAIUnsupported
-    describe = "descriptions"
 
     def _handle(self, request: httpx2.Request) -> httpx2.Response:
         self.questions.extend(json.loads(request.content)["questions"])
         body = {"model": "m", "answers": [{"name": "answer", **self.answer}], "usage": USAGE}
         return httpx2.Response(200, json=body)
 
-    def _config(self, **config: Any) -> Any:
-        return OpenAIDecisionsConfig(api_key="k", http_client=self.client, **config)
+    def _config(self, descriptions: dict[str, str] | None) -> ModelConfig:
+        return OpenAIDecisionsConfig(api_key="k", http_client=self.client, descriptions=descriptions)
 
     def predicate(self, probability: float) -> dict[str, Any]:
         return {"type": "predicate", "probability": probability}
@@ -149,15 +155,14 @@ class OpenAIProvider(Provider):
 
 class TypeSafeProvider(Provider):
     unsupported = TypeSafeUnsupported
-    describe = "criteria"
 
     def _handle(self, request: httpx2.Request) -> httpx2.Response:
         self.questions.append(json.loads(request.content)["questions"]["answer"])
         body = {"model": "m", "answers": {"answer": self.answer}, "usage": {"input_tokens": 1, "output_tokens": 0}}
         return httpx2.Response(200, json=body)
 
-    def _config(self, **config: Any) -> Any:
-        return TypeSafeConfig(api_key="k", http_client=self.client, **config)
+    def _config(self, descriptions: dict[str, str] | None) -> ModelConfig:
+        return TypeSafeConfig(api_key="k", http_client=self.client, criteria=descriptions)
 
     def predicate(self, probability: float) -> dict[str, Any]:
         return {"type": "noul", "noul": probability}
@@ -247,7 +252,7 @@ class TestPrecedence:
         schema = Annotated[Department, Question(options={"billing": "Money", "technical": "Code"})]
 
         await provider.ask(
-            schema, provider.choice("billing", ("billing", "technical")), **{provider.describe: {"billing": "Cash"}}
+            schema, provider.choice("billing", ("billing", "technical")), descriptions={"billing": "Cash"}
         )
 
         assert provider.asked().options == {"billing": "Cash", "technical": "Code"}

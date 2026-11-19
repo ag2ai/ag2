@@ -106,6 +106,7 @@ logger = logging.getLogger(__name__)
 _ATTR_USAGE_INPUT = "gen_ai.usage.input_tokens"
 _ATTR_USAGE_OUTPUT = "gen_ai.usage.output_tokens"
 _ATTR_USAGE_CACHE_CREATE = "gen_ai.usage.cache_creation_input_tokens"
+_ATTR_USAGE_CACHE_CREATE_EXTENDED = "gen_ai.usage.cache_creation_extended_input_tokens"
 _ATTR_USAGE_CACHE_READ = "gen_ai.usage.cache_read_input_tokens"
 _ATTR_USAGE_THINKING = "gen_ai.usage.thinking_tokens"
 _ATTR_OUTPUT_MESSAGES = "gen_ai.output.messages"
@@ -503,6 +504,7 @@ def _llm_span_to_response(span: SpanData) -> ModelResponse:
         prompt_tokens=a.get(_ATTR_USAGE_INPUT),
         completion_tokens=a.get(_ATTR_USAGE_OUTPUT),
         cache_creation_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE),
+        cache_creation_extended_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE_EXTENDED),
         cache_read_input_tokens=a.get(_ATTR_USAGE_CACHE_READ),
         thinking_tokens=a.get(_ATTR_USAGE_THINKING),
     )
@@ -527,6 +529,7 @@ def _usage_span_to_event(span: SpanData) -> UsageEvent:
         completion_tokens=a.get(_ATTR_USAGE_OUTPUT),
         total_tokens=a.get(ATTR_USAGE_TOTAL),
         cache_creation_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE),
+        cache_creation_extended_input_tokens=a.get(_ATTR_USAGE_CACHE_CREATE_EXTENDED),
         cache_read_input_tokens=a.get(_ATTR_USAGE_CACHE_READ),
         thinking_tokens=a.get(_ATTR_USAGE_THINKING),
     )

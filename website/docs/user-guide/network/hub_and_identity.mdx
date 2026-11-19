@@ -87,57 +87,154 @@ resume = Resume(
 Optional per-agent policy. Pass to `#!python hub.register(agent, passport, resume, rule=...)`.
 
 ```python linenums="1"
-from ag2.network import Rule, AccessBlock, LimitsBlock, RateBlock, InboxBlock
+from ag2.network import Rule, AccessBlock, ChannelTypeAccess, LimitsBlock, RateBlock, InboxBlock
 
 rule = Rule(
     access=AccessBlock(
         outbound_to=["bob", "carol"],   # whitelist who this agent can address
-        channel_types_allowed=["consulting", "discussion"],
+        channel_types=ChannelTypeAccess(
+            initiate=["consulting", "discussion"],
+            accept=["consulting", "discussion"],
+        ),
     ),
     limits=LimitsBlock(
         channel_ttl_default="4h",
         delegation_depth=2,
-    ),
-    rate=RateBlock(
-        envelopes_per_minute=60,
-    ),
-    inbox=InboxBlock(
-        max_pending=100,
+        rate=RateBlock(per_minute=60),
+        inbox=InboxBlock(max_pending=100),
     ),
 )
 ```
 
 | Block | Controls |
 |---|---|
-| `AccessBlock` | Who this agent can talk to; which channel types it can create or join. |
+| `AccessBlock` | Who this agent can address (`outbound_to`) and who can address it (`inbound_from`); channel-type allowlists (`channel_types`, stored only). |
 | `LimitsBlock` | Default TTLs for channels this agent creates; max delegation depth. |
-| `RateBlock` | Rate limits on outbound envelopes. |
-| `InboxBlock` | Inbound queue cap — protects an agent from being flooded. |
+| `RateBlock` | Rate-limit configuration stored under `limits.rate`; not enforced by the in-process hub. |
+| `InboxBlock` | Inbound queue cap under `limits.inbox` — protects an agent from being flooded. |
+
+`#!python AccessBlock.channel_types` uses separate allowlists for initiating and accepting channels; like `#!python RateBlock`, it is stored on the rule but not enforced by the in-process hub yet. `#!python RateBlock` and `#!python InboxBlock` belong inside `#!python LimitsBlock`, not directly on `#!python Rule`. Setting `#!python RateBlock.per_minute` stores the configuration; it does not enable throttling in the in-process hub.
 
 When a rule's check fails, the hub raises `#!python AccessDeniedError` (deny by access) or `#!python InboxFull` (queue cap) instead of letting the envelope through.
 
 ## Authentication
 
+Authentication decides whether a participant may register under the name in its passport. By default the hub accepts everyone: `#!python Hub.open(store)` uses `#!python AuthRegistry.default()`, which holds only `#!python NoAuth`. That is fine while every agent runs inside your own process, because the hub then holds only agents your code created.
+
+Turn authentication on once other processes can connect to the hub. Over the network, `#!python NoAuth` lets any client act as any agent, so `#!python serve_ws` refuses to bind a hub that still accepts it to a non-loopback address — see [Distributed Networks](/docs/user-guide/network/distributed#authentication).
+
+### How it fits together
+
+Authentication has two halves:
+
+- **The hub** is opened with an `#!python AuthRegistry` — a list of adapters. Each adapter handles one **scheme**, a short string such as `#!python "api_key"`.
+- **Each agent** presents a credential in its passport: `#!python Passport(auth=AuthBlock(scheme=..., claim=...))`. The `scheme` names the adapter that should check it; the `claim` is the credential itself, a dict whose shape that adapter defines.
+
+At registration the hub looks up the adapter for `#!python passport.auth.scheme` and calls its `#!python validate(passport, claim)`. If the adapter raises `#!python AuthError`, or no adapter is registered for that scheme, `#!python hub.register(...)` raises `#!python AuthError` and the agent is not registered.
+
+A passport built without `auth=` carries `#!python AuthBlock()`, whose scheme is `#!python "none"` — the scheme `#!python NoAuth` handles. That is why plain registration works on a default hub, and why it is rejected once `#!python NoAuth` is gone.
+
+### API keys
+
+`#!python ApiKeyAuth` is the built-in adapter: each agent name has one secret token. Configure the tokens on the hub, and have each agent send its own token as `#!python {"token": ...}`:
+
+```python linenums="1" hl_lines="7-8 12-15"
+import os
+
+from ag2 import Agent
+from ag2.knowledge import MemoryKnowledgeStore
+from ag2.network import ApiKeyAuth, AuthBlock, AuthRegistry, Hub, Passport
+
+auth = AuthRegistry([ApiKeyAuth(keys={"alice": os.environ["ALICE_API_KEY"]})])
+hub = await Hub.open(MemoryKnowledgeStore(), auth=auth)
+
+alice = await hub.register(
+    Agent("alice"),
+    passport=Passport(
+        name="alice",
+        auth=AuthBlock(scheme="api_key", claim={"token": os.environ["ALICE_API_KEY"]}),
+    ),
+)
+```
+
+Lines 7–8 are the hub's side: `keys` maps a passport **name** to the token expected for it. Lines 12–15 are the agent's side. Both run in one process here to keep the example short; in a real deployment the agent registers from another process through a `#!python HubClient` and reads its token from its own configuration.
+
+Registration fails with `#!python AuthError` when the token is wrong, when the name has no key, or when the passport has no `api_key` credential at all — for example `#!python await hub.register(Agent("bob"))` on this hub raises `AuthError: unknown auth scheme: 'none'`.
+
+When tokens live in a secret manager or a database, pass an async `resolver` instead of (or in addition to) `keys`. It receives the passport name and returns the expected token, or `#!python None` for an unknown name; `keys` is checked first:
+
 ```python linenums="1"
-from ag2.network import AuthAdapter, AuthRegistry, NoAuth
+import os
 
-# default: NoAuth registered for the empty scheme
-hub = await Hub.open(store)
+from ag2.network import ApiKeyAuth, AuthRegistry
 
-# explicit:
-auth = AuthRegistry()
-auth.register("hmac", MyHMACAdapter())
-hub = await Hub.open(store, auth=auth)
+async def lookup_api_key(name: str) -> str | None:
+    # Replace with a call to your secret store.
+    return os.environ.get(f"{name.upper()}_API_KEY")
+
+auth = AuthRegistry([ApiKeyAuth(resolver=lookup_api_key)])
 ```
 
-`#!python AuthAdapter` is a `#!python Protocol`:
+### Mixing authenticated and open registration
 
-```python
-class AuthAdapter(Protocol):
-    async def verify(self, passport: Passport, credentials: AuthBlock) -> None: ...
+A registry may hold several adapters, and each agent picks one through its passport's scheme. To keep accepting agents without credentials alongside API-key agents, add `#!python NoAuth()`:
+
+```python linenums="1"
+from ag2.network import ApiKeyAuth, AuthRegistry, NoAuth
+
+auth = AuthRegistry([NoAuth(), ApiKeyAuth(keys={"alice": "..."})])
 ```
 
-Hub calls `verify(...)` at registration. Raise `#!python AuthError` to reject. The default registry registers `#!python NoAuth` for the empty scheme so the simple in-process flow works with no setup.
+Note that with `#!python NoAuth` present, any client can still register under any name the API keys don't cover, and `#!python serve_ws` treats the hub as unauthenticated.
+
+### Writing a custom adapter
+
+Write your own adapter when agents already hold credentials from another system — for example, JWTs issued by your identity provider. An adapter is any class with a `scheme` attribute and an async `validate(passport, claim)` method; it satisfies the `#!python AuthAdapter` protocol structurally, with no base class.
+
+This adapter accepts agents that present a JWT signed by your identity provider. It uses [PyJWT](https://pyjwt.readthedocs.io/){.external-link target="_blank"} (`pip install "pyjwt[crypto]"`) to check the signature, expiry and audience:
+
+```python linenums="1" hl_lines="8 24-25"
+from typing import Any
+
+import jwt
+
+from ag2.network import AuthError, AuthRegistry, Passport
+
+class JwtAuth:
+    scheme = "jwt"
+
+    def __init__(self, public_key: str, audience: str) -> None:
+        self._public_key = public_key
+        self._audience = audience
+
+    async def validate(self, passport: Passport, claim: dict[str, Any]) -> None:
+        try:
+            payload = jwt.decode(
+                claim.get("token", ""),
+                self._public_key,
+                algorithms=["RS256"],
+                audience=self._audience,
+            )
+        except jwt.InvalidTokenError as exc:
+            raise AuthError(f"invalid token for {passport.name!r}") from exc
+        if payload.get("sub") != passport.name:
+            raise AuthError(f"token was not issued to {passport.name!r}")
+
+auth = AuthRegistry([JwtAuth(public_key=IDP_PUBLIC_KEY, audience="ag2-hub")])
+```
+
+`IDP_PUBLIC_KEY` stands for your identity provider's public key, loaded from configuration. The hub only verifies tokens and never holds a signing secret. Each agent registers with the token it got from the provider:
+
+```python linenums="1"
+passport = Passport(name="alice", auth=AuthBlock(scheme="jwt", claim={"token": alice_jwt}))
+```
+
+What the example shows, and what any adapter needs to get right:
+
+- **Return `#!python None` to accept, raise `#!python AuthError` to reject.** Turn your library's errors into `#!python AuthError`, as the `#!python except` block does. The message reaches the client, so don't put secrets in it.
+- **Tie the credential to the passport.** A valid token proves only that its holder is *somebody*. The `sub` check is what stops Alice's token from registering an agent named `bob`. Whatever your credential identifies (a subject, a tenant, a certificate), compare it to `#!python passport.name` or `#!python passport.owner`.
+- **Read the credential from `claim`, not from `#!python passport.auth.claim`.** The hub doesn't store credentials. When a remote agent reconnects with [`attach`](/docs/user-guide/network/distributed#at-least-once-delivery), the hub calls `validate` again with the stored passport, whose claim is empty, and passes the newly sent credential in `claim`. The reconnect must use the scheme the agent registered with.
+- **Leave the cryptography to a library.** Verifying signatures, expiry and audience is the library's job. Your adapter maps its result onto the hub's identity.
 
 ## Audit Log
 
@@ -173,7 +270,7 @@ The kind set is **open** — tenants and hub subclasses can write their own kind
 |---|---|
 | `#!python await hub.get_channel(channel_id)` | `#!python ChannelMetadata` snapshot. |
 | `#!python await hub.get_resume(agent_id)` | Current `#!python Resume`. |
-| `#!python await hub.get_passport(agent_id)` | Current `#!python Passport`. |
+| `#!python await hub.get_agent(name_or_id)` | Current `#!python Passport`, looked up by name or id. |
 | `#!python await hub.read_wal(channel_id)` | Ordered list of `#!python Envelope`s in that channel. |
 | `#!python hub.audit_log` | The `#!python AuditLog` instance — `#!python await hub.audit_log.read_all()` for every record, `#!python hub.audit_log.subscribe(cb)` to live-tail. |
 | `#!python hub.health()` | Cheap in-memory operational snapshot (`active_channels`, `registered_agents`, `pending_inbox_total`, `max_pending_inbox_depth`, `registered_listeners`, `adapters_loaded`, `audit_log_bytes`). |

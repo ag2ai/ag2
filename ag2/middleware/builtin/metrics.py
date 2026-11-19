@@ -265,6 +265,14 @@ class _MetricsMiddleware(BaseMiddleware):
                 token_type="cache_creation_input",
             ).inc(usage.cache_creation_input_tokens)
 
+        if usage.cache_creation_extended_input_tokens:
+            self._metrics.llm_tokens_total.labels(
+                agent=self._agent_name,
+                provider=provider,
+                model=model,
+                token_type="cache_creation_extended_input",
+            ).inc(usage.cache_creation_extended_input_tokens)
+
         if usage.thinking_tokens:
             self._metrics.llm_tokens_total.labels(
                 agent=self._agent_name,

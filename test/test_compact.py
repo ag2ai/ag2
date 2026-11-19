@@ -5,10 +5,12 @@
 """Tests for CompactStrategy, CompactTrigger, and built-in strategies."""
 
 import pytest
+from dirty_equals import HasAttributes, IsPartialDict
 
 from ag2 import Agent, Context, KnowledgeConfig
 from ag2.compact import CompactTrigger, CompactionSummary, SummarizeCompact, TailWindowCompact
 from ag2.events import (
+    BaseEvent,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
     CompactionCompleted,
@@ -37,7 +39,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_op_below_target(self) -> None:
         compact = TailWindowCompact(target=10)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(5)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 5
@@ -45,17 +47,16 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_truncates_above_target(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
-        assert len(result) == 3
-        assert result[0].parts[0].content == "msg-7"
+        assert result == events[7:]
 
     @pytest.mark.asyncio
     async def test_persists_dropped_to_store(self) -> None:
         store = MemoryKnowledgeStore()
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         stream = MemoryStream()
         ctx = Context(stream=stream)
         result = await compact.compact(events, ctx, store)
@@ -69,7 +70,7 @@ class TestTailWindowCompact:
     @pytest.mark.asyncio
     async def test_no_persist_without_store(self) -> None:
         compact = TailWindowCompact(target=3)
-        events = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
+        events: list[BaseEvent] = [ModelRequest([TextInput(f"msg-{i}")]) for i in range(10)]
         ctx = Context(stream=MemoryStream())
         result = await compact.compact(events, ctx, None)
         assert len(result) == 3
@@ -179,7 +180,7 @@ class TestTelemetryNotConversational:
         result = await TailWindowCompact(target=2).compact(events, Context(stream=MemoryStream()), None)
 
         conv = [e for e in result if isinstance(e, ModelRequest)]
-        assert [e.parts[0].content for e in conv] == ["u1", "u2"]
+        assert [e.parts for e in conv] == [[TextInput("u1")], [TextInput("u2")]]
         # Retained telemetry rides along so UsageReport keeps the window's usage
         assert any(isinstance(e, UsageEvent) for e in result)
 
@@ -303,6 +304,15 @@ class TestTelemetrySurvivesCompaction:
             ("model_call", 44),
             ("compaction", 525),
         ]
+
+    async def test_completion_reports_the_summarization_usage_as_a_dict(self) -> None:
+        stream = MemoryStream()
+        completions: list[CompactionCompleted] = []
+        stream.where(CompactionCompleted).subscribe(lambda e: completions.append(e))
+
+        await self._agent().ask("go", stream=stream)
+
+        assert completions == [HasAttributes(llm_calls=1, usage=IsPartialDict({"total_tokens": 525}))]
 
     async def test_carried_records_do_not_advance_the_compaction_trigger(self) -> None:
         # The records ride along in history but are not conversational (`ADR

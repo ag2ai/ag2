@@ -2,14 +2,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+import re
+from typing import Any
+
 import pytest
 from dirty_equals import IsPartialDict
 from jsonschema import Draft202012Validator
 
 from ag2.a2ui._types import A2UIVersion
 from ag2.a2ui.actions import A2UIEventAction
-from ag2.a2ui.parser import A2UIResponseParser
+from ag2.a2ui.parser import A2UIResponseParser, A2UIValidationResult
 from ag2.a2ui.schema_manager import A2UISchemaManager
+
+from ._helpers import update_components, validating_parser
 
 
 class TestA2UISchemaManager:
@@ -44,7 +50,7 @@ class TestA2UISchemaManager:
     def test_v1_0_init_loads_specs(self) -> None:
         manager = A2UISchemaManager(protocol_version="v1.0")
         assert manager.protocol_version == "v1.0"
-        assert manager.version_string == "v1.0"
+        assert manager.version_string == "1.0"
         assert "v1_0" in manager.catalog_id
         assert manager.server_to_client_schema is not None
         assert manager.basic_catalog_schema is not None
@@ -232,6 +238,168 @@ class TestMergedCatalog:
 
         assert validator.is_valid({"component": "Widget"})
         assert not validator.is_valid({"component": "widget/~definition"})
+
+
+def _catalog_with_ref(ref: str) -> dict[str, Any]:
+    return {
+        "$id": "https://example.com/catalog.json",
+        "$defs": {"Local": {"type": "string"}},
+        "components": {
+            "Label": {
+                "type": "object",
+                "properties": {"component": {"const": "Label"}, "text": {"$ref": ref}},
+                "required": ["component", "text"],
+            },
+        },
+    }
+
+
+class TestV1WireVersion:
+    """A2UI v1.0 is named ``"v1.0"`` but its messages carry the bare ``"1.0"`` (a2ui-project/a2ui#3726)."""
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            {
+                "createSurface": {
+                    "surfaceId": "s1",
+                    "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                }
+            },
+            {
+                "updateComponents": {
+                    "surfaceId": "s1",
+                    "components": [{"id": "root", "component": "Text", "text": "Hi"}],
+                }
+            },
+            {"updateDataModel": {"surfaceId": "s1", "path": "/name", "value": "Ada"}},
+            {"deleteSurface": {"surfaceId": "s1"}},
+        ],
+    )
+    def test_messages_carry_the_bare_wire_version(self, message: dict[str, Any]) -> None:
+        parser = validating_parser("v1.0")
+
+        assert parser.validate([{"version": "1.0", **message}]) == A2UIValidationResult(is_valid=True)
+        assert parser.validate([{"version": "v1.0", **message}]) == A2UIValidationResult(
+            is_valid=False, errors=["Operation 0: '1.0' was expected (at /version)"]
+        )
+
+    def test_prompt_teaches_the_wire_version(self) -> None:
+        prompt = A2UISchemaManager(protocol_version="v1.0").generate_prompt_section(include_schema=False)
+
+        assert '"version": "1.0"' in prompt
+        assert '"version": "v1.0"' not in prompt
+
+
+class TestV1Catalog:
+    """The v1.0 basic catalog and the ``$ref`` rules for custom catalogs (a2ui_protocol.md, "Restricted $ref Targets")."""
+
+    def test_the_catalog_instruction_examples_validate(self) -> None:
+        instructions = A2UISchemaManager(protocol_version="v1.0").basic_catalog_schema["instructions"]
+        assert isinstance(instructions, str)
+        examples = re.findall(r"```json\n(.*?)\n```", instructions, flags=re.DOTALL)
+        assert examples
+
+        parser = validating_parser("v1.0")
+        for example in examples:
+            assert parser.validate(json.loads(example)) == A2UIValidationResult(is_valid=True)
+
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            "basic_catalog.json#/components/Text",
+            "other_catalog.json#/$defs/Shared",
+            "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json#/components/Text",
+            "my_common_types.json#/$defs/DynamicString",
+            "catalog.json#/components/Text",
+            "common_types.json#/$defs/Surface",
+            "common_types.json#DynamicString",
+            "https://a2ui.org/specification/v1_0/common_types.json#/$defs/DynamicString",
+            "https://evil.example/x/common_types.json#/$defs/DynamicString",
+            "DynamicString",
+            "#/$defs/anyComponent",
+            "#/$defs/anyFunction",
+            "#/$defs/Missing",
+            "#/components/Missing",
+            "#/functions/required",
+            "#/properties/text",
+        ],
+    )
+    def test_custom_catalog_rejects_references_the_spec_does_not_allow(self, ref: str) -> None:
+        manager = A2UISchemaManager(protocol_version="v1.0", custom_catalog=_catalog_with_ref(ref))
+
+        with pytest.raises(ValueError, match=re.escape(f"'{ref}' at /components/Label/properties/text/$ref")):
+            manager.build_schema_registry()
+
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            "#/$defs/Local",
+            "common_types.json#/$defs/DynamicString",
+        ],
+    )
+    def test_custom_catalog_may_reference_itself_and_common_types(self, ref: str) -> None:
+        parser = validating_parser("v1.0", _catalog_with_ref(ref))
+        label = {"id": "root", "component": "Label", "text": "Hi"}
+
+        assert parser.validate([update_components("v1.0", label)]) == A2UIValidationResult(is_valid=True)
+
+    def test_custom_catalog_may_reference_its_components_and_functions(self) -> None:
+        catalog = _catalog_with_ref("common_types.json#/$defs/DynamicString")
+        catalog["functions"] = {
+            "isSet": {
+                "type": "object",
+                "returnType": "boolean",
+                "properties": {"@call": {"const": "isSet"}, "args": {"type": "object"}},
+                "required": ["@call", "args"],
+            },
+        }
+        catalog["$defs"] = {
+            "anyComponent": {"oneOf": [{"$ref": "#/components/Label"}]},
+            "anyFunction": {"oneOf": [{"$ref": "#/functions/isSet"}]},
+        }
+        parser = validating_parser("v1.0", catalog)
+        label = {"id": "root", "component": "Label", "text": "Hi"}
+
+        assert parser.validate([update_components("v1.0", label)]) == A2UIValidationResult(is_valid=True)
+
+    @pytest.mark.parametrize(
+        ("keyword", "annotation"),
+        [
+            ("examples", [{"$ref": "other_catalog.json#/$defs/Shared"}]),
+            ("default", {"$ref": "other_catalog.json#/$defs/Shared"}),
+            ("const", {"$ref": "other_catalog.json#/$defs/Shared"}),
+            ("enum", [{"$ref": "other_catalog.json#/$defs/Shared"}]),
+            ("metadata", {"$ref": "other_catalog.json#/$defs/Shared"}),
+        ],
+    )
+    def test_custom_catalog_ignores_ref_in_annotations(self, keyword: str, annotation: Any) -> None:
+        catalog = _catalog_with_ref("common_types.json#/$defs/DynamicString")
+        catalog["components"]["Label"]["properties"]["hint"] = {keyword: annotation}
+        parser = validating_parser("v1.0", catalog)
+        label = {"id": "root", "component": "Label", "text": "Hi"}
+
+        assert parser.validate([update_components("v1.0", label)]) == A2UIValidationResult(is_valid=True)
+
+    def test_text_field_requires_a_value(self) -> None:
+        parser = validating_parser("v1.0")
+        field = {"id": "root", "component": "TextField", "label": "Name"}
+
+        assert parser.validate([update_components("v1.0", field)]) == A2UIValidationResult(
+            is_valid=False, errors=["Operation 0: Component 'root' (TextField): 'value' is a required property"]
+        )
+        assert parser.validate([update_components("v1.0", {**field, "value": "Ada"})]) == A2UIValidationResult(
+            is_valid=True
+        )
+
+    def test_earlier_versions_keep_cross_catalog_references(self) -> None:
+        parser = validating_parser("v0.9", _catalog_with_ref("basic_catalog.json#/components/Text"))
+        label = {"id": "root", "component": "Label", "text": {"id": "t", "component": "Text", "text": "Hi"}}
+
+        assert parser.validate([update_components("v0.9", label)]) == A2UIValidationResult(is_valid=True)
+        rejected = parser.validate([update_components("v0.9", {**label, "text": "Hi"})])
+        assert rejected.is_valid is False
+        assert set(rejected.errors) == {"Operation 0: Component 'root' (Label): 'Hi' is not of type 'object'"}
 
 
 class TestPromptSection:

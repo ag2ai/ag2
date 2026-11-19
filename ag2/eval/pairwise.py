@@ -28,12 +28,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from ag2.context import ConversationContext
 from ag2.stream import Stream
 
+from ._types import Winner
 from .dataset import Suite, Task
 from .events import PairwiseCompared, PairwiseCompleted, PairwiseStarted
 from .sources import TraceRef, TraceSource
@@ -63,7 +64,7 @@ class PairwiseOutcome:
     such as the per-order verdicts behind a swapped LLM judgment.
     """
 
-    winner: Literal["a", "b", "tie"]
+    winner: Winner
     reasoning: str | None = None
     detail: Mapping[str, Any] = field(default_factory=dict)
 
@@ -91,7 +92,7 @@ class PairwiseCase:
 
     task_id: str
     key: str
-    winner: Literal["a", "b", "tie"]
+    winner: Winner
     reasoning: str | None = None
     detail: Mapping[str, Any] = field(default_factory=dict)
 

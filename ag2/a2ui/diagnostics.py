@@ -72,6 +72,10 @@ def _is_identifier(value: JsonValue) -> bool:
     return not isinstance(value, str) or value.isidentifier()
 
 
+def _check_identifier(instance: object) -> bool:
+    return not isinstance(instance, str) or _is_identifier(instance)
+
+
 class MessageChecker:
     """Check A2UI messages against a message schema and report where they are wrong.
 
@@ -83,7 +87,7 @@ class MessageChecker:
     def __init__(self, schema: JsonSchema, registry: Registry | None = None) -> None:
         validator_cls = jsonschema.validators.validator_for(schema)
         formats = FormatChecker(formats=())
-        formats.checks(XID_FORMAT)(_is_identifier)
+        formats.checks(XID_FORMAT)(_check_identifier)
         self._validators: dict[str, Any] = {}
         defs = schema.get("$defs")
         branches = schema.get("oneOf")

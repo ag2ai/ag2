@@ -51,7 +51,7 @@ class TaskProgress(TaskEvent):
 
     __transient__ = True
 
-    content: str = Field("")
+    content: str = Field(default="")
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -113,4 +113,4 @@ class TaskCancelled(TaskEvent):
     the cancellation alongside the other terminal events.
     """
 
-    reason: str = Field("")
+    reason: str = Field(default="")

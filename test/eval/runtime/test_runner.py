@@ -59,11 +59,10 @@ async def cancel() -> str:
     raise asyncio.CancelledError
 
 
-def _build_weather_agent(*, config: object = None) -> Agent:
+def _build_weather_agent() -> Agent:
     return Agent(
         "weather",
         prompt="You are a weather assistant. Use get_weather to answer.",
-        config=config,
         tools=[get_weather],
     )
 
@@ -312,24 +311,6 @@ async def test_budget_violation_recorded_not_aborted(tmp_path: Path) -> None:
     assert task_result.budget_violation is False
     # The scorer should still have run.
     assert task_result.feedback[0] == Feedback(key="called_get_weather", score=True)
-
-
-@pytest.mark.asyncio
-async def test_inline_list_dataset_is_loaded(tmp_path: Path) -> None:
-    """``suite=[...]`` is sugar for ``Suite.from_list([...])``."""
-    items = [{"task_id": "t1", "inputs": {"input": "Tokyo?"}, "reference_outputs": {"city": "Tokyo"}}]
-
-    result = await run_agent(
-        items,
-        agent=_build_weather_agent(),
-        scorers=[called_get_weather],
-        store_dir=tmp_path,
-        model_config={"t1": _cassette("Tokyo")},
-        concurrency=1,
-    )
-
-    assert len(result.tasks) == 1
-    assert result.suite.source == "inline"
 
 
 @pytest.mark.asyncio

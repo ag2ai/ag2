@@ -11,11 +11,6 @@ from ag2 import Context
 
 
 @pytest.fixture
-def context() -> Context:
-    return Context(stream=MagicMock())
-
-
-@pytest.fixture
 def make_context() -> Callable[..., Context]:
     def _make(**variables: object) -> Context:
         return Context(stream=MagicMock(), variables=variables)

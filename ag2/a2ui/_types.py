@@ -15,6 +15,9 @@ JsonSchema: TypeAlias = dict[str, "JsonValue"]
 A2UIVersion: TypeAlias = Literal["v0.9", "v0.9.1", "v1.0"]
 """Supported A2UI protocol versions. ``callRendererFunction`` / ``agentFunctionResponse`` are ``v1.0``-only."""
 
+A2UIWireVersion: TypeAlias = Literal["v0.9", "v0.9.1", "1.0"]
+"""The ``version`` string each protocol version's messages carry; v1.0 drops the ``v`` (a2ui-project/a2ui#3726)."""
+
 
 class CreateSurfaceContent(TypedDict, total=False):
     """Payload of a ``createSurface`` message.
@@ -36,7 +39,7 @@ class CreateSurfaceContent(TypedDict, total=False):
 class CreateSurfaceMessage(TypedDict, total=False):
     """``createSurface`` envelope."""
 
-    version: A2UIVersion
+    version: A2UIWireVersion
     createSurface: CreateSurfaceContent
 
 
@@ -50,7 +53,7 @@ class UpdateComponentsContent(TypedDict, total=False):
 class UpdateComponentsMessage(TypedDict, total=False):
     """``updateComponents`` envelope."""
 
-    version: A2UIVersion
+    version: A2UIWireVersion
     updateComponents: UpdateComponentsContent
 
 
@@ -68,7 +71,7 @@ class UpdateDataModelContent(TypedDict, total=False):
 class UpdateDataModelMessage(TypedDict, total=False):
     """``updateDataModel`` envelope."""
 
-    version: A2UIVersion
+    version: A2UIWireVersion
     updateDataModel: UpdateDataModelContent
 
 
@@ -81,7 +84,7 @@ class DeleteSurfaceContent(TypedDict, total=False):
 class DeleteSurfaceMessage(TypedDict, total=False):
     """``deleteSurface`` envelope."""
 
-    version: A2UIVersion
+    version: A2UIWireVersion
     deleteSurface: DeleteSurfaceContent
 
 
@@ -115,11 +118,11 @@ class CallRendererFunctionMessage(TypedDict, total=False):
     """``callRendererFunction`` envelope (v1.0): agent-initiated renderer function call.
 
     The renderer always answers with a ``rendererFunctionResponse`` that copies
-    ``functionCallId`` verbatim. ``version`` is ``v1.0``-only — this message type
+    ``functionCallId`` verbatim. ``version`` is always ``"1.0"`` — this message type
     does not exist in v0.9.
     """
 
-    version: Literal["v1.0"]
+    version: Literal["1.0"]
     callRendererFunction: CallRendererFunctionContent
 
 
@@ -149,10 +152,10 @@ class FunctionResponseContent(TypedDict, total=False):
 class AgentFunctionResponseMessage(TypedDict, total=False):
     """``agentFunctionResponse`` envelope (v1.0): the agent's reply to a ``callAgentFunction``.
 
-    ``version`` is ``v1.0``-only — this message type does not exist in v0.9.
+    ``version`` is always ``"1.0"`` — this message type does not exist in v0.9.
     """
 
-    version: Literal["v1.0"]
+    version: Literal["1.0"]
     agentFunctionResponse: FunctionResponseContent
 
 

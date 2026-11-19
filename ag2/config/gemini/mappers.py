@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import logging
 from collections.abc import Iterable
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -37,6 +38,11 @@ from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
 
 from .events import GeminiServerToolCallEvent, GeminiServerToolResultEvent, GeminiToolCallEvent
+
+logger = logging.getLogger(__name__)
+
+# Google's documented placeholder for a function call that has no real signature.
+SKIP_THOUGHT_SIGNATURE = b"skip_thought_signature_validator"
 
 
 def response_proto_to_config(response: ResponseProto | None) -> types.GenerateContentConfigDict:
@@ -379,7 +385,35 @@ def convert_messages(
             summary = types.Part.from_text(text=f"[Summary of earlier conversation]\n{message.summary}")
             result.append(types.Content(role="user", parts=[summary]))
 
+    _sign_current_turn_calls(result)
     return result
+
+
+def _sign_current_turn_calls(contents: list[types.Content]) -> None:
+    """Give each current-turn model step a signature on its first function call.
+
+    Gemini 3 rejects a request whose current turn (everything after the last user
+    message that is not a function response) has a function call step without a
+    ``thought_signature``. Only the first call of a step carries one.
+    """
+    turn_start = 0
+    for index, content in enumerate(contents):
+        if content.role == "user" and any(part.function_response is None for part in content.parts or ()):
+            turn_start = index + 1
+
+    for content in contents[turn_start:]:
+        if content.role != "model":
+            continue
+        first_call = next((part for part in content.parts or () if part.function_call is not None), None)
+        if first_call is None or first_call.thought_signature is not None:
+            continue
+        call = cast(types.FunctionCall, first_call.function_call)
+        logger.warning(
+            "Gemini function call %r (id=%s) has no thought_signature; sending the skip placeholder",
+            call.name,
+            call.id,
+        )
+        first_call.thought_signature = SKIP_THOUGHT_SIGNATURE
 
 
 def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usage:

@@ -82,7 +82,7 @@ async def _read_request(core: "_A2UITurnCore", request: Request) -> "A2UIServerR
         return parse_request(
             body,
             resolve_action=core.runtime.get_action,
-            version_key=core.runtime.version_string,
+            version_key=core.runtime.protocol_version,
         )
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)

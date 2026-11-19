@@ -73,7 +73,7 @@ async def _post_function(app: A2UIServer, quantity: int | str) -> list[dict[str,
             json={
                 "a2ui": [
                     {
-                        "version": "v1.0",
+                        "version": "1.0",
                         "callAgentFunction": {
                             "surfaceId": "s",
                             "functionCallId": "backend-1",
@@ -97,7 +97,7 @@ async def test_backend_validation_error_is_a_function_failure(
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "backend-1",
                 "error": {"code": "FUNCTION_FAILED", "message": "Function 'read_backend' failed."},
@@ -118,7 +118,7 @@ async def test_invalid_function_input_is_rejected_before_handler_runs(
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "backend-1",
                 "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'read_backend'."},
@@ -151,7 +151,7 @@ async def test_action_and_tool_keep_their_validation_errors_when_sharing_a_depen
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "backend-1",
                 "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'read_backend'."},
@@ -175,7 +175,7 @@ async def test_action_uses_agent_dependency_overrides_with_its_own_dependency_mo
 
     assert messages == [
         {
-            "version": "v1.0",
+            "version": "1.0",
             "agentFunctionResponse": {"functionCallId": "backend-1", "value": {"quantity": 4}},
         }
     ]

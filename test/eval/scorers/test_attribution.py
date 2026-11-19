@@ -4,10 +4,12 @@
 
 """Tests for failure attribution (deterministic detectors + LLM attributor)."""
 
+from typing import Any
+
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_traces
+from ag2.eval import Feedback, InMemoryTraceSource, Scorer, TraceRef, evaluate_traces
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import failure_attribution
 from ag2.eval.trace import Trace
@@ -19,7 +21,7 @@ def _trace(events: list, *, exception: BaseException | None = None) -> Trace:
     return Trace(events=events, exception=exception, duration_ms=0)
 
 
-async def _attribute(scorer, trace: Trace, *, outputs: dict | None = None) -> list:
+async def _attribute(scorer: Scorer, trace: Trace, *, outputs: dict[str, Any] | None = None) -> list[Feedback]:
     return await scorer(
         inputs={"input": "Q?"},
         outputs=outputs or {},
@@ -33,7 +35,7 @@ async def _attribute(scorer, trace: Trace, *, outputs: dict | None = None) -> li
 async def test_crash() -> None:
     [fb] = await _attribute(failure_attribution(), _trace([], exception=ValueError("boom")))
     assert fb.value == "crash"
-    assert fb.detail["failed"] is True
+    assert fb.detail == IsPartialDict({"failed": True})
 
 
 @pytest.mark.asyncio()
@@ -48,7 +50,7 @@ async def test_tool_failure_records_decisive_step() -> None:
     err = ToolErrorEvent.from_call(call, RuntimeError("kaboom"))
     [fb] = await _attribute(failure_attribution(), _trace([call, err]))
     assert fb.value == "tool_failure"
-    assert fb.detail["decisive_step"] == 1  # index of the error event
+    assert fb.detail == IsPartialDict({"decisive_step": 1})  # index of the error event
 
 
 @pytest.mark.asyncio()
@@ -95,7 +97,7 @@ async def test_clean_run_without_llm_is_none() -> None:
         failure_attribution(), _trace([ModelResponse(message=ModelMessage("done"))]), outputs={"body": "done"}
     )
     assert fb.value == "none"
-    assert fb.detail["failed"] is False
+    assert fb.detail == IsPartialDict({"failed": False})
 
 
 @pytest.mark.asyncio()
@@ -107,8 +109,7 @@ async def test_llm_attributor_for_semantic_failure() -> None:
     scorer = failure_attribution(config, key="failure")
     [fb] = await _attribute(scorer, _trace([ModelResponse(message=ModelMessage("Lyon"))]), outputs={"body": "Lyon"})
     assert fb.value == "incorrect_answer"
-    assert fb.detail["failed"] is True
-    assert fb.detail["decisive_step"] == 0
+    assert fb.detail == IsPartialDict({"failed": True, "decisive_step": 0})
 
 
 @pytest.mark.asyncio()

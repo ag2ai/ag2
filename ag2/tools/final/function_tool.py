@@ -219,6 +219,11 @@ def tool(
     """
 
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
+        # An object that is callable but is not meant for an agent says so
+        # through its type; otherwise it would fail deep inside signature
+        # inspection with a message naming neither the object nor the fix.
+        if (refusal := getattr(type(f), "__ag2_tool_refusal__", None)) is not None:
+            raise TypeError(refusal)
         call_model = build_model(
             f,
             sync_to_thread=sync_to_thread,

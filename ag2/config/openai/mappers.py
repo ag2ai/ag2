@@ -16,12 +16,14 @@ from openai.types.chat import (
     ChatCompletionContentPartParam,
     ChatCompletionContentPartTextParam,
     ChatCompletionFunctionToolParam,
+    ChatCompletionMessage,
     ChatCompletionMessageFunctionToolCallParam,
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
     ChatCompletionUserMessageParam,
 )
+from openai.types.chat.chat_completion_chunk import ChoiceDelta
 from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from openai.types.chat.chat_completion_content_part_param import File
 from openai.types.responses import (
@@ -792,6 +794,21 @@ def responses_api_includes(tools: Iterable[ToolSchema]) -> list[ResponseIncludab
     return includes
 
 
+def extract_reasoning(source: ChatCompletionMessage | ChoiceDelta) -> str | None:
+    """Reasoning text of a Chat Completions message or stream delta, if any.
+
+    OpenAI-compatible servers disagree on the field: DeepSeek, SGLang, xAI and
+    DashScope send ``reasoning_content``; vLLM, OpenRouter and Ollama send
+    ``reasoning``. ``reasoning_content`` wins when both are set, so a server
+    sending both yields one reasoning text, not two.
+    """
+    for field in ("reasoning_content", "reasoning"):
+        value = getattr(source, field, None)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def normalize_usage(usage: CompletionUsage) -> Usage:
     return Usage(
         prompt_tokens=usage.prompt_tokens,
@@ -806,12 +823,15 @@ def normalize_usage(usage: CompletionUsage) -> Usage:
 
 
 def normalize_responses_usage(usage: ResponseUsage) -> Usage:
+    write_details = usage.input_tokens_details.cache_write_tokens_details
     return Usage(
         prompt_tokens=usage.input_tokens,
         completion_tokens=usage.output_tokens,
         total_tokens=usage.total_tokens,
         cache_read_input_tokens=usage.input_tokens_details.cached_tokens,
         cache_creation_input_tokens=usage.input_tokens_details.cache_write_tokens,
+        # Writes made under `prompt_cache_options={"ttl": "12h"}`.
+        cache_creation_extended_input_tokens=write_details.ttl_12h_tokens if write_details else None,
         thinking_tokens=usage.output_tokens_details.reasoning_tokens,
     )
 
