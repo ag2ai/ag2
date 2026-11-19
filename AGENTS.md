@@ -139,6 +139,8 @@ All implementations must be re-exported from their public module's `__init__.py`
 - **Core modules** use **optional dependencies** shipped as pyproject extras — fall back via `missing_optional_dependency`, which hints `pip install "ag2[<extra>]"`.
 - **Extensions** (`ag2/extensions/`) are **not** shipped as extras — declare their third-party packages as **additional dependencies** and fall back via `missing_additional_dependency`, which hints the upstream package directly (e.g. `pip install "daytona>=0.171.0,<1"`).
 
+Packages whose exports pull in heavy SDKs (`ag2/config/__init__.py`) load them on first use instead: list each export in the module's `lazy_exports` map (`ag2/_lazy.py`) with its submodule and extra, and import it under `TYPE_CHECKING` for type checkers. The map applies the same `missing_optional_dependency` fallback on first access. See [ADR 0036](docs/adr/0036-provider-exports-load-on-first-use.md).
+
 Either way, add the third-party package to the `optionals` **dependency group** in `pyproject.toml` (PEP 735 — CI-only, never part of `pip install ag2`) so the test workflow installs it. Tests guarded by `pytest.importorskip("<package>")` are silently skipped otherwise, and CI still passes.
 
 ### Design principles
