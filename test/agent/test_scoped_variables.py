@@ -121,3 +121,23 @@ async def test_equal_cost_calls_remain_distinct_and_roots_do_not_share_defaults(
     assert second.context.variables["kv"] == {}
     assert (await first.usage()).total.total_tokens == 20
     assert (await second.usage()).total.total_tokens == 20
+
+
+@pytest.mark.asyncio
+async def test_continuation_can_delete_a_plain_variable_promoted_to_shared() -> None:
+    agent = Agent(
+        "root",
+        config=TestConfig("first", "continued"),
+        variables={"notes": ["draft"], "keep": "unchanged"},
+    )
+    first = await agent.ask("start")
+    continued = await first.ask("share the notes", variables={"notes": ScopedValue(["approved"], scope=Scope.SHARED)})
+    variables = continued.context.variables
+    assert variables["notes"] == ["approved"]
+    del variables["notes"]
+    assert dict(variables) == {"keep": "unchanged"}
+    assert list(variables) == ["keep"]
+    assert len(variables) == 1
+    assert "notes" not in variables
+    variables["notes"] = ["recreated"]
+    assert dict(variables) == {"keep": "unchanged", "notes": ["recreated"]}

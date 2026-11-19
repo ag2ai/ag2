@@ -72,6 +72,7 @@ class ScopedVariables(MutableMapping[str, Any]):
             self._declare(key, value.scope)
             value = value.value
         if self._declared.get(key) == Scope.SHARED:
+            self._own.pop(key, None)
             self._shared[key] = value
         else:
             self._own[key] = value
