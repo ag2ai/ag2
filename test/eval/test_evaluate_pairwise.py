@@ -11,9 +11,10 @@ any LLM; the dual-order swap is unit-tested separately in test_pairwise_judge.
 import pytest
 
 from ag2.eval import InMemoryTraceSource, TraceRef, evaluate_pairwise
-from ag2.eval.pairwise import PairwiseComparator, PairwiseOutcome
+from ag2.eval.pairwise import PairwiseComparator
 from ag2.eval.trace import Trace
 from ag2.events import ModelMessage, ModelResponse
+from ag2.testing import TestComparator
 
 _TASKS = ("t1", "t2", "t3", "t4")
 
@@ -26,20 +27,9 @@ def _source(label: str) -> InMemoryTraceSource:
     return InMemoryTraceSource([(TraceRef(f"{label}-{t}", task_id=t), _trace(label)) for t in _TASKS])
 
 
-class _Scripted:
-    """A PairwiseComparator that returns a fixed winner per task_id."""
-
-    def __init__(self, key: str, wins: dict[str, str]) -> None:
-        self.key = key
-        self._wins = wins
-
-    async def compare(self, *, task, trace_a, trace_b, reference_outputs) -> PairwiseOutcome:
-        return PairwiseOutcome(winner=self._wins.get(task.task_id, "tie"))
-
-
 @pytest.mark.asyncio()
 async def test_win_rate_tally_and_persist(tmp_path) -> None:
-    judge = _Scripted("correctness", {"t1": "b", "t2": "b", "t3": "a", "t4": "tie"})
+    judge = TestComparator("correctness", {"t1": "b", "t2": "b", "t3": "a", "t4": "tie"})
     assert isinstance(judge, PairwiseComparator)
 
     result = await evaluate_pairwise(
@@ -56,8 +46,8 @@ async def test_win_rate_tally_and_persist(tmp_path) -> None:
 
 @pytest.mark.asyncio()
 async def test_agreement_cohen_kappa(tmp_path) -> None:
-    judge = _Scripted("c@judge", {"t1": "b", "t2": "b", "t3": "a", "t4": "tie"})
-    human = _Scripted("c@human", {"t1": "b", "t2": "tie", "t3": "a", "t4": "tie"})
+    judge = TestComparator("c@judge", {"t1": "b", "t2": "b", "t3": "a", "t4": "tie"})
+    human = TestComparator("c@human", {"t1": "b", "t2": "tie", "t3": "a", "t4": "tie"})
 
     result = await evaluate_pairwise(_source("v1"), _source("v2"), comparators=[judge, human], store_dir=tmp_path)
 
@@ -73,6 +63,6 @@ async def test_no_pairs_without_task_ids(tmp_path) -> None:
     a = InMemoryTraceSource([(TraceRef("a1"), _trace("v1"))])  # no task_id
     b = InMemoryTraceSource([(TraceRef("b1"), _trace("v2"))])
 
-    result = await evaluate_pairwise(a, b, comparators=[_Scripted("k", {})], store_dir=tmp_path)
+    result = await evaluate_pairwise(a, b, comparators=[TestComparator("k", {})], store_dir=tmp_path)
 
     assert result.tally("k") == (0, 0, 0)

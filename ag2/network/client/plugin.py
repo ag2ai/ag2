@@ -24,8 +24,8 @@ chain so every LLM call sees a "you are <name>" prefix.
 
 from typing import TYPE_CHECKING
 
-from ag2.agent import Plugin
 from ag2.events import BaseEvent
+from ag2.plugin import Plugin
 
 from .tools import (
     make_channels_tool,

@@ -246,6 +246,13 @@ Call `create_a2ui_parts(messages)`: one `DataPart` whose `data` is the array of 
 - Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:create_a2ui_parts\\(legacy_split=True\\):DeprecationWarning")`; new tests must not depend on it.
 - Removal in 1.4.0 covers: the `legacy_split` parameter and `LEGACY_SPLIT_DEPRECATION` in `ag2/a2ui/a2a/parts.py`, the warning-filtered tests in `test/a2ui/a2a/test_parts.py`, and the deprecation admonition in `website/docs/user-guide/a2ui/a2a.mdx`. Keep `get_a2ui_data` decoding a single-object `data`: it is a public helper, and a caller can recognise such a malformed part with it (the executor consumes every A2UI part, whatever its `data`).
 
+### Deprecated: `google-genai` 2.x (removed in 1.4.0)
+
+`ag2[gemini]` accepts `google-genai>=1.68.0,<4`; 1.4.0 requires `>=3,<4`. Everything that differs between the majors lives in `ag2/config/gemini/_compat.py`. `GeminiConfig` / `VertexAIConfig` `create()` and `create_files_client()` warn on 2.x.
+
+- Tests branch on `_compat.SDK_3X` with `skipif`; the `test-gemini-2x` CI job runs the suite against 2.x.
+- Removal in 1.4.0 covers: the `google-genai` floor in `pyproject.toml`, `SDK_2X_DEPRECATION` / `warn_if_sdk_2x` / `HTTPX2_NEEDS_SDK_3X` and the `SDK_3X` branches in `_compat.py`, the `skipif(_compat.SDK_3X)` tests in `test/config/gemini/test_http_options.py`, the `test-gemini-2x` job and its `build-check` entry in `.github/workflows/test.yml`, and the 2.x notes in `website/docs/`. Keep `build_http_options` and the `api_version` fields.
+
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.

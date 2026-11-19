@@ -91,7 +91,7 @@ async def whoami(ctx: MCPRequestContext) -> str:
 
 ## UI resource types
 
-`ag2.mcp_ui` provides three builders, one per MCP-UI content type. Each returns an `mcp.types.EmbeddedResource` — a valid `tools/call` content block — and each `uri` **must** start with `ui://`.
+`ag2.mcp_ui` provides three builders, one per MCP-UI content type. Each returns an `mcp_ui_server.UIResource` (an `mcp.types.EmbeddedResource`) — a valid `tools/call` content block — and each `uri` **must** start with `ui://`.
 
 | Builder | Content type | Client renders it as |
 |---|---|---|

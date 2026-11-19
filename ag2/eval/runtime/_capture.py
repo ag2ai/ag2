@@ -37,7 +37,7 @@ scorers don't change. The boundary between offline and online is just
 where the stream came from.
 """
 
-from contextlib import ExitStack
+from contextlib import AsyncExitStack, ExitStack
 
 from ag2.annotations import Context
 from ag2.events import BaseEvent
@@ -61,7 +61,7 @@ class EventCapture:
         self.events: list[BaseEvent] = []
         self._subscribed = False
 
-    def register(self, stack: ExitStack, context: Context) -> None:
+    def register(self, stack: ExitStack | AsyncExitStack, context: Context) -> None:
         # Subscribe directly (not via sub_scope) so the subscription
         # outlives this ExitStack and continues capturing events from
         # any follow-up ``reply.ask`` on the same stream. The unused

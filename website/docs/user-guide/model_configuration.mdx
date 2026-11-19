@@ -101,6 +101,8 @@ config = GeminiConfig(
     streaming=True
 )
 ```
+
+`ag2[gemini]` requires `google-genai>=1.68.0,<4`; 1.4.0 will require `google-genai>=3`. See [Gemini API Version and HTTP Client](#gemini-api-version-and-http-client) for what changed in `google-genai` 3.x.
   </Tab>
   <Tab title="Amazon Bedrock">
 ```python linenums="1"
@@ -539,6 +541,41 @@ config = GeminiConfig(
 ```
 
 A response cut short then reports `#!python response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
+
+### Gemini API Version and HTTP Client
+
+`ag2[gemini]` accepts `google-genai` 2.x and 3.x. Two defaults change with 3.x.
+
+!!! warning "google-genai 2.x support is removed in 1.4.0"
+
+    With `google-genai` 2.x installed, `config.create()` and `config.create_files_client()` on `GeminiConfig` and `VertexAIConfig` emit a `#!python DeprecationWarning`. 1.4.0 requires `google-genai>=3`; upgrade with `pip install -U "google-genai>=3,<4"`.
+
+**API version.** `google-genai` 3.x sends Developer API requests to `v1`; 2.x sent them to `v1beta`. AG2 follows the installed SDK. The `-latest` aliases (such as `gemini-flash-latest`) and some `-preview` models exist only on `v1beta`, so with 3.x a request for one of them fails until you set `api_version`:
+
+```python linenums="1" hl_lines="5"
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.1-pro-preview",
+    api_version="v1beta",
+)
+```
+
+`GeminiConfig` takes `"v1"` or `"v1beta"`; `VertexAIConfig` takes `"v1"` or `"v1beta1"`, and Vertex AI keeps `v1beta1` as its default on both SDK majors. With `api_version` left unset, `google-genai` 3.x also reads the `GOOGLE_GENAI_API_VERSION` environment variable.
+
+**HTTP client.** `google-genai` 3.x is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`, like `AnthropicConfig`. An `#!python httpx.AsyncClient` keeps working with both SDK majors:
+
+```python linenums="1" hl_lines="6"
+import httpx2
+from ag2.config import GeminiConfig
+
+config = GeminiConfig(
+    model="gemini-3.6-flash",
+    http_client=httpx2.AsyncClient(proxy="http://proxy.example.com:8080"),
+)
+```
+
+With `google-genai` 2.x, an `httpx2` client raises `#!python TypeError` when `config.create()` builds the client.
 
 ### Ollama Configuration
 

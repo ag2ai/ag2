@@ -102,6 +102,7 @@ class TestEnum:
 
     def test_enum_inside_dict(self) -> None:
         result = _round_trip({"kind": BinaryType.DOCUMENT})
+        assert isinstance(result, dict)
         assert result["kind"] is BinaryType.DOCUMENT
 
 

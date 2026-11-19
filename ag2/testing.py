@@ -10,6 +10,10 @@ from unittest.mock import MagicMock
 
 from ag2 import Context
 from ag2.config import LLMClient, ModelConfig, ModelProvider
+from ag2.eval._types import Winner
+from ag2.eval.dataset.task import Task
+from ag2.eval.pairwise import PairwiseOutcome
+from ag2.eval.trace import Trace
 from ag2.events import (
     BaseEvent,
     BuiltinToolCallEvent,
@@ -19,6 +23,7 @@ from ag2.events import (
     ToolCallsEvent,
     ToolErrorEvent,
 )
+from ag2.exceptions import FilesAPIUnsupportedError
 from ag2.files import FileContent, UploadedFile
 from ag2.tools.schemas import ToolSchema
 
@@ -27,6 +32,7 @@ if TYPE_CHECKING:
 
 __all__ = (
     "ModelCall",
+    "TestComparator",
     "TestConfig",
     "TestFilesClient",
     "TrackingConfig",
@@ -163,7 +169,7 @@ class TrackingConfig(ModelConfig):
         return TrackingClient(self.config.create(), self.mock, self.calls)
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)
 
 
 class TestFilesClient:
@@ -212,6 +218,7 @@ class TestConfig(ModelConfig):
         model: str | None = None,
         raise_tool_errors: bool = True,
         files: TestFilesClient | None = None,
+        persistent: bool = False,
     ) -> None:
         """Script the LLM, one :data:`Turn` per positional event.
 
@@ -229,8 +236,20 @@ class TestConfig(ModelConfig):
         asserting this double's behaviour rather than the agent's.
 
         ``files`` backs ``FilesAPI(config)``; without it the Files API is unsupported.
+
+        By default every ``ask`` replays the script from its first turn. With
+        ``persistent=True`` all asks share one script and each reads on where
+        the previous one stopped — for code that asks the same agent several
+        times, such as a judge called once per order::
+
+            TestConfig("first", "second", persistent=True)
+
+        Every agent built from the same persistent config reads that one script,
+        so concurrent asks take turns in whatever order they reach the model.
         """
         self.events = events
+        self._persistent = persistent
+        self._client: TestClient | None = None
         self._files = files
         self._provider = provider
         self._model = model
@@ -252,9 +271,40 @@ class TestConfig(ModelConfig):
         return self
 
     def create(self) -> TestClient:
-        return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        if not self._persistent:
+            return TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        if self._client is None:
+            self._client = TestClient(*self.events, raise_tool_errors=self._raise_tool_errors)
+        return self._client
 
     def create_files_client(self) -> "FilesClient":
         if self._files is None:
-            raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+            raise FilesAPIUnsupportedError(type(self).__name__)
         return self._files
+
+
+class TestComparator:
+    """A pairwise comparator that returns a fixed winner per ``task_id``.
+
+    Tasks without a scripted winner come out as a tie. Use it to test what is
+    built on pairwise outcomes — tallies, win-rates, agreement — without a
+    judge model::
+
+        TestComparator("quality", {"t1": "b", "t2": "a"})
+    """
+
+    __test__ = False
+
+    def __init__(self, key: str, winners: Mapping[str, Winner]) -> None:
+        self.key = key
+        self._winners = winners
+
+    async def compare(
+        self,
+        *,
+        task: Task,
+        trace_a: Trace,
+        trace_b: Trace,
+        reference_outputs: dict[str, Any] | None,
+    ) -> PairwiseOutcome:
+        return PairwiseOutcome(winner=self._winners.get(task.task_id, "tie"))

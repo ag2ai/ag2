@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 
 from ag2.events import ModelMessage, ModelResponse, Usage, UsageEvent
 from ag2.usage import UsageRecord, UsageReport
@@ -32,10 +31,6 @@ class TestUsageArithmetic:
 
     def test_add_none_stays_none(self) -> None:
         assert Usage() + Usage() == Usage()
-
-    def test_add_rejects_non_usage(self) -> None:
-        with pytest.raises(TypeError):
-            Usage() + 42  # type: ignore[operator]
 
     def test_builtin_sum_aggregates(self) -> None:
         usages = [

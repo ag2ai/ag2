@@ -40,6 +40,8 @@ from ag_ui.core import (  # noqa: E402
     FileSource,
     FunctionCall,
     ImagePart,
+    MultimodalCapabilities,
+    MultimodalInputCapabilities,
     RunAgentInput,
     RunFinishedEvent,
     RunFinishedSuccessOutcome,
@@ -248,6 +250,7 @@ _Wire = TypeVar("_Wire")
 
 
 def _refuses(convert: Callable[[_Wire, SerializerProto], Sized], given: _Wire) -> bool:
+    assert SerializerCls is not None
     try:
         convert(given, SerializerCls)
     except UnsupportedInputError:
@@ -271,9 +274,6 @@ def test_the_table_agrees_with_what_the_provider_mapper_takes(provider: str, pos
 async def test_the_capabilities_advertise_what_a_user_message_may_carry() -> None:
     agent = Agent("test_agent", config=OllamaConfig(model="probe"))
 
-    assert AGUIStream(agent).capabilities().multimodal.input.model_dump() == {
-        "image": True,
-        "audio": False,
-        "video": False,
-        "pdf": False,
-    }
+    assert AGUIStream(agent).capabilities().multimodal == MultimodalCapabilities(
+        input=MultimodalInputCapabilities(image=True, audio=False, video=False, pdf=False),
+    )

@@ -112,7 +112,7 @@ class SkillsToolkit(Toolkit):
         ``Literal`` cannot be empty).
         """
         names = [s.name for s in self.merged_skills()]
-        base: object = Literal[tuple(names)] if names else str  # type: ignore[valid-type]
+        base: object = Literal[tuple(names)] if names else str
         return Annotated[base, Field(description=description)]
 
     def list_skills(

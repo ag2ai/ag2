@@ -211,37 +211,37 @@ class TestSchemaGeneration:
 
 class TestValidation:
     @pytest.mark.asyncio()
-    async def test_sync_str_param(self) -> None:
+    async def test_sync_str_param(self, context: Context) -> None:
         @response_schema
         def parse(content: str) -> int:
             return int(content)
 
-        result = await parse.validate("42", context=None)  # type: ignore[arg-type]
+        result = await parse.validate("42", context=context)
 
         assert result == 42
 
     @pytest.mark.asyncio()
-    async def test_async_str_param(self) -> None:
+    async def test_async_str_param(self, context: Context) -> None:
         @response_schema
         async def parse(content: str) -> int:
             return int(content)
 
-        result = await parse.validate("42", context=None)  # type: ignore[arg-type]
+        result = await parse.validate("42", context=context)
 
         assert result == 42
 
     @pytest.mark.asyncio()
-    async def test_single_int_param_deserializes(self) -> None:
+    async def test_single_int_param_deserializes(self, context: Context) -> None:
         @response_schema
         def double(value: int) -> int:
             return value * 2
 
-        result = await double.validate('{"data": 21}', context=None)  # type: ignore[arg-type]
+        result = await double.validate('{"data": 21}', context=context)
 
         assert result == 42
 
     @pytest.mark.asyncio()
-    async def test_single_dataclass_param_deserializes(self) -> None:
+    async def test_single_dataclass_param_deserializes(self, context: Context) -> None:
         @dataclass
         class Point:
             x: int
@@ -253,68 +253,68 @@ class TestValidation:
 
         result = await stringify.validate(
             '{"x": 3, "y": 4}',
-            context=None,  # type: ignore[arg-type]
+            context=context,
         )
 
         assert result == "3,4"
 
     @pytest.mark.asyncio()
-    async def test_single_union_param_deserializes(self) -> None:
+    async def test_single_union_param_deserializes(self, context: Context) -> None:
         @response_schema
         def to_str(value: int | str) -> str:
             return str(value)
 
-        assert await to_str.validate('{"data": 42}', context=None) == "42"  # type: ignore[arg-type]
-        assert await to_str.validate('{"data": "hello"}', context=None) == "hello"  # type: ignore[arg-type]
+        assert await to_str.validate('{"data": 42}', context=context) == "42"
+        assert await to_str.validate('{"data": "hello"}', context=context) == "hello"
 
     @pytest.mark.asyncio()
-    async def test_multi_params_with_defaults_uses_default(self) -> None:
+    async def test_multi_params_with_defaults_uses_default(self, context: Context) -> None:
         @response_schema
         def process(name: str, retries: int = 3) -> str:
             return f"{name} x{retries}"
 
         result = await process.validate(
             '{"name": "test"}',
-            context=None,  # type: ignore[arg-type]
+            context=context,
         )
 
         assert result == "test x3"
 
     @pytest.mark.asyncio()
-    async def test_multi_params_with_defaults_overridden(self) -> None:
+    async def test_multi_params_with_defaults_overridden(self, context: Context) -> None:
         @response_schema
         def process(name: str, retries: int = 3) -> str:
             return f"{name} x{retries}"
 
         result = await process.validate(
             '{"name": "test", "retries": 5}',
-            context=None,  # type: ignore[arg-type]
+            context=context,
         )
 
         assert result == "test x5"
 
     @pytest.mark.asyncio()
-    async def test_multi_params_deserializes_json(self) -> None:
+    async def test_multi_params_deserializes_json(self, context: Context) -> None:
         @response_schema
         def greet(name: str, age: int) -> str:
             return f"{name} is {age}"
 
         result = await greet.validate(
             '{"name": "Alice", "age": 30}',
-            context=None,  # type: ignore[arg-type]
+            context=context,
         )
 
         assert result == "Alice is 30"
 
     @pytest.mark.asyncio()
-    async def test_async_multi_params(self) -> None:
+    async def test_async_multi_params(self, context: Context) -> None:
         @response_schema
         async def greet(name: str, age: int) -> str:
             return f"{name} is {age}"
 
         result = await greet.validate(
             '{"name": "Bob", "age": 25}',
-            context=None,  # type: ignore[arg-type]
+            context=context,
         )
 
         assert result == "Bob is 25"

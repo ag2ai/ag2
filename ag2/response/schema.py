@@ -5,7 +5,7 @@
 import warnings
 from dataclasses import is_dataclass
 from types import UnionType
-from typing import Annotated, Any, Union, get_args, get_origin, overload
+from typing import TYPE_CHECKING, Annotated, Any, Union, get_args, get_origin, overload
 
 from fast_depends import Provider
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
@@ -16,6 +16,10 @@ from ag2.types import ClassInfo
 
 from .proto import ResponseProto
 
+if TYPE_CHECKING:
+    # Runtime typing_extensions may predate TypeForm (4.13); only the checker needs it.
+    from typing_extensions import TypeForm
+
 T = TypeVar313("T", default=str)
 
 
@@ -23,7 +27,7 @@ class ResponseSchema(ResponseProto[T]):
     @overload
     def __init__(
         self,
-        types: type[T],
+        types: "TypeForm[T]",
         /,
         name: str | None = None,
         description: str | None = None,
@@ -32,7 +36,7 @@ class ResponseSchema(ResponseProto[T]):
 
     @overload
     def __init__(
-        self,
+        self: "ResponseSchema[Any]",
         types: ClassInfo,
         /,
         name: str | None = None,
@@ -42,7 +46,7 @@ class ResponseSchema(ResponseProto[T]):
 
     def __init__(
         self,
-        types: ClassInfo,
+        types: "TypeForm[Any] | ClassInfo",
         /,
         name: str | None = None,
         description: str | None = None,
@@ -88,7 +92,7 @@ class ResponseSchema(ResponseProto[T]):
     @classmethod
     def ensure_schema(
         cls,
-        obj: "type[T]",
+        obj: "TypeForm[T]",
     ) -> "ResponseSchema[T]": ...
 
     @overload
@@ -101,7 +105,7 @@ class ResponseSchema(ResponseProto[T]):
     @classmethod
     def ensure_schema(
         cls,
-        obj: "ResponseProto[T] | ClassInfo | None",
+        obj: "ResponseProto[T] | TypeForm[Any] | ClassInfo | None",
     ) -> "ResponseProto[T] | None":
         if obj is None:
             return None
@@ -172,7 +176,7 @@ class RawSchema(ResponseProto[str]):
         return response
 
 
-def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[Any] | None, bool]:
+def make_adapter(types: "TypeForm[Any] | ClassInfo", *, embed: bool = True) -> tuple[TypeAdapter[Any] | None, bool]:
     # Classify by the bare type, but build the adapter from the full annotated one so metadata is kept.
     bare = strip_annotated(types)
     origin = get_origin(bare)
@@ -217,7 +221,7 @@ def make_adapter(types: ClassInfo, *, embed: bool = True) -> tuple[TypeAdapter[A
     return TypeAdapter(final_type), embedded_type
 
 
-def strip_annotated(types: ClassInfo) -> ClassInfo:
+def strip_annotated(types: "TypeForm[Any] | ClassInfo") -> "TypeForm[Any] | ClassInfo":
     """The type under any ``Annotated`` wrappers."""
     while get_origin(types) is Annotated:
         types = get_args(types)[0]
