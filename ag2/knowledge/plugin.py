@@ -86,9 +86,9 @@ class _KnowledgeMiddlewareFactory:
             async with lock:
                 if not uses_configured_store or not self._configured_store_initialized:
                     if not await store.exists("/.initialized"):
-                        await store.write("/.initialized", actor)
                         bootstrap = self.config.bootstrap or DefaultBootstrap(mention_tool=self.config.expose_tool)
                         await bootstrap.bootstrap(store, actor)
+                        await store.write("/.initialized", actor)
                     # Only the plugin's own store is memoized. Overrides use their
                     # sentinel on subsequent calls without being kept alive here.
                     if uses_configured_store:
