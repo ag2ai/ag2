@@ -35,6 +35,7 @@ from ag2.events import (
     HumanInputRequest,
     HumanMessage,
     ModelResponse,
+    TextInput,
     ToolCallEvent,
     ToolErrorEvent,
     ToolResultEvent,
@@ -515,9 +516,9 @@ class TestAG2GenAIConvention:
         span = replace(span, attributes={**span.attributes, ATTR_TOOL_RESULT_TRUNCATED: True})
         trace = spans_to_trace([_agent_span(), span])
 
-        part = trace.events_of(ToolResultEvent)[0].result.parts[0]
-        assert part.content == '{"rows": ["x...[truncated]'
-        assert part.metadata == {"truncated": True}
+        assert trace.events_of(ToolResultEvent)[0].result.parts == [
+            TextInput('{"rows": ["x...[truncated]', metadata={"truncated": True})
+        ]
 
     def test_tool_span_error_reconstructs_tool_error_event(self) -> None:
         err_span = _tool_span(10 * _MS, name="flaky", call_id="c2")

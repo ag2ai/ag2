@@ -157,11 +157,18 @@ class PathTriage(BaseModel):
 
 
 class SharedAlias(BaseModel):
+    # validate_by_name keeps the alias clash, but lets the pydantic mypy plugin build
+    # __init__ from field names instead of the duplicated alias (no-redef otherwise)
+    model_config = ConfigDict(validate_by_name=True)
+
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="flag")
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")] = Field(alias="flag")
 
 
 class AliasOfAnotherField(BaseModel):
+    # validate_by_name: same reason as SharedAlias
+    model_config = ConfigDict(validate_by_name=True)
+
     is_spam: Annotated[bool, Question("Is this message spam?")] = Field(alias="is_urgent")
     is_urgent: Annotated[bool, Question("Is this ticket urgent?")]
 
