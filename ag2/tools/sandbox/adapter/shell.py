@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -132,7 +133,11 @@ class ShellAdapter:
         argv = self._argv(command)
         if argv is None:
             return f"Command not allowed (unbalanced quotes): {command!r}"
-        denied = self._filter(command, argv)
+        if self._ignore is None:
+            denied = self._filter(command, argv)
+        else:
+            # ignore may walk directory trees on the host: keep it off the event loop.
+            denied = await asyncio.to_thread(self._filter, command, argv)
         if denied is not None:
             return denied
 

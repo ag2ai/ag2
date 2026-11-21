@@ -12,6 +12,7 @@ deadlock).
 """
 
 import fnmatch
+import os
 import posixpath
 import shlex
 from collections.abc import Sequence
@@ -105,13 +106,22 @@ def _unquoted(command: str) -> str:
     return "".join(kept)
 
 
-def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
+def check_ignore(
+    command: str,
+    workdir: "Path | PurePath",
+    patterns: list[str],
+    *,
+    max_entries: int = 20_000,
+) -> str | None:
     """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
     token is resolved relative to *workdir* and checked against each pattern;
     a glob token is checked against the files it matches on a host path.
     Returns ``None`` if no pattern matches.
+
+    For ``grep`` / ``diff`` every file under a directory operand is checked as
+    well; a walk that would visit more than *max_entries* entries is refused.
 
     *workdir* may be a host :class:`~pathlib.Path` (local backend) or a
     :class:`~pathlib.PurePosixPath` (remote/container backend). For a host path
@@ -135,9 +145,9 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
         if isinstance(workdir, Path):
             try:
                 literal: PurePath = (workdir / token).resolve()
+                candidates = [literal, *(match.resolve() for match in _glob_matches(workdir, token))]
             except Exception:
                 continue
-            candidates = [literal, *_glob_matches(workdir, token)]
         else:
             candidates = [PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))]
 
@@ -150,7 +160,7 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
         return None
     if not isinstance(workdir, Path):
         return f"Access denied: {tokens[0]} can read files inside a directory, which cannot be checked on this backend"
-    return _check_directory_operands(tokens, expanded_tokens, workdir, resolved_workdir, patterns)
+    return _check_directory_operands(tokens, expanded_tokens, workdir, resolved_workdir, patterns, max_entries)
 
 
 # Programs in READONLY_COMMANDS that open files inside a directory operand on
@@ -189,19 +199,28 @@ def _check_directory_operands(
     workdir: Path,
     resolved_workdir: PurePath,
     patterns: list[str],
+    max_entries: int,
 ) -> str | None:
-    directories = [workdir / token for token in expanded_tokens[1:] if _is_dir(workdir / token)]
+    # Each directory is walked under the path it was named by (an alias such as
+    # a symlink may carry its own ignore rule) as well as its real location.
+    starts: list[tuple[PurePath, Path]] = []
+    for token in expanded_tokens[1:]:
+        for relative in (PurePath(token), *(m.relative_to(workdir) for m in _glob_matches(workdir, token))):
+            if not _is_dir(workdir / relative):
+                continue
+            try:
+                real = (workdir / relative).resolve()
+            except (OSError, RuntimeError):
+                return f"Access denied: {workdir / relative}"
+            starts.append((PurePath(os.path.normpath(resolved_workdir / relative)), real))
+
     if PurePosixPath(tokens[0]).name in _GREP_FAMILY and not any(
         _exists(workdir / operand) for operand in _grep_file_operands(tokens[1:])
     ):
         # With no file operand a recursive grep searches the working directory.
-        directories.append(workdir)
+        starts.append((resolved_workdir, Path(resolved_workdir)))
 
-    for directory in directories:
-        denied = _ignored_inside(directory, resolved_workdir, patterns)
-        if denied is not None:
-            return denied
-    return None
+    return _ignored_inside(starts, resolved_workdir, patterns, max_entries)
 
 
 def _grep_file_operands(args: list[str]) -> list[str]:
@@ -237,35 +256,44 @@ def _grep_file_operands(args: list[str]) -> list[str]:
     return positionals if explicit_pattern else positionals[1:]
 
 
-def _ignored_inside(directory: Path, resolved_workdir: PurePath, patterns: list[str]) -> str | None:
-    """Return ``"Access denied: <path>"`` for the first file under *directory* that is ignored or leaves the workdir.
+def _ignored_inside(
+    starts: list[tuple[PurePath, Path]],
+    resolved_workdir: PurePath,
+    patterns: list[str],
+    max_entries: int,
+) -> str | None:
+    """Return ``"Access denied: ..."`` if any file under the *starts* directories may not be read.
 
-    Symlinks are followed (``grep -R`` and ``diff -r`` follow them), and each
-    entry is checked both by the path it is listed under and by its target.
+    Every entry is checked both by the path it is reached under (keeping the
+    alias a directory was entered by) and by its real target, and symlinks are
+    followed as ``grep -R`` and ``diff -r`` follow them. A directory that cannot
+    be listed or resolved, or a walk longer than *max_entries*, is refused: what
+    cannot be checked is not let through. A symlink back into one of its own
+    ancestors is not entered again (``grep`` and ``diff`` skip such loops too).
     """
-    seen: set[Path] = set()
-    pending = [directory]
+    pending = [(lexical, real, frozenset({real})) for lexical, real in starts]
+    visited = 0
     while pending:
-        current = pending.pop()
+        lexical, real, ancestors = pending.pop()
         try:
-            real = current.resolve()
-            entries = list(current.iterdir())
-        except (OSError, RuntimeError):
-            continue
-        if real in seen:
-            continue
-        seen.add(real)
-        for entry in entries:
+            names = [entry.name for entry in real.iterdir()]
+        except OSError:
+            return f"Access denied: cannot list {lexical}"
+        for name in names:
+            visited += 1
+            if visited > max_entries:
+                return f"Access denied: more than {max_entries} files to check against ignore; name a smaller directory"
+            child = lexical / name
             try:
-                target = entry.resolve()
+                target = (real / name).resolve()
             except (OSError, RuntimeError):
-                continue
-            for candidate in (real / entry.name, target):
+                return f"Access denied: {child}"
+            for candidate in (child, target):
                 denied = _denied(candidate, resolved_workdir, patterns)
                 if denied is not None:
                     return denied
-            if _is_dir(entry):
-                pending.append(entry)
+            if _is_dir(real / name) and target not in ancestors:
+                pending.append((child, target, ancestors | {target}))
     return None
 
 
@@ -300,12 +328,16 @@ def _embedded_paths(token: str) -> list[str]:
 
 
 def _glob_matches(workdir: Path, token: str) -> list[Path]:
-    # The command runs as argv, but a program may expand a glob itself (MSYS
-    # tools do on Windows), so a pattern naming an ignored file must be refused.
+    """Return the paths under *workdir* a glob *token* matches, unresolved.
+
+    The command runs as argv, but a program may expand a glob itself (MSYS
+    tools do on Windows), so a pattern naming an ignored file, or a directory
+    holding one, must be refused.
+    """
     if not any(c in token for c in "*?["):
         return []
     try:
-        return [m.resolve() for m in workdir.glob(token)]
+        return list(workdir.glob(token))
     except (ValueError, NotImplementedError, OSError):
         return []
 
