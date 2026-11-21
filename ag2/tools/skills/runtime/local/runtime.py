@@ -144,14 +144,14 @@ class LocalRuntime(SkillRuntime):
         name: str,
         script: str,
         context: "ConversationContext",
-        args: dict[str, Any] | Sequence[str] | None = None,
+        args: dict[str, Any] | Sequence[Any] | str | None = None,
     ) -> str:
         """Run a script of *name* and return its output (list-based lookup).
 
         *context* is part of the runtime protocol; a subprocess script ignores it.
         """
         skill = self._loader.get_skill(name)
-        if isinstance(args, dict):
+        if isinstance(args, (dict, str)):
             raise TypeError(
                 f"file-based script {script!r} requires positional string arguments (an array); "
                 "named arguments (an object) are only supported for in-process scripts"

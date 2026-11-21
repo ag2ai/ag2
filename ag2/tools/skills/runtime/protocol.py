@@ -90,7 +90,7 @@ class SkillRuntime(Protocol):
         name: str,
         script: str,
         context: "ConversationContext",
-        args: dict[str, Any] | Sequence[str] | None = None,
+        args: dict[str, Any] | Sequence[Any] | str | None = None,
     ) -> str:
         """Run a script of skill *name* and return its output.
 
