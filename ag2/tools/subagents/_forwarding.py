@@ -69,10 +69,16 @@ class DelegationRegistry:
             if delegation.path != path and delegation.path[: len(path)] == path:
                 origin = delegation.origin
                 if origin is not None and origin.task is not None:
-                    origin.halted = True
-                    origin.reason = reason
-                    origin.task.cancel()
-                if delegation.caller_task is not None and delegation.caller_task is not current:
+                    if not origin.halted:
+                        origin.halted = True
+                        origin.reason = reason
+                    if not origin.task.cancelling():
+                        origin.task.cancel()
+                if (
+                    delegation.caller_task is not None
+                    and delegation.caller_task is not current
+                    and not delegation.caller_task.cancelling()
+                ):
                     delegation.caller_task.cancel()
 
     async def settle_descendants(self, path: tuple[str, ...]) -> None:
@@ -107,10 +113,14 @@ class _Endpoint:
         self.reason = ""
 
     async def halt(self, event: HaltEvent) -> None:
+        if self.halted:
+            # A second cancellation would interrupt the cleanup already in
+            # progress. Keep the first request's reason and let it settle.
+            return
         self.halted = True
         self.reason = event.reason
         DelegationRegistry.for_context(self.parent).cancel_descendants(self.path, event.reason)
-        if self.task is not None:
+        if self.task is not None and not self.task.cancelling():
             self.task.cancel()
 
     def close(self) -> None:
