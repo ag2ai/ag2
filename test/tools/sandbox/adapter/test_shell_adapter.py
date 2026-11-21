@@ -428,6 +428,28 @@ class TestIgnoreWithDirectoryReaders:
         assert check_ignore("grep -r hello src", project, SECRETS, max_entries=5) is not None
         assert check_ignore("grep -r hello src", project, SECRETS, max_entries=100) is None
 
+    async def test_wildcard_with_more_matches_than_the_budget_is_refused(self, project: Path) -> None:
+        for i in range(10):
+            (project / "src" / f"module_{i}.py").write_text("print('hello')\n")
+
+        assert check_ignore("cat src/module_*", project, SECRETS, max_entries=5) is not None
+        assert check_ignore("cat src/module_*", project, SECRETS, max_entries=100) is None
+
+    async def test_recursive_wildcard_is_refused(self, project: Path) -> None:
+        # Its scan is not bounded by the number of matches, so it cannot be checked within the budget.
+        assert check_ignore("cat src/**/app.py", project, SECRETS) is not None
+
+    @pytest.mark.parametrize("command", ["cat {project}/.en*", "diff -N {project}/secret? docs"])
+    async def test_absolute_wildcard_inside_the_workdir_is_checked(self, project: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command.format(project=project))
+
+        assert "Access denied" in result
+
+    async def test_path_that_cannot_be_resolved_is_refused(self, project: Path) -> None:
+        assert check_ignore("cat app.py 'a\x00b'", project, SECRETS) is not None
+
 
 @pytest.mark.asyncio
 class TestShellAdapterAsync:
