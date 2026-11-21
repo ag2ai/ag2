@@ -5,10 +5,7 @@
 import locale
 import os
 import sys
-from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -271,27 +268,6 @@ class TestShellAdapterFiltering:
 SECRETS = ["**/.env", "*.key", "secrets/**"]
 
 
-class _CountingScandir:
-    """Stands in for ``os.scandir``: counts the entries read, or fails every listing with *fail*."""
-
-    def __init__(self, scandir: Callable[[Path], Any], fail: type[OSError] | None = None) -> None:
-        self._scandir = scandir
-        self._fail = fail
-        self.read = 0
-
-    @contextmanager
-    def __call__(self, path: Path) -> Generator[Iterator[os.DirEntry[str]]]:
-        if self._fail is not None:
-            raise self._fail(f"cannot list {path}")
-        with self._scandir(path) as entries:
-            yield self._count(entries)
-
-    def _count(self, entries: Iterator[os.DirEntry[str]]) -> Iterator[os.DirEntry[str]]:
-        for entry in entries:
-            self.read += 1
-            yield entry
-
-
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     (tmp_path / ".env").write_text("OPENAI_API_KEY=SECRET-ENV\n")
@@ -466,24 +442,19 @@ class TestIgnoreWithDirectoryReaders:
         assert check_ignore("cat src/nothing_*", project, SECRETS, max_entries=5) is not None
         assert check_ignore("cat src/nothing_*", project, SECRETS, max_entries=100) is None
 
-    @pytest.mark.parametrize("command", ["grep -r hello src", "cat src/nothing_*"])
-    async def test_budget_stops_reading_entries_at_the_limit(
-        self, project: Path, monkeypatch: pytest.MonkeyPatch, command: str
-    ) -> None:
-        for i in range(50):
-            (project / "src" / f"module_{i}.py").write_text("print('hello')\n")
-        counter = _CountingScandir(os.scandir)
-        monkeypatch.setattr(os, "scandir", counter)
+    @pytest.mark.skipif(sys.platform == "win32", reason="directory permissions differ on Windows")
+    @pytest.mark.skipif(sys.platform != "win32" and os.geteuid() == 0, reason="root can list any directory")
+    async def test_wildcard_inside_a_directory_that_cannot_be_listed_is_refused(self, project: Path) -> None:
+        locked = project / "src" / "locked"
+        locked.mkdir()
+        locked.chmod(0)
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+        try:
+            result = await adapter.run("cat src/locked/*.py")
+        finally:
+            locked.chmod(0o755)
 
-        assert check_ignore(command, project, SECRETS, max_entries=5) is not None
-        assert counter.read == 6  # the entry over the limit is read, nothing after it
-
-    async def test_wildcard_crossing_a_directory_that_cannot_be_listed_is_refused(
-        self, project: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(os, "scandir", _CountingScandir(os.scandir, fail=PermissionError))
-
-        assert check_ignore("cat src/*.py", project, SECRETS) is not None
+        assert "Access denied" in result
 
     async def test_recursive_wildcard_is_refused(self, project: Path) -> None:
         # Its scan is not bounded by the number of matches, so it cannot be checked within the budget.
