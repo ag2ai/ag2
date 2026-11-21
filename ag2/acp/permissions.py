@@ -6,8 +6,11 @@
 ACP leaves the choice to the user: the client shows the agent's options and
 answers with the ``option_id`` of the one picked. Under ``"ask"`` the request
 goes to the human as an :class:`~.events.ACPPermissionRequest` carrying those
-options, and the answer selects one. ``"auto"`` / ``"deny"`` select the
-one-time option, and the remembered one only when the agent offers no other.
+options. An :class:`~ag2.events.ApprovalChoiceMessage` answer selects the
+option with that id; a plain answer is a yes or no in words and is never
+matched against ids, so the two cannot be mistaken for each other.
+``"auto"`` / ``"deny"`` select the one-time option, and the remembered one
+only when the agent offers no other.
 
 Returns the ``option_id`` to select, or ``None`` when no offered option fits;
 the bridge then answers ``cancelled``.
@@ -17,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from acp import schema
 
-from ag2.events import ApprovalChoice
+from ag2.events import ApprovalChoice, ApprovalChoiceMessage, HumanMessage
 
 from .events import ACPPermissionOption, ACPPermissionRequest, ACPToolLocation
 
@@ -51,8 +54,8 @@ async def resolve_permission_option_id(
     if policy == "deny" or context is None:
         return _first_of_kind(options, "reject_once", "reject_always")
 
-    answer = await context.ask(permission_request(options, tool_call))
-    return _selected(answer.strip(), options)
+    reply = await context.ask_message(permission_request(options, tool_call))
+    return _selected(reply, options)
 
 
 def permission_request(
@@ -71,22 +74,28 @@ def permission_request(
     )
 
 
-def _selected(answer: str, options: list[schema.PermissionOption]) -> str | None:
-    """The option the answer picks; anything unrecognised rejects.
+def _selected(reply: HumanMessage, options: list[schema.PermissionOption]) -> str | None:
+    """The option the reply picks; anything unrecognised rejects.
 
-    Plain approval words are read before ids, so an agent cannot make ``y``
-    mean ``allow_always`` by giving that option the id ``"y"``.
+    A picked choice is matched against ids only, and a plain answer against
+    words only. So an agent cannot make AG-UI's approve button (``"y"``) mean
+    ``allow_always``, nor its refuse button (``"n"``) grant anything, by giving
+    an option that id; and a human picking an option whose id is ``"y"`` gets
+    that option, not a yes.
     """
-    word = answer.lower()
+    if isinstance(reply, ApprovalChoiceMessage):
+        for o in options:
+            if o.option_id == reply.content:
+                return o.option_id
+        return _first_of_kind(options, "reject_once", "reject_always")
+
+    word = reply.content.strip().lower()
     if word in _ALWAYS:
         # With nothing remembered on offer, grant this call only: less than asked, never more.
         return _first_of_kind(options, "allow_always", "allow_once", "reject_once", "reject_always")
     if word in _ONCE:
         # Never widened to allow_always: with nothing one-time to allow, refuse.
         return _first_of_kind(options, "allow_once", "reject_once", "reject_always")
-    for o in options:
-        if o.option_id == answer:
-            return o.option_id
     return _first_of_kind(options, "reject_once", "reject_always")
 
 

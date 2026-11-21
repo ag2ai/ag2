@@ -77,7 +77,7 @@ class ACPPermissionOption:
     """One choice the agent offers in a permission request.
 
     Attributes:
-        option_id: What to answer to select this option.
+        option_id: The ``ApprovalChoiceMessage`` content that selects this option.
         name: The agent's label. It, not ``kind``, says what an ``*_always``
             option covers (for example "Allow for this session").
         kind: ``allow_once``, ``allow_always``, ``reject_once`` or
@@ -106,9 +106,10 @@ class ACPPermissionRequest(ToolApprovalRequest):
     call's agent-authored title, and ``choices`` holds the options as
     transport-neutral choices (``option_id`` and ``name``).
 
-    Answer with the ``option_id`` of the chosen option. A plain approval
-    answer is also accepted and never widened: ``yes`` selects the one-time
-    allow option, ``always`` the remembered one, anything else rejects.
+    Answer with an :class:`~ag2.events.ApprovalChoiceMessage` holding the
+    ``option_id`` of the chosen option. A plain answer is read as a yes or no
+    in words, never as an id, and is never widened: ``yes`` selects the
+    one-time allow option, ``always`` the remembered one, anything else rejects.
 
     Attributes:
         options: The agent's options, in the agent's order.

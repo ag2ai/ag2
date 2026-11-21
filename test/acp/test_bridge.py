@@ -17,7 +17,7 @@ from ag2 import Agent
 from ag2.acp import PermissionPolicy
 from ag2.acp.events import ACPPermissionOption, ACPPermissionRequest, ACPToolLocation
 from ag2.acp.testing import duplex_acp_config
-from ag2.events import ApprovalChoice, HumanInputRequest
+from ag2.events import ApprovalChoice, ApprovalChoiceMessage, HumanInputRequest, HumanMessage
 
 SESSION_ID = "calling-session"
 
@@ -143,7 +143,7 @@ class TestPermission:
         workspace: Path,
         policy: PermissionPolicy,
         options: list[schema.PermissionOption],
-        hitl_hook: Callable[[HumanInputRequest], str] | None = None,
+        hitl_hook: Callable[[HumanInputRequest], str | HumanMessage] | None = None,
         tool_call: schema.ToolCallUpdate = TOOL_CALL,
     ) -> Any:
         async def act(conn: AgentSideConnection, sid: str) -> schema.RequestPermissionResponse:
@@ -155,9 +155,9 @@ class TestPermission:
     async def test_the_human_is_asked_with_the_agents_request(self, tmp_path: Path) -> None:
         asked: list[HumanInputRequest] = []
 
-        def hook(event: HumanInputRequest) -> str:
+        def hook(event: HumanInputRequest) -> HumanMessage:
             asked.append(event)
-            return "opt-c"
+            return ApprovalChoiceMessage("opt-c")
 
         await self.ask_permission(tmp_path, "ask", GEMINI_ORDER, hook)
 
@@ -199,10 +199,22 @@ class TestPermission:
     @pytest.mark.parametrize(
         ("reply", "options", "outcome"),
         [
-            pytest.param("opt-a", GEMINI_ORDER, selected("opt-a"), id="option id: allow_once"),
-            pytest.param("opt-b", GEMINI_ORDER, selected("opt-b"), id="option id: allow_always"),
-            pytest.param("opt-c", GEMINI_ORDER, selected("opt-c"), id="option id: reject_once"),
-            pytest.param("opt-d", [ALLOW, REJECT_ALWAYS], selected("opt-d"), id="option id: reject_always"),
+            pytest.param(ApprovalChoiceMessage("opt-a"), GEMINI_ORDER, selected("opt-a"), id="picked: allow_once"),
+            pytest.param(ApprovalChoiceMessage("opt-b"), GEMINI_ORDER, selected("opt-b"), id="picked: allow_always"),
+            pytest.param(ApprovalChoiceMessage("opt-c"), GEMINI_ORDER, selected("opt-c"), id="picked: reject_once"),
+            pytest.param(
+                ApprovalChoiceMessage("opt-d"), [ALLOW, REJECT_ALWAYS], selected("opt-d"), id="picked: reject_always"
+            ),
+            # A picked id is that option, even when it reads as an approval word.
+            pytest.param(
+                ApprovalChoiceMessage("y"),
+                [ALLOW, REJECT.model_copy(update={"option_id": "y"})],
+                selected("y"),
+                id="picked rejection whose id is 'y'",
+            ),
+            pytest.param(
+                ApprovalChoiceMessage("opt-unknown"), [ALLOW, REJECT], selected("opt-c"), id="picked unknown id"
+            ),
             # GHSA-3r6w-7pcg-c4x2: a plain yes was sent as the agent's first allow
             # option, which Gemini CLI makes allow_always.
             *(
@@ -219,16 +231,23 @@ class TestPermission:
                 "y",
                 [ALLOW_ALWAYS.model_copy(update={"option_id": "y"}), ALLOW, REJECT],
                 selected("opt-a"),
-                id="approval word beats an option id",
+                id="yes word is not an option id",
+            ),
+            pytest.param(
+                "n",
+                [ALLOW_ALWAYS.model_copy(update={"option_id": "n"}), ALLOW, REJECT],
+                selected("opt-c"),
+                id="refusal word is not an option id",
             ),
             *(
                 pytest.param(reply, [ALLOW, REJECT_ALWAYS, REJECT], selected("opt-c"), id=f"rejects {reply!r}")
-                for reply in ["", "no", "n", "maybe", "opt-unknown"]
+                # A plain answer is a word, never an id: "opt-a" names an option but is not a pick.
+                for reply in ["", "no", "n", "maybe", "opt-unknown", "opt-a"]
             ),
         ],
     )
     async def test_the_answer_selects_an_option(
-        self, tmp_path: Path, reply: str, options: list[schema.PermissionOption], outcome: Any
+        self, tmp_path: Path, reply: str | HumanMessage, options: list[schema.PermissionOption], outcome: Any
     ) -> None:
         assert await self.ask_permission(tmp_path, "ask", options, lambda event: reply) == outcome
 

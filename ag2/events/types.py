@@ -309,3 +309,14 @@ class HumanMessage(BaseEvent):
             # Set parent_id after creation to hide this option from public API
             msg.parent_id = parent_id
         return msg
+
+
+class ApprovalChoiceMessage(HumanMessage):
+    """A human's answer to a :class:`ToolApprovalRequest` that picks one of its ``choices``.
+
+    ``content`` is the picked :attr:`ApprovalChoice.value`, exactly as offered.
+    A plain :class:`HumanMessage` is a yes or no in words; this one is a
+    selection, so the asker matches it against its choices and never reads it
+    as a word. A choice whose value happens to be ``"y"`` or ``"n"`` therefore
+    means that choice, not yes or no.
+    """

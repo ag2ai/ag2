@@ -320,34 +320,49 @@ request. `permission_policy` controls the response:
 Under `"ask"`, the hook receives an `ACPPermissionRequest`: the agent's request
 as it sent it, with the options it offers (`option_id`, `name`, `kind`), the
 tool call's `kind`, `locations` and `raw_input`, and its title as `content`.
-Answer with the `option_id` of the option to select:
+To select an option, answer with an `ApprovalChoiceMessage` holding its
+`option_id`:
 
 ```python linenums="1"
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 from ag2.acp.events import ACPPermissionRequest
-from ag2.events import HumanInputRequest
+from ag2.events import ApprovalChoiceMessage, HumanInputRequest, HumanMessage
 
 
-def choose(event: HumanInputRequest) -> str:
+def choose(event: HumanInputRequest) -> str | HumanMessage:
     if isinstance(event, ACPPermissionRequest):
         for i, option in enumerate(event.options, 1):
             print(f"{i}. {option.name} [{option.kind}]")
-        return event.options[int(input(f"{event.content}: ")) - 1].option_id
+        while True:
+            reply = input(f"{event.content} [1-{len(event.options)}]: ")
+            try:
+                picked = int(reply)
+            except ValueError:
+                picked = 0
+            if 1 <= picked <= len(event.options):
+                return ApprovalChoiceMessage(event.options[picked - 1].option_id)
+            print(f"Enter a number from 1 to {len(event.options)}.")
     return input(event.content)
 
 
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/repo"), hitl_hook=choose)
 ```
 
-`ACPPermissionRequest` is a `ToolApprovalRequest`, so a hook or UI that answers
-any tool approval works too, without being told about the agent's options: a
-plain **yes** (or AG-UI's approve button) selects the agent's one-time allow
-option, whatever order the agent lists its options in, **always** selects the
-remembered one (for example Gemini CLI's *Allow for this session*), and any
-other answer rejects. Served over [AG-UI](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question),
+The range check matters: Python reads `options[-1]` as the last option, so an
+unchecked `0` would select an option nobody picked.
+
+A plain string answer is a yes or no in words and is never matched against
+option ids, so an option whose id happens to read `"y"` or `"n"` cannot be
+selected by accident. `ACPPermissionRequest` is a `ToolApprovalRequest`, so a
+hook or UI that answers any tool approval works too, without being told about
+the agent's options: a plain **yes** (or AG-UI's approve button) selects the
+agent's one-time allow option, whatever order the agent lists its options in,
+**always** selects the remembered one (for example Gemini CLI's *Allow for this
+session*), and any other answer, AG-UI's refuse button included, rejects.
+Served over [AG-UI](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question),
 the interrupt's `responseSchema` lists the agent's options, so the client can
-offer each one.
+offer each one; resuming with an option's value selects exactly that option.
 
 `"auto"` and `"deny"` select the one-time option, and fall back to the
 remembered one only when the agent offers nothing else.

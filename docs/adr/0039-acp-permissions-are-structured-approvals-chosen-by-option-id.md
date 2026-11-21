@@ -33,25 +33,33 @@ boolean answer.
    `ACPPermissionRequest(ToolApprovalRequest)`** carrying the agent's options,
    the tool call's `kind`, `locations` and `raw_input`, and its title as
    `content`. AG2 renders nothing itself; the hook or transport does.
-2. **The answer is the `option_id` of the chosen option**, and that option is
-   selected, rejections included.
-3. **A plain approval answer is never widened.** So that hooks and UIs that
-   only know tool approvals keep working, `approval_required()`'s words are
-   also accepted: `yes` / `y` / `1` select the one-time allow option (or reject
-   if there is none), `always` selects the remembered one, anything else
-   rejects. These words are read before option ids, so an agent cannot make
-   AG-UI's approve button (`"y"`) mean `allow_always` by giving that option the
-   id `"y"`.
+2. **A selection is typed, not a string.** The human picks an option with an
+   `ApprovalChoiceMessage(HumanMessage)` holding its `option_id`, and that
+   option is selected, rejections included. Ids and words share one string
+   space and the agent picks the ids, so a selection and a yes or no must not
+   be told apart by their text: an agent offering an allow option with id
+   `"n"` would turn AG-UI's refuse button into a grant, and a rejecting option
+   with id `"y"` would read as a yes. `Context.ask_message()` returns the whole
+   reply so the asker can see its type.
+3. **A plain approval answer is a word, never an id, and is never widened.**
+   So that hooks and UIs that only know tool approvals keep working,
+   `approval_required()`'s words are accepted: `yes` / `y` / `1` select the
+   one-time allow option (or reject if there is none), `always` selects the
+   remembered one, anything else rejects.
 4. **`"auto"` and `"deny"` select the one-time option**, and the remembered one
    only when the agent offers no other. The agent's option order never decides.
 5. **`ToolApprovalRequest.choices` (a list of `ApprovalChoice(value, label)`) is the
    transport-neutral way to offer more than yes or no.** AG-UI turns it into a
    titled constant per choice in the interrupt's `responseSchema`, beside the
-   boolean. `ACPPermissionRequest` fills it from its options, so `ag_ui` needs no
-   knowledge of ACP.
+   boolean. A resume carrying a boolean reaches the asker as `"y"` / `"n"`, and
+   one carrying a string naming a choice as an `ApprovalChoiceMessage`, so the
+   kind of answer survives the transport. `ACPPermissionRequest` fills
+   `choices` from its options, so `ag_ui` needs no knowledge of ACP.
 
 ## Consequences
 
+- A hook that returns an option's id as a plain string rejects; it must
+  return an `ApprovalChoiceMessage` to select it.
 - A hook that only prints `content` shows the title, not the options. Showing
   them is the hook's or UI's job; the fields are on the event.
 - The words `ok`, `allow`, `approve`, `allow_once` and `allow_always`, accepted

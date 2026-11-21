@@ -55,7 +55,14 @@ from anyio import BrokenResourceError, ClosedResourceError, create_memory_object
 from anyio.streams.memory import MemoryObjectSendStream
 
 from ag2.annotations import Context
-from ag2.events import ApprovalChoice, HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
+from ag2.events import (
+    ApprovalChoice,
+    ApprovalChoiceMessage,
+    HumanInputRequest,
+    HumanMessage,
+    ToolApprovalRequest,
+    UsageEvent,
+)
 from ag2.events import BaseEvent as AG2Event
 from ag2.exceptions import AG2Error, HumanInputTimeoutError
 
@@ -475,7 +482,7 @@ class ServedTurn:
         """Taken by `ServedTurns.ask` for the question being put."""
         self._task: asyncio.Task[None] | None = None
         self._outstanding: Interrupt | None = None
-        self._answer: asyncio.Future[str] | None = None
+        self._answer: asyncio.Future[str | bool] | None = None
 
     @property
     def thread_id(self) -> str:
@@ -511,7 +518,7 @@ class ServedTurn:
             self.release()
             raise
 
-    def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str]") -> None:
+    def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str | bool]") -> None:
         """Park the turn on `interrupt` until `answer` is resolved.
 
         Called by `ServedTurns.ask` under `asking`: one question is outstanding per turn.
@@ -525,8 +532,8 @@ class ServedTurn:
         self._outstanding = None
         self._answer = None
 
-    def deliver(self, payload: str) -> None:
-        """Hand `payload` to the waiting call."""
+    def deliver(self, payload: str | bool) -> None:
+        """Hand `payload` to the waiting call; see `answer_from` for what it may be."""
         assert self._answer is not None, "deliver() on a turn that is not waiting"
         # Forgotten synchronously, not in the waiting coroutine's own cleanup:
         # that coroutine does not resume until the loop next runs it, and until
@@ -580,7 +587,7 @@ class ServedTurns:
         self._live.add(turn)
         task.add_done_callback(_Discard(self, turn))
 
-    async def ask(self, turn: ServedTurn, interrupt_for: "Callable[[datetime], Interrupt]") -> str:
+    async def ask(self, turn: ServedTurn, interrupt_for: "Callable[[datetime], Interrupt]") -> str | bool:
         """Put a question to the client, hold `turn`, and return the answer.
 
         Concurrent askers on one turn — parallel tool calls, parallel subtasks —
@@ -593,8 +600,8 @@ class ServedTurns:
         async with turn.asking:
             return await self._put(turn, interrupt_for(since))
 
-    async def _put(self, turn: ServedTurn, interrupt: Interrupt) -> str:
-        answer: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    async def _put(self, turn: ServedTurn, interrupt: Interrupt) -> str | bool:
+        answer: asyncio.Future[str | bool] = asyncio.get_running_loop().create_future()
         turn.suspend(interrupt, answer)
         # Held before the question is emitted, never after: the exchange ends on
         # that very event, so a resume can be in flight the moment it lands, and
@@ -789,7 +796,7 @@ class ClientInterrupter:
 
     async def __call__(self, event: HumanInputRequest, context: Context) -> "AG2Event | None":
         answer = await self._turns.ask(self._turn, functools.partial(self.interrupt_for, event))
-        await context.send(HumanMessage.ensure_message(answer, parent_id=event.id))
+        await context.send(reply_for(event, answer))
         return None
 
     def interrupt_for(self, event: HumanInputRequest, since: datetime | None = None) -> Interrupt:
@@ -863,23 +870,44 @@ def resume_entry(incoming: RunAgentInput) -> "list[ResumeEntry]":
     return list(incoming.resume or ())
 
 
-def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> str:
-    """The answer `entry` carries, as the string the waiting call will read.
+def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> str | bool:
+    """The answer `entry` carries, for the waiting call to turn into a reply.
 
     A `bool` is accepted for an approval and only for an approval; anything else
-    raises `ResumeRefusedError` under `PAYLOAD_REFUSED`.
+    raises `ResumeRefusedError` under `PAYLOAD_REFUSED`. It is handed on as a
+    `bool`, not as a word: whether the client pressed approve or picked a
+    choice whose value is `"y"` is told apart by `reply_for`, which knows the
+    request's choices.
     """
-    # The client drew two buttons and has a bool; the approval middleware reads
-    # words. Translating here beats teaching either side the other's vocabulary.
     if isinstance(entry.payload, bool):
         if interrupt.reason == TOOL_CALL_REASON:
-            return "y" if entry.payload else "n"
+            return entry.payload
     elif isinstance(entry.payload, str):
         return entry.payload
     raise ResumeRefusedError(
         PAYLOAD_REFUSED,
         f"interrupt {interrupt.id} asked for a string answer, got {type(entry.payload).__name__}",
     )
+
+
+def reply_for(event: HumanInputRequest, answer: str | bool) -> HumanMessage:
+    """The reply to `event` that `answer` makes, keeping the kind of answer the client gave.
+
+    The approve and refuse buttons are a yes or no: `true` and `false` reach the
+    asker as the words `"y"` and `"n"` the approval middleware reads. A string
+    naming one of the request's `choices` is that choice, picked: an
+    `ApprovalChoiceMessage`, so the asker never reads it as a word. Any other
+    string is an ordinary answer.
+    """
+    if isinstance(answer, bool):
+        # The client drew two buttons and has a bool; the approval middleware reads
+        # words. Translating here beats teaching either side the other's vocabulary.
+        reply = HumanMessage("y" if answer else "n")
+    elif isinstance(event, ToolApprovalRequest) and any(c.value == answer for c in event.choices):
+        reply = ApprovalChoiceMessage(answer)
+    else:
+        reply = HumanMessage(answer)
+    return HumanMessage.ensure_message(reply, parent_id=event.id)
 
 
 @dataclass(frozen=True, slots=True)

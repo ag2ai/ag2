@@ -17,7 +17,7 @@ from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context
 from ag2.ag_ui import NOT_PROVEN, TOOL_CALL_REASON, AGUIStream
-from ag2.events import ApprovalChoice, ToolApprovalRequest, ToolCallEvent
+from ag2.events import ApprovalChoice, ApprovalChoiceMessage, HumanMessage, ToolApprovalRequest, ToolCallEvent
 from ag2.middleware import ToolExecution, ToolResultType, approval_required
 from ag2.testing import TestConfig
 from test.ag_ui.harness import only, outcome_of, types_of
@@ -156,13 +156,13 @@ class TestItBehavesLikeAnyOtherInterrupt:
 CHOICES = [ApprovalChoice("opt-b", "Allow for this session"), ApprovalChoice("opt-a", "Allow")]
 
 
-def choosing_agent() -> tuple[Agent, list[str]]:
-    """An agent whose one tool asks an approval offering `CHOICES`, and a record of the answers."""
-    answers: list[str] = []
+def choosing_agent() -> tuple[Agent, list[HumanMessage]]:
+    """An agent whose one tool asks an approval offering `CHOICES`, and a record of the replies."""
+    answers: list[HumanMessage] = []
 
     async def offer(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
         request = ToolApprovalRequest("Run it?", tool_call_id=event.id, choices=CHOICES)
-        answers.append(await context.ask(request))
+        answers.append(await context.ask_message(request))
         return await call_next(event, context)
 
     agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="run", arguments="{}"), "all done"))
@@ -209,17 +209,21 @@ class TestChoices:
     @pytest.mark.parametrize(
         ("payload", "received"),
         [
-            pytest.param("opt-b", "opt-b", id="a choice"),
-            # The approve button is a plain yes, never widened to the first choice.
-            pytest.param(True, "y", id="approve button"),
-            pytest.param(False, "n", id="refuse button"),
+            # A choice arrives as picked, so the asker never reads it as a word.
+            pytest.param("opt-b", ApprovalChoiceMessage("opt-b"), id="a choice"),
+            # The buttons are a plain yes or no, never widened to the first choice.
+            pytest.param(True, HumanMessage("y"), id="approve button"),
+            pytest.param(False, HumanMessage("n"), id="refuse button"),
+            # A string that is not one of the choices is an ordinary answer.
+            pytest.param("always", HumanMessage("always"), id="not a choice"),
         ],
     )
-    async def test_the_answer_reaches_the_asker(self, payload: str | bool, received: str) -> None:
+    async def test_the_answer_reaches_the_asker(self, payload: str | bool, received: HumanMessage) -> None:
         agent, answers = choosing_agent()
         app = app_for(AGUIStream(agent))
 
         interrupt = await ask_once(app)
         await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, payload)))
 
-        assert answers == [received]
+        [reply] = answers
+        assert (type(reply), reply.content) == (type(received), received.content)

@@ -582,7 +582,10 @@ not have to know which words this server accepts:
 An approval that accepts more than yes or no lists its other answers in
 `ToolApprovalRequest.choices`, and the interrupt's `responseSchema` then offers
 each one as a titled constant beside the boolean, so a client can draw a button
-per choice and resume with its value. A permission request from an
+per choice and resume with its value. The two kinds of answer stay apart: a
+boolean reaches the asker as a plain yes or no, and a string naming a choice as
+an `ApprovalChoiceMessage` picking it, even when the value reads `"y"` or
+`"n"`. A permission request from an
 [ACP agent](/docs/user-guide/acp/client#permissions-human-in-the-loop) does this
 with the agent's own options:
 
