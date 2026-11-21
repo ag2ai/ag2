@@ -497,7 +497,6 @@ class _MustNotConstruct:
 
 class TestUntrustedToolData:
     async def test_tool_result_with_marker_keys_is_not_reconstructed(self, redis_stream):
-        """GHSA-whf5-5qcj-v9m8: a tool returning ``__dataclass__`` must not run a constructor."""
         profile = {
             "__dataclass__": f"{__name__}._MustNotConstruct",
             "data": {"args": ["id"]},
