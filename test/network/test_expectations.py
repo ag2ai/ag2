@@ -31,16 +31,21 @@ from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_EXPECTATION_VIOLATED,
     EV_TEXT,
+    WORKFLOW_TYPE,
+    AgentTarget,
     Envelope,
+    ExpectedTurn,
     Hub,
     Resume,
     Rule,
+    TransitionGraph,
 )
 from ag2.network.adapters.consulting import CONSULTING_TYPE
 from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
 )
+from ag2.network.adapters.discussion import DISCUSSION_TYPE
 from ag2.network.channel import (
     ChannelManifest,
     ChannelMetadata,
@@ -62,6 +67,9 @@ from ag2.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
+    TurnWithinEvaluator,
+    Violation,
+    WarnHandler,
 )
 from ag2.network.views.builtin import WindowedSummary
 from ag2.testing import TestConfig
@@ -79,6 +87,14 @@ async def _silent_handler(_envelope: Envelope) -> None:
     Used to drive expectation paths that depend on a participant
     *not* responding (e.g. ``acks_within`` / ``reply_within`` tests).
     """
+
+
+class _CaptureHandler:
+    def __init__(self) -> None:
+        self.received: list[Envelope] = []
+
+    async def __call__(self, envelope: Envelope) -> None:
+        self.received.append(envelope)
 
 
 def _conv_metadata(
@@ -127,6 +143,7 @@ def _ctx(
     *,
     wal: list[Envelope] | None = None,
     now: str = "2026-01-01T00:01:00+00:00",
+    expected_turn: ExpectedTurn | None = None,
 ) -> ExpectationContext:
     now_dt = datetime.fromisoformat(now)
     return ExpectationContext(
@@ -135,6 +152,7 @@ def _ctx(
         wal=wal or [],
         now_iso=now,
         now_seconds=now_dt.timestamp(),
+        expected_turn=expected_turn,
     )
 
 
@@ -476,3 +494,468 @@ async def test_audit_log_writer_round_trips() -> None:
         {"at": "2026-01-01T00:00:00", "kind": "test", "n": 1},
         {"at": "2026-01-01T00:00:01", "kind": "test", "n": 2},
     ]
+
+
+class TestTurnWithinEvaluator:
+    def test_fresh_channel_anchors_on_creation_and_fires_after_threshold(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice")
+
+        violation = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(metadata, now="2026-01-01T00:01:01+00:00", expected_turn=expected),
+        )
+
+        assert violation is not None
+        assert violation.violator_ids == ["alice"]
+        assert violation.detail["threshold_seconds"] == 60
+        assert violation.detail["elapsed_seconds"] == 61
+
+    def test_triggering_envelope_resets_timer_for_new_expected_speaker(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        first = _envelope("alice", "first", "2026-01-01T00:00:00+00:00")
+        latest = _envelope("bob", "latest", "2026-01-01T00:00:50+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice", triggering_envelope_id=latest.envelope_id)
+
+        before_new_deadline = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(
+                metadata,
+                wal=[first, latest],
+                now="2026-01-01T00:01:20+00:00",
+                expected_turn=expected,
+            ),
+        )
+        at_new_deadline = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(
+                metadata,
+                wal=[first, latest],
+                now="2026-01-01T00:01:50+00:00",
+                expected_turn=expected,
+            ),
+        )
+
+        assert before_new_deadline is None
+        assert at_new_deadline is not None
+        assert at_new_deadline.violator_ids == ["alice"]
+
+    def test_missing_triggering_envelope_does_not_fall_back_to_creation(self, caplog) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="nobody", triggering_envelope_id="missing-trigger")
+
+        violation = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(metadata, now="2026-01-01T01:00:00+00:00", expected_turn=expected),
+        )
+
+        assert violation is None
+        assert "s1" in caplog.text
+        assert "missing-trigger" in caplog.text
+
+    def test_exact_threshold_fires_and_just_under_is_silent(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice")
+
+        exact = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(metadata, now="2026-01-01T00:01:00+00:00", expected_turn=expected),
+        )
+        under = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(metadata, now="2026-01-01T00:00:59.999000+00:00", expected_turn=expected),
+        )
+
+        assert exact is not None
+        assert exact.violator_ids == ["alice"]
+        assert under is None
+
+
+@pytest.mark.asyncio
+async def test_warn_handler_delivers_violation_only_to_violator() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(
+        MemoryKnowledgeStore(),
+        clock=clock,
+        ttl_sweep_interval=0,
+        expectation_sweep_interval=0,
+    )
+    assert isinstance(hub._expectation_evaluators["turn_within"], TurnWithinEvaluator)
+    assert isinstance(hub._violation_handlers["warn"], WarnHandler)
+
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id])
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+
+    bob_capture = _CaptureHandler()
+    alice_capture = _CaptureHandler()
+    bob.on_envelope(bob_capture)
+    alice.on_envelope(alice_capture)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "hello"},
+        )
+    )
+    clock.advance(121)
+    await hub._expectation_tick()
+    await asyncio.sleep(0.05)
+
+    wal = await hub.read_wal(channel.channel_id)
+    violations = [e for e in wal if e.event_type == EV_EXPECTATION_VIOLATED]
+    assert len(violations) == 1
+    assert violations[0].audience == [bob.agent_id]
+    assert violations[0].event_data["violators"] == [bob.agent_id]
+    assert any(e.envelope_id == violations[0].envelope_id for e in bob_capture.received)
+    assert not any(e.event_type == EV_EXPECTATION_VIOLATED for e in alice_capture.received)
+
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_workflow_turn_timeout_auto_closes_channel() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(
+        MemoryKnowledgeStore(),
+        clock=clock,
+        ttl_sweep_interval=0,
+        expectation_sweep_interval=0,
+    )
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id])
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+    bob.on_envelope(_silent_handler)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "bob, your turn"},
+        )
+    )
+    assert getattr(hub._adapter_states[channel.channel_id], "expected_next_speaker") == bob.agent_id
+
+    clock.advance(601)
+    await hub._expectation_tick()
+
+    final = await hub.get_channel(channel.channel_id)
+    assert final.state == ChannelState.CLOSED
+    assert "expectation_violated:turn_within" in final.close_reason
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_workflow_unknown_expected_speaker_still_auto_closes() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(
+        MemoryKnowledgeStore(),
+        clock=clock,
+        ttl_sweep_interval=0,
+        expectation_sweep_interval=0,
+    )
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph(initial_speaker=alice.agent_id, default_target=AgentTarget("nobody"))
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+    bob.on_envelope(_silent_handler)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "handoff to an unknown agent"},
+        )
+    )
+    assert getattr(hub._adapter_states[channel.channel_id], "expected_next_speaker") == "nobody"
+
+    clock.advance(601)
+    await hub._expectation_tick()
+
+    final = await hub.get_channel(channel.channel_id)
+    assert final.state == ChannelState.CLOSED
+    assert "expectation_violated:turn_within" in final.close_reason
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_workflow_turn_warn_and_auto_close_thresholds_deduplicate() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(
+        MemoryKnowledgeStore(),
+        clock=clock,
+        ttl_sweep_interval=0,
+        expectation_sweep_interval=0,
+    )
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id])
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": graph.to_dict()},
+    )
+    bob_capture = _CaptureHandler()
+    bob.on_envelope(bob_capture)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "waiting for bob"},
+        )
+    )
+
+    clock.advance(121)
+    await hub._expectation_tick()
+    await asyncio.sleep(0.05)
+    await hub._expectation_tick()
+    warn_wal = await hub.read_wal(channel.channel_id)
+    warn_events = [e for e in warn_wal if e.event_type == EV_EXPECTATION_VIOLATED]
+    assert len(warn_events) == 1
+    detail = warn_events[0].event_data.get("detail")
+    assert isinstance(detail, dict)
+    assert detail.get("threshold_seconds") == 120
+    assert hub._active_channels[channel.channel_id].state == ChannelState.ACTIVE
+
+    clock.advance(480)
+    await hub._expectation_tick()
+
+    final = await hub.get_channel(channel.channel_id)
+    assert final.state == ChannelState.CLOSED
+    assert "expectation_violated:turn_within" in final.close_reason
+    final_wal = await hub.read_wal(channel.channel_id)
+    assert sum(e.event_type == EV_EXPECTATION_VIOLATED for e in final_wal) == 1
+    assert sum(e.event_type == EV_EXPECTATION_VIOLATED for e in bob_capture.received) == 1
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_expectation_tick_uses_consistent_state_and_wal_snapshot() -> None:
+    """A concurrent reply cannot pair fresh WAL with stale turn state."""
+
+    class _BlockingWalReadStore(MemoryKnowledgeStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block_next_wal_read = False
+            self.read_entered = asyncio.Event()
+            self.allow_read = asyncio.Event()
+
+        async def read(self, path: str) -> str | None:
+            if self.block_next_wal_read and path.endswith("/wal.jsonl"):
+                self.block_next_wal_read = False
+                self.read_entered.set()
+                await self.allow_read.wait()
+            return await super().read(path)
+
+    class _CapturingTurnEvaluator:
+        name = "turn_within"
+
+        def __init__(self) -> None:
+            self.contexts: list[ExpectationContext] = []
+
+        def evaluate(self, expectation: Expectation, context: ExpectationContext) -> Violation | None:
+            self.contexts.append(context)
+            return TurnWithinEvaluator().evaluate(expectation, context)
+
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    store = _BlockingWalReadStore()
+    hub = await Hub.open(store, clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    channel = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": TransitionGraph.round_robin([alice.agent_id, bob.agent_id]).to_dict()},
+    )
+    bob.on_envelope(_silent_handler)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "bob's turn"},
+        )
+    )
+    clock.advance(601)
+
+    capturing_evaluator = _CapturingTurnEvaluator()
+    hub.register_expectation_evaluator(capturing_evaluator)
+    store.block_next_wal_read = True
+    tick = asyncio.create_task(hub._expectation_tick())
+    await store.read_entered.wait()
+    post = asyncio.create_task(
+        hub.post_envelope(
+            Envelope(
+                channel_id=channel.channel_id,
+                sender_id=bob.agent_id,
+                audience=None,
+                event_type=EV_TEXT,
+                event_data={"text": "bob replied"},
+            )
+        )
+    )
+    await asyncio.sleep(0)
+    store.allow_read.set()
+    await asyncio.gather(tick, post, return_exceptions=True)
+
+    assert len(capturing_evaluator.contexts) == 2
+    for context in capturing_evaluator.contexts:
+        text_envelopes = [envelope for envelope in context.wal if envelope.event_type == EV_TEXT]
+        assert text_envelopes
+        latest_speaker = text_envelopes[-1].sender_id
+        expected_next_speaker = alice.agent_id if latest_speaker == bob.agent_id else bob.agent_id
+        assert getattr(context.state, "expected_next_speaker") == expected_next_speaker
+
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_turn_within_deduplicates_per_turn_not_per_participant() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(MemoryKnowledgeStore(), clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    channel = await alice.open(type=DISCUSSION_TYPE, target=[bob.agent_id])
+
+    async def post_text(sender_id: str, text: str) -> None:
+        await hub.post_envelope(
+            Envelope(
+                channel_id=channel.channel_id,
+                sender_id=sender_id,
+                audience=None,
+                event_type=EV_TEXT,
+                event_data={"text": text},
+            )
+        )
+
+    await post_text(alice.agent_id, "first turn")
+    clock.advance(121)
+    await hub._expectation_tick()
+    wal = await hub.read_wal(channel.channel_id)
+    violations = [envelope for envelope in wal if envelope.event_type == EV_EXPECTATION_VIOLATED]
+    assert len(violations) == 1
+    assert violations[0].audience == [bob.agent_id]
+    await hub._expectation_tick()
+    wal = await hub.read_wal(channel.channel_id)
+    assert sum(envelope.event_type == EV_EXPECTATION_VIOLATED for envelope in wal) == 1
+
+    await post_text(bob.agent_id, "second turn")
+    await post_text(alice.agent_id, "third turn")
+    clock.advance(121)
+    await hub._expectation_tick()
+
+    wal = await hub.read_wal(channel.channel_id)
+    violations = [envelope for envelope in wal if envelope.event_type == EV_EXPECTATION_VIOLATED]
+    assert len(violations) == 2
+    for envelope in violations:
+        assert envelope.event_data["violators"] == [bob.agent_id]
+        detail = envelope.event_data.get("detail")
+        assert isinstance(detail, dict)
+        assert detail.get("threshold_seconds") == 120
+
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_turn_within_warns_for_initial_speaker_on_fresh_channels() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(MemoryKnowledgeStore(), clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+
+    discussion = await alice.open(type=DISCUSSION_TYPE, target=[bob.agent_id])
+    workflow = await alice.open(
+        type=WORKFLOW_TYPE,
+        target=[bob.agent_id],
+        knobs={"graph": TransitionGraph.round_robin([alice.agent_id, bob.agent_id]).to_dict()},
+    )
+    assert not any(envelope.event_type == EV_TEXT for envelope in await hub.read_wal(discussion.channel_id))
+    assert not any(envelope.event_type == EV_TEXT for envelope in await hub.read_wal(workflow.channel_id))
+    discussion_expected = hub._adapters[(DISCUSSION_TYPE, 1)].expected_next(
+        hub._channels[discussion.channel_id], hub._adapter_states[discussion.channel_id]
+    )
+    workflow_expected = hub._adapters[(WORKFLOW_TYPE, 1)].expected_next(
+        hub._channels[workflow.channel_id], hub._adapter_states[workflow.channel_id]
+    )
+    assert discussion_expected is not None
+    assert workflow_expected is not None
+    assert discussion_expected.triggering_envelope_id is None
+    assert workflow_expected.triggering_envelope_id is None
+
+    clock.advance(121)
+    await hub._expectation_tick()
+
+    for channel_id in (discussion.channel_id, workflow.channel_id):
+        wal = await hub.read_wal(channel_id)
+        violations = [envelope for envelope in wal if envelope.event_type == EV_EXPECTATION_VIOLATED]
+        assert len(violations) == 1
+        assert violations[0].event_data["expectation"] == "turn_within"
+        assert violations[0].event_data["violators"] == [alice.agent_id]
+        detail = violations[0].event_data.get("detail")
+        assert isinstance(detail, dict)
+        assert detail.get("threshold_seconds") == 120
+
+    await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_discussion_adapter_turn_warn_targets_current_expected_speaker() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(MemoryKnowledgeStore(), clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    alice = await hub.register(_agent("alice"))
+    bob = await hub.register(_agent("bob"))
+    channel = await alice.open(type=DISCUSSION_TYPE, target=[bob.agent_id])
+
+    bob_capture = _CaptureHandler()
+    alice_capture = _CaptureHandler()
+    bob.on_envelope(bob_capture)
+    alice.on_envelope(alice_capture)
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel.channel_id,
+            sender_id=alice.agent_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": "waiting for bob"},
+        )
+    )
+    assert hub._adapter_states[channel.channel_id].expected_next_speaker == bob.agent_id
+
+    clock.advance(121)
+    await hub._expectation_tick()
+    await asyncio.sleep(0.05)
+
+    wal = await hub.read_wal(channel.channel_id)
+    violations = [envelope for envelope in wal if envelope.event_type == EV_EXPECTATION_VIOLATED]
+    assert len(violations) == 1
+    assert violations[0].audience == [bob.agent_id]
+    assert violations[0].event_data["violators"] == [bob.agent_id]
+    assert any(envelope.envelope_id == violations[0].envelope_id for envelope in bob_capture.received)
+    assert not any(envelope.event_type == EV_EXPECTATION_VIOLATED for envelope in alice_capture.received)
+
+    await hub.close()

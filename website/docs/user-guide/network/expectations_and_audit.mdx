@@ -13,14 +13,14 @@ The hub enforces governance and surfaces observability through a few layered sea
 
 ## Evaluators
 
-Three evaluators ship today, addressed by name in adapter manifests:
+Four evaluators ship today, addressed by name in adapter manifests:
 
 | Name | Class | Threshold |
 |---|---|---|
 | `#!python "acks_within"` | `#!python AcksWithinEvaluator` | All invitees must ack within `params["seconds"]` of channel creation. |
 | `#!python "reply_within"` | `#!python ReplyWithinEvaluator` | The respondent must reply within `params["seconds"]` of the initiator's first send (consulting only). |
 | `#!python "max_silence"` | `#!python MaxSilenceEvaluator` | No participant may go silent for longer than `params["seconds"]`. |
-| `#!python "turn_within"` | (composes from the above) | The next speaker must speak within `params["seconds"]` of being scheduled. |
+| `#!python "turn_within"` | `#!python TurnWithinEvaluator` | The next speaker must speak within `params["seconds"]` of being scheduled. |
 
 Each evaluator implements:
 
@@ -62,6 +62,7 @@ expectations = [
 |---|---|---|
 | `#!python "audit"` | `#!python AuditHandler` | Write to the audit log only. Channel continues. |
 | `#!python "notify_channel"` | `#!python NotifyChannelHandler` | Post `#!python EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `#!python "warn"` | `#!python WarnHandler` | Post `#!python EV_EXPECTATION_VIOLATED` to the violating participant(s) only. |
 | `#!python "auto_close"` | `#!python AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `#!python "hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
