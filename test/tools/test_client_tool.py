@@ -9,9 +9,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context, MemoryStream, tool
-from ag2.events import ClientToolCallEvent, ToolCallEvent, ToolCallsEvent
+from ag2.events import (
+    ClientToolCallEvent,
+    ModelResponse,
+    ToolCallEvent,
+    ToolCallsEvent,
+    ToolErrorEvent,
+    ToolResultEvent,
+    ToolResultsEvent,
+)
 from ag2.middleware import BaseMiddleware, Middleware, ToolExecution, ToolResultType
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final.client_tool import ClientTool
 
 
@@ -64,6 +72,70 @@ async def test_client_response_preserves_effective_call_and_provider_fields(
     assert original.name == "my_client_tool"
     assert original.arguments == '{"path":"/untrusted"}'
     assert original.serialized_arguments == {"path": "/untrusted"}
+
+    history = list(await reply.context.stream.history.get_events())
+    tracking = TrackingConfig(TestConfig("done"))
+    resumed = Agent("test", config=tracking, tools=[client_tool])
+    await resumed.resume(*history, ToolResultsEvent([ToolResultEvent.from_call(expected, "read")]))
+
+    [model_call] = tracking.calls
+    assert [
+        call for event in model_call.messages if isinstance(event, ModelResponse) for call in event.tool_calls.calls
+    ] == [expected]
+    assert original.arguments == '{"path":"/untrusted"}'
+    assert [event for event in history if isinstance(event, ModelResponse)][0].tool_calls == ToolCallsEvent([original])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local_error", [False, True])
+@pytest.mark.parametrize("client_first", [False, True])
+async def test_client_handoff_preserves_local_results_on_resume(
+    client_tool: ClientTool, local_error: bool, client_first: bool
+) -> None:
+    local_call = ToolCallEvent(name="lookup", arguments="{}")
+    client_call = ToolCallEvent(name="my_client_tool", arguments="{}")
+    executed: list[str] = []
+    failure = ValueError("lookup failed")
+
+    @tool
+    def lookup() -> str:
+        """Look up the order before the client confirms it."""
+        executed.append("lookup")
+        if local_error:
+            raise failure
+        return "order ready"
+
+    calls = [client_call, local_call] if client_first else [local_call, client_call]
+    config = TrackingConfig(TestConfig(calls, raise_tool_errors=False))
+    agent = Agent("test", config=config, tools=[lookup, client_tool])
+    reply = await agent.ask("Look up and confirm the order")
+
+    assert reply.response.tool_calls == ToolCallsEvent([client_call])
+    assert len(config.calls) == 1
+    history = await reply.context.stream.history.get_events()
+    client_result = ToolResultEvent.from_call(client_call, "confirmed")
+    resumed_config = TrackingConfig(TestConfig("done", raise_tool_errors=False))
+    resumed_agent = Agent("test", config=resumed_config, tools=[lookup, client_tool])
+
+    resumed = await resumed_agent.resume(*history, ToolResultsEvent([client_result]))
+
+    assert resumed.body == "done"
+    [model_call] = resumed_config.calls
+    local_result = (
+        ToolErrorEvent.from_call(local_call, failure)
+        if local_error
+        else ToolResultEvent.from_call(local_call, "order ready")
+    )
+    assert [
+        result for event in model_call.messages if isinstance(event, ToolResultsEvent) for result in event.results
+    ] == [
+        local_result,
+        client_result,
+    ]
+    assert [
+        call for event in model_call.messages if isinstance(event, ModelResponse) for call in event.tool_calls.calls
+    ] == calls
+    assert executed == ["lookup"]
 
 
 @pytest.fixture()
