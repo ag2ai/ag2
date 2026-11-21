@@ -7,13 +7,15 @@
 from ag2._replay import replayable_span
 from ag2.assembly import AssemblyPolicy
 from ag2.context import ConversationContext as Context
-from ag2.events import BaseEvent
+from ag2.events import BaseEvent, estimated_tokens
 
 
 class TokenBudgetPolicy(AssemblyPolicy):
     """Keep events within a token budget.
 
-    Estimates tokens by character count. Retains most recent events first.
+    Sizes each event from its full content with the shared estimate (text by
+    ``chars_per_token``, non-text by a per-modality budget), never from the
+    truncated ``str(event)`` repr. Retains most recent events first.
 
     The budget is a target, not a guarantee: events the cut orphaned are dropped
     from the span, and a span that would reduce to nothing widens past the budget
@@ -23,7 +25,10 @@ class TokenBudgetPolicy(AssemblyPolicy):
     name = "token_budget"
 
     def __init__(self, max_tokens: int, chars_per_token: int = 4, transparent: bool = False) -> None:
-        self._max_chars = max_tokens * chars_per_token
+        if chars_per_token < 1:
+            raise ValueError("chars_per_token must be greater than 0")
+        self._max_tokens = max_tokens
+        self._chars_per_token = chars_per_token
         self._transparent = transparent
 
     async def apply(
@@ -32,15 +37,14 @@ class TokenBudgetPolicy(AssemblyPolicy):
         events: list[BaseEvent],
         context: Context,
     ) -> tuple[list[str], list[BaseEvent]]:
-        total_chars = sum(len(str(e)) for e in events)
-        if total_chars <= self._max_chars:
+        costs = [estimated_tokens(e, self._chars_per_token) for e in events]
+        if sum(costs) <= self._max_tokens:
             return prompts, events
 
         # Retain from the end, fitting within budget
         retained: list[BaseEvent] = []
-        budget = self._max_chars
-        for event in reversed(events):
-            cost = len(str(event))
+        budget = self._max_tokens
+        for event, cost in zip(reversed(events), reversed(costs), strict=True):
             if budget - cost < 0 and retained:
                 break
             retained.append(event)

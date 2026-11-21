@@ -14,8 +14,14 @@ from ag2.events import (
     ToolCallsEvent,
     ToolResultEvent,
     ToolResultsEvent,
+    estimated_tokens,
 )
 from ag2.policies.token_budget import TokenBudgetPolicy
+
+
+def _tokens(*events: BaseEvent) -> int:
+    """Size of the given events in the tokens the policy counts."""
+    return sum(estimated_tokens(e) for e in events)
 
 
 def _tool_response(call_id: str = "tc_1", name: str = "get") -> ModelResponse:
@@ -49,7 +55,7 @@ class TestTrimming:
         # Use a very tight budget so only the last event fits
         last = ModelRequest([TextInput("z")])
         events: list[BaseEvent] = [ModelRequest([TextInput("a" * 200)]), last]
-        budget_tokens = (len(str(last)) // 4) + 1
+        budget_tokens = _tokens(last) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens)
 
         _, result = await policy.apply([], events, context)
@@ -59,7 +65,7 @@ class TestTrimming:
     @pytest.mark.asyncio
     async def test_transparent_adds_prompt(self, context: Context) -> None:
         events: list[BaseEvent] = [ModelRequest([TextInput("a" * 200)]), ModelRequest([TextInput("b")])]
-        budget_tokens = (len(str(events[-1])) // 4) + 1
+        budget_tokens = _tokens(events[-1]) + 1
         policy = TokenBudgetPolicy(max_tokens=budget_tokens, transparent=True)
 
         prompts, _ = await policy.apply(["existing"], events, context)
@@ -84,8 +90,7 @@ class TestOrphanedToolResults:
             request,
         ]
         # Tight budget: fits tool_result + request but not the big first event and tool_response
-        budget_chars = len(str(tool_result)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        policy = TokenBudgetPolicy(max_tokens=_tokens(tool_result, request))
 
         _, result = await policy.apply([], events, context)
 
@@ -108,8 +113,7 @@ class TestOrphanedToolResults:
             tr2,
             request,
         ]
-        budget_chars = len(str(tr1)) + len(str(tr2)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        policy = TokenBudgetPolicy(max_tokens=_tokens(tr1, tr2, request))
 
         _, result = await policy.apply([], events, context)
 
@@ -126,8 +130,7 @@ class TestOrphanedToolResults:
             tr,
             request,
         ]
-        budget_chars = len(str(tr)) + len(str(request)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1, transparent=True)
+        policy = TokenBudgetPolicy(max_tokens=_tokens(tr, request), transparent=True)
 
         prompts, result = await policy.apply([], events, context)
 
@@ -147,9 +150,60 @@ class TestOrphanedToolResults:
             tr,
             req_b,
         ]
-        budget_chars = len(str(req_a)) + len(str(tr)) + len(str(req_b)) + 10
-        policy = TokenBudgetPolicy(max_tokens=budget_chars // 4 + 1)
+        policy = TokenBudgetPolicy(max_tokens=_tokens(req_a, tr, req_b))
 
         _, result = await policy.apply([], events, context)
 
         assert result == [req_a, req_b]
+
+
+class TestContentSizing:
+    """The budget counts an event's full content, not its truncated repr."""
+
+    @pytest.mark.asyncio
+    async def test_long_message_is_trimmed(self, context: Context) -> None:
+        # str(event) truncates a long message to a few hundred characters, so a
+        # repr-sized budget would keep this whole history.
+        big = ModelRequest([TextInput("x" * 10_000)])
+        last = ModelRequest([TextInput("next")])
+        policy = TokenBudgetPolicy(max_tokens=1000)
+
+        _, result = await policy.apply([], [big, last], context)
+
+        assert result == [last]
+
+    @pytest.mark.asyncio
+    async def test_long_tool_result_is_trimmed(self, context: Context) -> None:
+        call = _tool_response("tc_1")
+        big = ToolResultsEvent(
+            results=[ToolResultEvent(parent_id="tc_1", name="get", result=ToolResult("y" * 10_000))],
+        )
+        last = ModelRequest([TextInput("next")])
+        policy = TokenBudgetPolicy(max_tokens=1000)
+
+        _, result = await policy.apply([], [call, big, last], context)
+
+        assert result == [last]
+
+    @pytest.mark.asyncio
+    async def test_history_within_budget_is_unchanged(self, context: Context) -> None:
+        events: list[BaseEvent] = [ModelRequest([TextInput("x" * 400)]), ModelRequest([TextInput("next")])]
+        policy = TokenBudgetPolicy(max_tokens=_tokens(*events))
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events
+
+    @pytest.mark.asyncio
+    async def test_chars_per_token_scales_the_estimate(self, context: Context) -> None:
+        events: list[BaseEvent] = [ModelRequest([TextInput("x" * 400)]), ModelRequest([TextInput("next")])]
+        policy = TokenBudgetPolicy(max_tokens=150, chars_per_token=2)
+
+        _, result = await policy.apply([], events, context)
+
+        assert result == events[1:]
+
+    @pytest.mark.parametrize("chars_per_token", [0, -1])
+    def test_rejects_non_positive_chars_per_token(self, chars_per_token: int) -> None:
+        with pytest.raises(ValueError, match="chars_per_token"):
+            TokenBudgetPolicy(max_tokens=100, chars_per_token=chars_per_token)
