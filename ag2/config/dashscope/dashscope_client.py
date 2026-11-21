@@ -179,7 +179,8 @@ class DashScopeClient(LLMClient):
 
         full_content: str = ""
         usage = Usage()
-        calls: list[ToolCallEvent] = []
+        # Accumulate tool calls by index (incremental_output sends partial updates per index)
+        full_tool_calls: list[dict[str, str]] = []
         finish_reason: str | None = None
 
         async for chunk in responses:
@@ -216,19 +217,30 @@ class DashScopeClient(LLMClient):
                             await context.send(ModelMessageChunk(text))
 
                 for tc in msg.get("tool_calls") or []:
-                    args = tc["function"]["arguments"]
-                    calls.append(
-                        ToolCallEvent(
-                            id=tc["id"],
-                            name=tc["function"]["name"],
-                            arguments=args if isinstance(args, str) else json.dumps(args),
+                    ix = tc.get("index")
+                    if ix is None:
+                        # A call carrying an id starts a new entry, anything else continues the last.
+                        ix = len(full_tool_calls) if tc.get("id") or not full_tool_calls else len(full_tool_calls) - 1
+                    if ix >= len(full_tool_calls):
+                        full_tool_calls.extend(
+                            {"id": "", "name": "", "arguments": ""} for _ in range(ix - len(full_tool_calls) + 1)
                         )
-                    )
+                    acc = full_tool_calls[ix]
+                    if tc.get("id"):
+                        acc["id"] = tc["id"]
+                    fn = tc.get("function") or {}
+                    if fn.get("name"):
+                        acc["name"] = fn["name"]
+                    args = fn.get("arguments")
+                    if args:
+                        acc["arguments"] += args if isinstance(args, str) else json.dumps(args)
 
         message: ModelMessage | None = None
         if full_content:
             message = ModelMessage(full_content)
             await context.send(message)
+
+        calls = [ToolCallEvent(id=acc["id"], name=acc["name"], arguments=acc["arguments"]) for acc in full_tool_calls]
 
         return ModelResponse(
             message=message,
