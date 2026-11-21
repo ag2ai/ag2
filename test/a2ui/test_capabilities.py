@@ -4,6 +4,8 @@
 
 import logging
 
+import pytest
+
 from ag2.a2ui import A2UIClientCapabilities
 from ag2.a2ui.capabilities import (
     A2UI_CLIENT_CAPABILITIES_METADATA_KEY,
@@ -37,22 +39,15 @@ class TestCapabilitiesToPrompt:
         assert _AGENT_CATALOG in prompt
         assert any("did not advertise" in r.message for r in caplog.records)
 
-    def test_inline_catalogs_are_summarized(self) -> None:
+    def test_inline_catalogs_are_not_offered(self) -> None:
+        # The agent does not declare acceptsInlineCatalogs, so it cannot render with them: they stay out of the prompt.
         caps = A2UIClientCapabilities(
             supported_catalog_ids=[_AGENT_CATALOG],
-            inline_catalogs=[
-                {
-                    "catalogId": "https://acme.example/cat.json",
-                    "components": {"Gauge": {}, "Chart": {}},
-                    "functions": {"refresh": {}},
-                }
-            ],
+            inline_catalogs=[{"catalogId": "https://acme.example/cat.json", "components": {"Gauge": {}}}],
         )
         prompt = capabilities_to_prompt(caps, catalog_id=_AGENT_CATALOG)
-        assert "inline catalog" in prompt
-        assert "https://acme.example/cat.json" in prompt
-        assert "components: Chart, Gauge" in prompt  # sorted
-        assert "functions: refresh" in prompt
+        assert "acme" not in prompt
+        assert "Gauge" not in prompt
 
     def test_inline_catalog_without_defs_is_dropped(self) -> None:
         # An inline catalog with neither components nor functions yields no line,
@@ -88,16 +83,42 @@ class TestParseClientCapabilitiesVersionKey:
         metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"1.0": {"supportedCatalogIds": ["x"]}}}
         assert parse_client_capabilities(metadata) is None
 
-    def test_coerces_ids_to_str(self) -> None:
-        metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.9": {"supportedCatalogIds": [1, 2]}}}
-        caps = parse_client_capabilities(metadata)
-        assert caps == A2UIClientCapabilities(supported_catalog_ids=["1", "2"], inline_catalogs=[])
-
-    def test_drops_non_dict_inline_catalogs(self) -> None:
+    def test_reads_inline_catalogs(self) -> None:
         metadata = {
             A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {
-                "v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": [{"catalogId": "ok"}, "nope", 5]}
+                "v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": [{"catalogId": "ok"}]}
             }
         }
         caps = parse_client_capabilities(metadata)
         assert caps == A2UIClientCapabilities(supported_catalog_ids=["x"], inline_catalogs=[{"catalogId": "ok"}])
+
+
+class TestParseMalformedClientCapabilities:
+    """Capabilities that break ``renderer_capabilities.json`` support no catalog (a2ui-core rejects them,
+    ``conformance/agent/renderer_capabilities.yaml``), so the turn sends no A2UI rather than guess."""
+
+    @pytest.mark.parametrize(
+        "caps",
+        [
+            pytest.param("garbage", id="key-holds-a-string"),
+            pytest.param({"v0.9": "garbage"}, id="entry-is-a-string"),
+            pytest.param({"v0.9": {}}, id="entry-missing-supportedCatalogIds"),
+            pytest.param({"v0.9": {"supportedCatalogIds": "x"}}, id="string-supportedCatalogIds"),
+            pytest.param({"v0.9": {"supportedCatalogIds": [1, 2]}}, id="non-string-ids"),
+            pytest.param({"v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": None}}, id="null-inlineCatalogs"),
+            pytest.param({"v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": ["nope"]}}, id="non-object-inline"),
+            pytest.param({"v0.9": {"supportedCatalogIds": ["x"], "inlineCatalogs": [{}]}}, id="inline-without-id"),
+        ],
+    )
+    def test_supports_no_catalog(self, caps: object, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            parsed = parse_client_capabilities({A2UI_CLIENT_CAPABILITIES_METADATA_KEY: caps})
+        assert parsed == A2UIClientCapabilities()
+        assert any("malformed" in r.message for r in caplog.records)
+
+    def test_v1_0_malformed_entry_supports_no_catalog(self) -> None:
+        metadata = {A2UI_RENDERER_CAPABILITIES_METADATA_KEY: {"1.0": {"supportedCatalogIds": [5]}}}
+        assert parse_client_capabilities(metadata, version_key="v1.0") == A2UIClientCapabilities()
+
+    def test_null_key_is_no_capabilities(self) -> None:
+        assert parse_client_capabilities({A2UI_CLIENT_CAPABILITIES_METADATA_KEY: None}) is None

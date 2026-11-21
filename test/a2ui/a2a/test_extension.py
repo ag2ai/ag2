@@ -4,19 +4,25 @@
 
 import pytest
 from a2a.server.context import ServerCallContext
+from a2a.types import Message
 from google.protobuf.json_format import MessageToDict
 
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_agent_extension, get_activated_extensions
 from ag2.a2ui.a2a.extension import ACTIVATED_EXTENSIONS_KEY, try_activate_a2ui_extension
-from ag2.a2ui.constants import (
-    A2UI_DEFAULT_CATALOG_ID_BY_VERSION,
-    A2UI_EXTENSION_URI_BY_VERSION,
-)
+
+from ._helpers import EXTENSION_URIS
+
+# Pinned wire values, written out so a change to them shows up here.
+BASIC_CATALOG_IDS: dict[str, str] = {
+    "v0.9": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+    "v0.9.1": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+    "v1.0": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+}
 
 # The default protocol version is v0.9; these handles keep the assertions terse.
-A2UI_DEFAULT_CATALOG_ID = A2UI_DEFAULT_CATALOG_ID_BY_VERSION["v0.9"]
-A2UI_EXTENSION_URI = A2UI_EXTENSION_URI_BY_VERSION["v0.9"]
+A2UI_DEFAULT_CATALOG_ID = BASIC_CATALOG_IDS["v0.9"]
+A2UI_EXTENSION_URI = EXTENSION_URIS["v0.9"]
 
 
 def _params(ext) -> dict:
@@ -34,8 +40,9 @@ class _StubContext:
     ``test_extension_e2e.py`` for the round-trip that pins it.
     """
 
-    def __init__(self, requested_extensions: list[str] | None = None) -> None:
+    def __init__(self, requested_extensions: list[str] | None = None, message: Message | None = None) -> None:
         self.requested_extensions = requested_extensions or []
+        self.message = message
         self.call_context = ServerCallContext()
 
     @property
@@ -81,9 +88,9 @@ class TestAgentExtension:
     @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
     def test_per_version_uri_and_default_catalog(self, version: A2UIVersion) -> None:
         ext = get_a2ui_agent_extension(version=version)
-        assert ext.uri == A2UI_EXTENSION_URI_BY_VERSION[version]
+        assert ext.uri == EXTENSION_URIS[version]
         assert version in ext.description
-        assert _params(ext) == {"supportedCatalogIds": [A2UI_DEFAULT_CATALOG_ID_BY_VERSION[version]]}
+        assert _params(ext) == {"supportedCatalogIds": [BASIC_CATALOG_IDS[version]]}
 
     def test_v1_0_uses_v1_namespace(self) -> None:
         ext = get_a2ui_agent_extension(version="v1.0")
@@ -94,6 +101,12 @@ class TestAgentExtension:
 class TestTryActivateExtension:
     def test_activates_when_client_requests_uri(self) -> None:
         ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
+        assert try_activate_a2ui_extension(ctx) is True  # type: ignore[arg-type]
+        assert ctx.activated == [A2UI_EXTENSION_URI]
+
+    def test_activates_when_the_message_lists_the_uri(self) -> None:
+        # The official SDK also reads ``message.extensions``, not only the X-A2A-Extensions header.
+        ctx = _StubContext(message=Message(extensions=[A2UI_EXTENSION_URI]))
         assert try_activate_a2ui_extension(ctx) is True  # type: ignore[arg-type]
         assert ctx.activated == [A2UI_EXTENSION_URI]
 
@@ -123,14 +136,14 @@ class TestTryActivateExtension:
 
     @pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
     def test_activates_matching_version_uri(self, version: A2UIVersion) -> None:
-        uri = A2UI_EXTENSION_URI_BY_VERSION[version]
+        uri = EXTENSION_URIS[version]
         ctx = _StubContext(requested_extensions=[uri])
         assert try_activate_a2ui_extension(ctx, version=version) is True  # type: ignore[arg-type]
         assert ctx.activated == [uri]
 
     def test_does_not_activate_on_version_mismatch(self) -> None:
         # Client requested v0.9 but the agent serves v1.0 — no activation.
-        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI_BY_VERSION["v0.9"]])
+        ctx = _StubContext(requested_extensions=[A2UI_EXTENSION_URI])
         assert try_activate_a2ui_extension(ctx, version="v1.0") is False  # type: ignore[arg-type]
         assert ctx.activated is None
 

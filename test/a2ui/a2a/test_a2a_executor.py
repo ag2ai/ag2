@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import Annotated
+from typing import Annotated, Any
 
 import httpx
 import pytest
@@ -21,15 +21,15 @@ from ag2.a2a.mappers.messages import build_tool_result_message, build_user_messa
 from ag2.a2a.testing import make_test_client_factory
 from ag2.a2ui import a2ui_action
 from ag2.a2ui.a2a import A2UIAgentExecutor, create_a2ui_parts
-from ag2.a2ui.a2a.executor import _extract_a2ui_envelopes
 from ag2.a2ui.constants import A2UI_MIME_TYPE
-from ag2.events import TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
+from ag2.events import DataInput, TextInput, ToolCallEvent, ToolResultEvent, ToolResultsEvent
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final.function_tool import FunctionToolSchema
 
 from ._helpers import (
     FUNCTION_RESULT_MARK,
+    V1_BASIC_CATALOG_ID,
     CallRendererFunctionThenComplete,
     CapturingConfig,
     DropEmptyTextInterceptor,
@@ -44,6 +44,7 @@ CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 
 DELETE_SURFACE_MSG = {"version": VERSION, "deleteSurface": {"surfaceId": "s1"}}
 CREATE_SURFACE_MSG = {"version": VERSION, "createSurface": {"surfaceId": "s1", "catalogId": CATALOG}}
+V1_CREATE_SURFACE = {"version": "1.0", "createSurface": {"surfaceId": "s1", "catalogId": V1_BASIC_CATALOG_ID}}
 
 ACTION_ENVELOPE = {
     "version": VERSION,
@@ -90,6 +91,8 @@ _CALL_RENDERER_FUNCTION_BLOCK = (
 
 
 async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
+    """Send ``message`` from a v1.0 renderer, which advertises its catalogs on every message."""
+    message.metadata.update({"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": [V1_BASIC_CATALOG_ID]}}})
     response = await http.post(
         "/",
         json={
@@ -106,6 +109,22 @@ async def _send_a2a_message(http: httpx.AsyncClient, message: Message) -> Task:
     task = Task()
     ParseDict(payload["result"]["task"], task)
     return task
+
+
+DEVICE_CATALOG: dict[str, Any] = {
+    "catalogId": "https://example.com/device",
+    "protocolVersion": "1.0",
+    "functions": {
+        "getLocation": {
+            "type": "object",
+            "returnType": "string",
+            "allowedCallers": "rendererOrAgent",
+            "properties": {"@call": {"const": "getLocation"}},
+            "required": ["@call"],
+        }
+    },
+}
+"""Declares the renderer function the server asks for, so its ``callRendererFunction`` validates."""
 
 
 class _FunctionRoundTrip(ClientCallInterceptor):
@@ -141,31 +160,66 @@ class _FunctionRoundTrip(ClientCallInterceptor):
         return None
 
 
-class TestExtractA2UIEnvelopes:
-    """Envelope decode — the three on-the-wire shapes from get_a2ui_data."""
+@pytest.mark.asyncio
+class TestIncomingA2UIDataParts:
+    """What the agent receives from the A2UI DataParts on a request (the shapes ``get_a2ui_data`` decodes)."""
 
-    def test_returns_empty_for_text_part(self) -> None:
-        assert _extract_a2ui_envelopes(Part(text="hello")) == []
+    async def _ask(self, parts: list[Part], *, protocol_version: str = "v0.9") -> str:
+        config = CapturingConfig()
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version=protocol_version, validate_responses=False)
+        await client.ask("go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: parts})
+        return synthesized_text(config.messages[-1])
 
-    def test_canonical_list_payload(self) -> None:
-        [part] = create_a2ui_parts([ACTION_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+    async def test_canonical_list_payload_reaches_the_agent(self) -> None:
+        assert "user@example.com" in await self._ask(create_a2ui_parts([ACTION_ENVELOPE]))
 
-    def test_legacy_single_dict_payload(self) -> None:
-        [part] = create_a2ui_parts(ACTION_ENVELOPE, legacy_split=True)
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+    async def test_single_object_payload_is_consumed_without_envelopes(self, caplog: pytest.LogCaptureFixture) -> None:
+        # The A2A extension: a DataPart's data "MUST be an array of messages".
+        part = data_part(ACTION_ENVELOPE, media_type=A2UI_MIME_TYPE)
 
-    def test_filters_entries_the_renderer_does_not_send(self) -> None:
-        [part] = create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ACTION_ENVELOPE]
+        with caplog.at_level("WARNING"):
+            synthesized = await self._ask([part])
 
-    def test_decodes_error_envelope(self) -> None:
-        [part] = create_a2ui_parts([ERROR_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [ERROR_ENVELOPE]
+        assert "not an array of messages" in caplog.text
+        assert "user@example.com" not in synthesized
 
-    def test_decodes_function_response_envelope(self) -> None:
-        [part] = create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE])
-        assert _extract_a2ui_envelopes(part) == [FUNCTION_RESPONSE_ENVELOPE]
+    @pytest.mark.parametrize(
+        ("data", "action_prompted", "entry_dropped"),
+        [([ACTION_ENVELOPE, "junk"], True, True), ([], False, False)],
+        ids=["mixed-list", "empty-list"],
+    )
+    async def test_an_a2ui_part_is_always_consumed(
+        self, data: list[Any], action_prompted: bool, entry_dropped: bool, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The A2A extension's "Processing Rules": a receiver "MUST continue processing the remaining messages in the
+        # list" when one fails, so a non-object entry is dropped, and the part itself never reaches the agent raw.
+        config = CapturingConfig()
+        client = client_for(Agent(name="ui_agent", config=config), validate_responses=False)
+
+        with caplog.at_level("WARNING"):
+            await client.ask(
+                "go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [data_part(data, media_type=A2UI_MIME_TYPE)]}
+            )
+
+        received = [part for message in config.messages[-1] for part in getattr(message, "parts", None) or []]
+        assert not any(isinstance(part, DataInput) for part in received)
+        assert ("user@example.com" in synthesized_text(config.messages[-1])) is action_prompted
+        assert ("not a renderer-to-agent message" in caplog.text) is entry_dropped
+
+    async def test_entries_the_renderer_does_not_send_are_skipped(self) -> None:
+        synthesized = await self._ask(create_a2ui_parts([CREATE_SURFACE_MSG, ACTION_ENVELOPE]))
+
+        assert "user@example.com" in synthesized
+        assert "createSurface" not in synthesized
+
+    async def test_error_envelope_reaches_the_agent(self) -> None:
+        assert "VALIDATION_FAILED" in await self._ask(create_a2ui_parts([ERROR_ENVELOPE]))
+
+    async def test_function_response_envelope_reaches_the_agent(self) -> None:
+        synthesized = await self._ask(create_a2ui_parts([FUNCTION_RESPONSE_ENVELOPE]), protocol_version="v1.0")
+
+        assert "fc-1" in synthesized
 
 
 @pytest.mark.asyncio
@@ -303,6 +357,35 @@ async def test_incoming_error_envelope_becomes_corrective_prompt() -> None:
     synthesized = synthesized_text(config.messages[-1])
     assert "VALIDATION_FAILED" in synthesized
     assert "/components/0" in synthesized
+
+
+@pytest.mark.asyncio
+async def test_malformed_envelope_is_dropped_with_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    # Same rule as AG-UI: an envelope key is enough to reach the decoder, which warns about the bad payload.
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, validate_responses=False)
+    malformed = {"version": "v0.9", "action": "submit"}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await client.ask("go", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([malformed])})
+
+    assert "does not conform to protocol v0.9" in caplog.text
+    assert "submit" not in synthesized_text(config.messages[-1])
+
+
+@pytest.mark.asyncio
+async def test_function_response_is_dropped_before_v1_0(caplog: pytest.LogCaptureFixture) -> None:
+    config = CapturingConfig()
+    agent = Agent(name="ui_agent", config=config)
+    client = client_for(agent, validate_responses=False)
+    envelope: Any = {**FUNCTION_RESPONSE_ENVELOPE, "version": "v0.9"}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await client.ask("continue", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: create_a2ui_parts([envelope])})
+
+    assert "exists only in protocol v1.0" in caplog.text
+    assert "fc-1" not in synthesized_text(config.messages[-1])
 
 
 @pytest.mark.asyncio
@@ -481,6 +564,7 @@ class TestCallAgentFunction:
             actions=[obtain_location],
             protocol_version="v1.0",
             hitl_hook=hitl_hook,
+            custom_catalog=DEVICE_CATALOG,
         )
         stream = MemoryStream()
         payloads, states = subscribe_task_stream(stream)
@@ -600,14 +684,15 @@ class TestCapabilitiesNegotiation:
     async def test_client_caps_injected_into_prompt(self) -> None:
         config = CapturingConfig()
         agent = Agent(name="ui_agent", config=config)
-        caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": ["https://other.example/c.json"]}}}
+        supported = ["https://other.example/c.json", "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"]
+        caps = {"a2uiClientCapabilities": {VERSION: {"supportedCatalogIds": supported}}}
         client = client_for(agent, interceptors=[MetadataInterceptor(caps)], validate_responses=False)
 
         await client.ask("hi")
 
         prompt = "\n".join(config.prompts[-1])
         assert "## A2UI Client Capabilities" in prompt
-        assert "did NOT list" in prompt  # agent catalog absent from client's advertised list
+        assert "https://other.example/c.json" in prompt
 
     async def test_v0_9_1_client_caps_are_read_under_the_v0_9_key(self) -> None:
         config = TrackingConfig(TestConfig("ok"))
@@ -619,21 +704,55 @@ class TestCapabilitiesNegotiation:
 
         await client.ask("hi")
 
+        # Read and acted on: the renderer supports none of the agent's catalogs, so the turn has no A2UI.
         [record] = config.calls
-        assert "did NOT list" in "\n".join(record.prompt)
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
 
-    async def test_v1_0_renderer_caps_injected_into_prompt(self) -> None:
-        config = TrackingConfig(TestConfig("ok"))
+    async def test_v1_0_renderer_without_the_agents_catalog_gets_no_a2ui(self) -> None:
+        response = f"Here.\n<a2ui-json>\n[{json.dumps(V1_CREATE_SURFACE)}]\n</a2ui-json>"
+        config = TrackingConfig(TestConfig(response))
         agent = Agent(name="ui_agent", config=config)
         caps = {"a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": ["https://other.example/c.json"]}}}
-        client = client_for(
-            agent, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0", validate_responses=False
-        )
+        client = client_for(agent, streaming=True, interceptors=[MetadataInterceptor(caps)], protocol_version="v1.0")
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
 
-        await client.ask("hi")
+        await client.ask("hi", stream=stream)
 
         [record] = config.calls
-        assert "did NOT list" in "\n".join(record.prompt)
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
+        assert payloads == []
+
+    async def test_v1_0_message_without_capabilities_gets_no_a2ui(self) -> None:
+        # A2A extension v1.0, "Capability scoping": no a2uiRendererCapabilities entry, no A2UI in reply.
+        response = f"Here.\n<a2ui-json>\n[{json.dumps(V1_CREATE_SURFACE)}]\n</a2ui-json>"
+        config = TrackingConfig(TestConfig(response))
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, streaming=True, protocol_version="v1.0", renderer_capabilities=False)
+        stream = MemoryStream()
+        payloads, _states = subscribe_task_stream(stream)
+
+        reply = await client.ask("hi", stream=stream)
+
+        [record] = config.calls
+        assert "A2UI Response Format" not in "\n".join(record.prompt)
+        assert payloads == []
+        assert reply.response.content == "Here."
+
+    async def test_v1_0_capabilities_on_a_data_part_count(self) -> None:
+        # The lookup reads Message.metadata first and then each DataPart's metadata.
+        config = TrackingConfig(TestConfig("ok"))
+        agent = Agent(name="ui_agent", config=config)
+        client = client_for(agent, protocol_version="v1.0", renderer_capabilities=False, validate_responses=False)
+        [part] = create_a2ui_parts([CALL_AGENT_FUNCTION_ENVELOPE])
+        part.metadata.update({
+            "a2uiRendererCapabilities": {"1.0": {"supportedCatalogIds": [V1_BASIC_CATALOG_ID]}},
+        })
+
+        await client.ask("hi", dependencies={EXTRA_PARTS_DEPENDENCY_KEY: [part]})
+
+        [record] = config.calls
+        assert "A2UI Response Format (v1.0)" in "\n".join(record.prompt)
 
     async def test_v1_0_renderer_data_model_injected_into_prompt(self) -> None:
         config = TrackingConfig(TestConfig("ok"))

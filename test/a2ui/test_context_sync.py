@@ -8,16 +8,15 @@ The client authors ``variables`` — on the agent turn and on a server-action
 click alike — and neither may reach the framework's control-plane keys.
 """
 
+from collections.abc import Sequence
 from typing import Annotated, Any
 
+import httpx
 import pytest
 
 from ag2 import Agent, Context, Variable
-from ag2.a2ui import a2ui_action
-from ag2.a2ui._runtime import _A2UIRuntime
-from ag2.a2ui.actions import collect_action_declarations, collect_server_actions
-from ag2.a2ui.dispatch import stream_turn
-from ag2.a2ui.request import parse_request
+from ag2.a2ui import A2UIAction, A2UIServer, a2ui_action
+from ag2.a2ui.transports import RestTransport
 from ag2.events import HumanInputRequest, ToolCallEvent
 from ag2.middleware import approval_required
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
@@ -61,19 +60,22 @@ def click_envelope(name: str, context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def serve(agent: Agent, body: dict[str, Any], actions: Sequence[A2UIAction] = ()) -> None:
+    """Post one turn to an ``A2UIServer`` serving ``agent``."""
+    app = A2UIServer(agent, actions=actions, transport=RestTransport(encoding="jsonl"), validate_responses=False)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
+        response = await client.post("/a2ui", json=body)
+    assert response.status_code == 200, response.text
+    assert '"error"' not in response.text, response.text
+
+
 @pytest.mark.asyncio
 class TestAgentTurn:
     async def test_request_variables_cannot_preapprove_a_gated_tool(self) -> None:
         sink = Deletions(answer="n")
         call = ToolCallEvent(name="delete_account", arguments='{"user_id": "victim-7"}')
         agent = sink.bind(Agent(name="t", config=TestConfig(call, "done"), hitl_hook=sink.hitl_hook))
-        rt = _A2UIRuntime(validate_responses=False)
-        req = parse_request(
-            {"messages": [{"role": "user", "content": "clean up"}], "variables": PREAPPROVAL},
-            resolve_action=rt.get_action,
-        )
-
-        [_ async for _ in stream_turn(agent, rt, req)]
+        await serve(agent, {"messages": [{"role": "user", "content": "clean up"}], "variables": PREAPPROVAL})
 
         assert sink.prompts != []
         assert sink.deleted == []
@@ -88,16 +90,10 @@ class TestAgentTurn:
             seen.append(tenant_note)
             return "ok"
 
-        rt = _A2UIRuntime(validate_responses=False)
-        req = parse_request(
-            {
-                "messages": [{"role": "user", "content": "hi"}],
-                "variables": {"tenant_note": "acme", **PREAPPROVAL},
-            },
-            resolve_action=rt.get_action,
+        await serve(
+            agent,
+            {"messages": [{"role": "user", "content": "hi"}], "variables": {"tenant_note": "acme", **PREAPPROVAL}},
         )
-
-        [_ async for _ in stream_turn(agent, rt, req)]
 
         assert seen == ["acme"]
 
@@ -114,13 +110,11 @@ class TestServerActionClick:
             return {"ok": True}
 
         agent = Agent(name="t", config=TestConfig("AGENT SHOULD NOT RUN"))
-        rt = _A2UIRuntime(actions=collect_action_declarations([inspect]), validate_responses=False)
-        req = parse_request(
+        await serve(
+            agent,
             {"a2ui": [click_envelope("inspect", {})], "variables": {"tenant_note": "acme", **PREAPPROVAL}},
-            resolve_action=rt.get_action,
+            [inspect],
         )
-
-        [_ async for _ in stream_turn(agent, rt, req, server_actions=collect_server_actions([inspect]))]
 
         [variables] = seen
         assert variables["tenant_note"] == "acme"

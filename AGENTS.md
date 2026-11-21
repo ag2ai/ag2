@@ -239,6 +239,13 @@ Construct `Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., p
 - Tests that exercise it on purpose assert the warning with `pytest.warns(DeprecationWarning)` (see `test/agent/test_task_deprecation.py`); new tests must not depend on it.
 - Removal in 1.4.0 covers: `Agent.task` and `AGENT_TASK_DEPRECATION`, the `deprecated-factory` parametrisations and `test_deprecated_factory_still_fails_the_task_on_error` in `test/agent/test_task_deprecation.py`, and the deprecation notes in `website/docs/`. Keep `Task`, `TaskSpec` and `TaskInject`.
 
+### Deprecated: `create_a2ui_parts(legacy_split=True)` (removed in 1.4.0)
+
+Call `create_a2ui_parts(messages)`: one `DataPart` whose `data` is the array of messages, which the A2UI A2A extension requires ("MUST be an array of messages") in every version. To build a single-object `DataPart` in a test, use `ag2.a2a.mappers.data_part(message, media_type=A2UI_MIME_TYPE)`.
+
+- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:create_a2ui_parts\\(legacy_split=True\\):DeprecationWarning")`; new tests must not depend on it.
+- Removal in 1.4.0 covers: the `legacy_split` parameter and `LEGACY_SPLIT_DEPRECATION` in `ag2/a2ui/a2a/parts.py`, the warning-filtered tests in `test/a2ui/a2a/test_parts.py`, and the deprecation admonition in `website/docs/user-guide/a2ui/a2a.mdx`. Keep `get_a2ui_data` decoding a single-object `data`: it is a public helper, and a caller can recognise such a malformed part with it (the executor consumes every A2UI part, whatever its `data`).
+
 ### Deprecated: `google-genai` 2.x (removed in 1.4.0)
 
 `ag2[gemini]` accepts `google-genai>=1.68.0,<4`; 1.4.0 requires `>=3,<4`. Everything that differs between the majors lives in `ag2/config/gemini/_compat.py`. `GeminiConfig` / `VertexAIConfig` `create()` and `create_files_client()` warn on 2.x.

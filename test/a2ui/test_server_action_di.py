@@ -16,6 +16,8 @@ from ag2.a2ui import A2UIServer, a2ui_action
 from ag2.a2ui.transports import RestTransport
 from ag2.testing import TestConfig
 
+from .seam import from_renderer
+
 
 class Database:
     """A stand-in for an injected backend resource (e.g. a DB connection)."""
@@ -265,7 +267,7 @@ async def test_function_response_value_is_serialized() -> None:
         protocol_version="v1.0",
     )
 
-    body = {
+    body = from_renderer({
         "messages": [],
         "a2ui": [
             {
@@ -277,7 +279,7 @@ async def test_function_response_value_is_serialized() -> None:
                 },
             }
         ],
-    }
+    })
     async with _client(app) as client:
         resp = await client.post("/a2ui", json=body)
 

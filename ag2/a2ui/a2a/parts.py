@@ -5,17 +5,19 @@
 """A2A part helpers for A2UI.
 
 Build, identify, and decode A2A ``Part`` objects that carry A2UI JSON.
-Per the canonical A2A v1.0 encoding for A2UI, a single DataPart carries
-a JSON ARRAY of A2UI operations under ``data``. Pre-v1.0 renderers used
-one DataPart per operation with ``data`` as a single object — both
-shapes are decoded by :func:`get_a2ui_data` and may be emitted by
-:func:`create_a2ui_parts` via the ``legacy_split`` flag.
+The A2UI A2A extension (v0.9 and v1.0 alike) says a DataPart's ``data``
+"MUST be an array of messages", so a single DataPart carries a JSON array of
+A2UI operations. :func:`get_a2ui_data` still decodes a single object, so a
+caller can recognise a malformed part; ``create_a2ui_parts(legacy_split=True)``,
+which emits one, is deprecated.
 
 The A2UI A2A extension spec marks an A2UI part with
 ``metadata["mimeType"]``, which is all an A2A v0.3 peer sees: a data part's
 ``media_type`` does not exist there. Parts are written with both and
 recognised by either.
 """
+
+import warnings
 
 from a2a.types import Part
 
@@ -25,6 +27,11 @@ from .._types import JsonObject, ServerToClientMessage
 from ..constants import A2UI_MIME_TYPE
 
 _MIME_TYPE_METADATA_KEY = "mimeType"
+
+LEGACY_SPLIT_DEPRECATION = (
+    "create_a2ui_parts(legacy_split=True) is deprecated and will be removed in 1.4.0: the A2UI A2A extension "
+    "requires a DataPart's 'data' to be an array of messages."
+)
 
 
 def create_a2ui_parts(
@@ -39,9 +46,9 @@ def create_a2ui_parts(
 
     Args:
         operations: A single A2UI server→client message or a list of them.
-        legacy_split: If True, emit one DataPart per operation with
-            ``data`` as a single object. Use this for pre-A2A-v1.0
-            renderers that don't accept a list in ``data``.
+        legacy_split: Deprecated, removed in 1.4.0. If True, emit one DataPart
+            per operation with ``data`` as a single object, which the A2UI A2A
+            extension does not allow in any version.
 
     Returns:
         A list of ``Part`` objects, each tagged with the A2UI MIME type in
@@ -50,6 +57,7 @@ def create_a2ui_parts(
     if isinstance(operations, dict):
         operations = [operations]
     if legacy_split:
+        warnings.warn(LEGACY_SPLIT_DEPRECATION, DeprecationWarning, stacklevel=2)
         return [_a2ui_part(op) for op in operations]
     return [_a2ui_part(list(operations))]
 

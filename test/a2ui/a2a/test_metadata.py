@@ -39,5 +39,7 @@ class TestParseClientCapabilities:
         metadata = {A2UI_CLIENT_CAPABILITIES_METADATA_KEY: {"v0.8": {"supportedCatalogIds": []}}}
         assert parse_client_capabilities(metadata) is None
 
-    def test_malformed_payload_returns_none(self) -> None:
-        assert parse_client_capabilities({A2UI_CLIENT_CAPABILITIES_METADATA_KEY: "not-a-dict"}) is None
+    def test_malformed_payload_supports_no_catalog(self) -> None:
+        assert (
+            parse_client_capabilities({A2UI_CLIENT_CAPABILITIES_METADATA_KEY: "not-a-dict"}) == A2UIClientCapabilities()
+        )

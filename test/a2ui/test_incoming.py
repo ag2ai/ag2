@@ -17,9 +17,10 @@ from ag2.a2ui.incoming import (
     A2UIIncomingSurfaceError,
     A2UIIncomingUnknownResult,
     action_to_prompt,
+    decode_envelopes,
     error_to_prompt,
     function_response_to_prompt,
-    iter_incoming_prompts,
+    incoming_prompts,
     parse_incoming_message,
 )
 
@@ -190,16 +191,6 @@ class TestParseIncomingFunctionResponse:
         assert isinstance(result, A2UIIncomingUnknownResult)
 
 
-class TestFunctionResponsePrompt:
-    def test_names_the_function_when_known(self) -> None:
-        response = A2UIIncomingFunctionResponse(function_call_id="fc-1", value=1)
-        assert "function=getLocation" in function_response_to_prompt(response, "getLocation")
-
-    def test_unnamed_by_default(self) -> None:
-        response = A2UIIncomingFunctionResponse(function_call_id="fc-1", value=1)
-        assert "function=" not in function_response_to_prompt(response)
-
-
 class TestParseIncomingError:
     def test_validation_failed(self) -> None:
         result = parse_incoming_message({
@@ -334,19 +325,38 @@ class TestFunctionResponseToPrompt:
         assert "<non-serializable>" in prompt
 
 
-class TestIterIncomingPrompts:
+class TestIncomingPrompts:
     def test_function_call_is_never_a_prompt(self) -> None:
         envelopes = [
-            {"callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}}},
+            {
+                "version": "1.0",
+                "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc", "callFunction": {"@call": "ping"}},
+            },
         ]
-        assert list(iter_incoming_prompts(envelopes, lambda name: None)) == []
+        assert list(incoming_prompts(decode_envelopes(envelopes, protocol_version="v1.0"), lambda name: None)) == []
 
     def test_function_response_without_id_is_dropped(self) -> None:
-        assert list(iter_incoming_prompts([{"rendererFunctionResponse": {"value": 1}}], lambda name: None)) == []
+        assert (
+            list(
+                incoming_prompts(
+                    decode_envelopes(
+                        [{"version": "1.0", "rendererFunctionResponse": {"value": 1}}], protocol_version="v1.0"
+                    ),
+                    lambda name: None,
+                )
+            )
+            == []
+        )
 
     def test_function_response_becomes_a_prompt(self) -> None:
         prompts = list(
-            iter_incoming_prompts([{"rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}], lambda n: None)
+            incoming_prompts(
+                decode_envelopes(
+                    [{"version": "1.0", "rendererFunctionResponse": {"functionCallId": "fc", "value": 1}}],
+                    protocol_version="v1.0",
+                ),
+                lambda n: None,
+            )
         )
         assert len(prompts) == 1
         assert "fc" in prompts[0]
