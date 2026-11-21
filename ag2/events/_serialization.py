@@ -121,7 +121,13 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
         if "__dataclass__" in value:
             cls = _resolve_class(value["__dataclass__"])
             data = {k: deserialize_value(v, event_registry) for k, v in value.get("data", {}).items()}
-            return cls(**data)
+            non_init_fields = {f.name for f in fields(cls) if not f.init}
+            instance = cls(**{k: v for k, v in data.items() if k not in non_init_fields})
+            # Restore saved state after __post_init__, including frozen/slotted fields.
+            for name in non_init_fields:
+                if name in data:
+                    object.__setattr__(instance, name, data[name])
+            return instance
         if "__pydantic__" in value:
             cls = _resolve_class(value["__pydantic__"])
             raw = deserialize_value(value.get("data", {}), event_registry)
