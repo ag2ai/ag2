@@ -579,6 +579,21 @@ not have to know which words this server accepts:
              "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
 ```
 
+An approval that accepts more than yes or no lists its other answers in
+`ToolApprovalRequest.choices`, and the interrupt's `responseSchema` then offers
+each one as a titled constant beside the boolean, so a client can draw a button
+per choice and resume with its value. A permission request from an
+[ACP agent](/docs/user-guide/acp/client#permissions-human-in-the-loop) does this
+with the agent's own options:
+
+```json
+{"title": "Approval",
+ "anyOf": [{"type": "boolean"},
+           {"type": "string", "oneOf": [{"const": "proceed_always", "title": "Allow for this session"},
+                                        {"const": "proceed_once", "title": "Allow"},
+                                        {"const": "cancel", "title": "Reject"}]}]}
+```
+
 `false` **refuses the call without failing the turn**: the model is handed the
 middleware's refusal as the tool's result and carries on, and the run still
 finishes with a success outcome. Because a gated call is a paused tool call, it

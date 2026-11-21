@@ -17,8 +17,8 @@ from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context
 from ag2.ag_ui import NOT_PROVEN, TOOL_CALL_REASON, AGUIStream
-from ag2.events import ToolCallEvent
-from ag2.middleware import approval_required
+from ag2.events import ApprovalChoice, ToolApprovalRequest, ToolCallEvent
+from ag2.middleware import ToolExecution, ToolResultType, approval_required
 from ag2.testing import TestConfig
 from test.ag_ui.harness import only, outcome_of, types_of
 from test.ag_ui.serving import answer, app_for, ask_once, post_run, resolved, run_body
@@ -151,3 +151,75 @@ class TestItBehavesLikeAnyOtherInterrupt:
 
         assert outcome_of(events) == {"type": "cancelled"}
         assert ran == []
+
+
+CHOICES = [ApprovalChoice("opt-b", "Allow for this session"), ApprovalChoice("opt-a", "Allow")]
+
+
+def choosing_agent() -> tuple[Agent, list[str]]:
+    """An agent whose one tool asks an approval offering `CHOICES`, and a record of the answers."""
+    answers: list[str] = []
+
+    async def offer(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
+        request = ToolApprovalRequest("Run it?", tool_call_id=event.id, choices=CHOICES)
+        answers.append(await context.ask(request))
+        return await call_next(event, context)
+
+    agent = Agent("test_agent", config=TestConfig(ToolCallEvent(name="run", arguments="{}"), "all done"))
+
+    @agent.tool(middleware=[offer])
+    async def run() -> str:
+        """Run something."""
+        return "ran"
+
+    return agent, answers
+
+
+async def test_without_choices_the_schema_is_yes_or_no() -> None:
+    agent, _ = gated_agent()
+
+    interrupt = await ask_once(app_for(AGUIStream(agent)))
+
+    assert interrupt["responseSchema"] == IsPartialDict({"type": ["string", "boolean"]})
+
+
+class TestChoices:
+    """An approval offering more than yes or no puts each choice in the schema."""
+
+    async def test_the_schema_offers_each_choice(self) -> None:
+        agent, _ = choosing_agent()
+
+        interrupt = await ask_once(app_for(AGUIStream(agent)))
+
+        assert interrupt["responseSchema"] == {
+            "title": "Approval",
+            "description": "true to let the tool call go ahead, false to refuse it, or one of the choices.",
+            "anyOf": [
+                {"type": "boolean"},
+                {
+                    "type": "string",
+                    "oneOf": [
+                        {"const": "opt-b", "title": "Allow for this session"},
+                        {"const": "opt-a", "title": "Allow"},
+                    ],
+                },
+            ],
+        }
+
+    @pytest.mark.parametrize(
+        ("payload", "received"),
+        [
+            pytest.param("opt-b", "opt-b", id="a choice"),
+            # The approve button is a plain yes, never widened to the first choice.
+            pytest.param(True, "y", id="approve button"),
+            pytest.param(False, "n", id="refuse button"),
+        ],
+    )
+    async def test_the_answer_reaches_the_asker(self, payload: str | bool, received: str) -> None:
+        agent, answers = choosing_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        await post_run(app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, payload)))
+
+        assert answers == [received]

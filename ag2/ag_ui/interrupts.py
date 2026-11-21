@@ -14,7 +14,7 @@ import logging
 import re
 import secrets
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from math import inf
@@ -55,8 +55,8 @@ from anyio import BrokenResourceError, ClosedResourceError, create_memory_object
 from anyio.streams.memory import MemoryObjectSendStream
 
 from ag2.annotations import Context
+from ag2.events import ApprovalChoice, HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
 from ag2.events import BaseEvent as AG2Event
-from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
 from ag2.exceptions import AG2Error, HumanInputTimeoutError
 
 from .run_input import strip_unrecognised
@@ -88,6 +88,26 @@ APPROVAL_SCHEMA: dict[str, Any] = {
     "title": "Approval",
     "description": "true to let the tool call go ahead, false to refuse it.",
 }
+
+
+def approval_schema(choices: Sequence[ApprovalChoice]) -> dict[str, Any]:
+    """The response schema for a tool approval offering `choices`.
+
+    With none it is `APPROVAL_SCHEMA`. With some, the string branch is one
+    titled constant per choice, so a client can draw a button each; the boolean
+    branch stays, so a client that draws two buttons still works.
+    """
+    if not choices:
+        return APPROVAL_SCHEMA
+    return {
+        "title": "Approval",
+        "description": "true to let the tool call go ahead, false to refuse it, or one of the choices.",
+        "anyOf": [
+            {"type": "boolean"},
+            {"type": "string", "oneOf": [{"const": c.value, "title": c.label} for c in choices]},
+        ],
+    }
+
 
 # Codes on the `RUN_ERROR` a refused resume produces, so a client can branch
 # without parsing prose.
@@ -789,7 +809,7 @@ class ClientInterrupter:
             reason=INPUT_REQUIRED_REASON if approval is None else TOOL_CALL_REASON,
             message=event.content,
             tool_call_id=None if approval is None else approval.tool_call_id,
-            response_schema=ANSWER_SCHEMA if approval is None else APPROVAL_SCHEMA,
+            response_schema=ANSWER_SCHEMA if approval is None else approval_schema(approval.choices),
             expires_at=self._turns.deadline(event.timeout, since=since).isoformat(),
             metadata={AG2_METADATA_KEY: {PROOF_KEY: issue_proof()}},
         )

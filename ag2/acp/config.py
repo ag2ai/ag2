@@ -89,7 +89,8 @@ class ACPConfig:
             ``None`` keeps the agent's default. When the agent has no model
             option the value is response metadata only.
         permission_policy: How to answer ``session/request_permission``:
-            ``"ask"`` routes to the agent's ``hitl_hook``/``context.input``,
+            ``"ask"`` routes an ``ACPPermissionRequest`` to the agent's
+            ``hitl_hook``, answered with the ``option_id`` to select,
             ``"auto"`` allows, ``"deny"`` rejects.
         elicitation_policy: How to answer ``elicitation/create`` — the agent
             asking the *user* a question (a form, or a URL to complete an

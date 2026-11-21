@@ -267,15 +267,33 @@ class HumanInputRequest(BaseEvent):
     """
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalChoice:
+    """One answer a tool approval offers beyond a plain yes or no.
+
+    Attributes:
+        value: The answer to give to pick this choice.
+        label: What to show for it.
+    """
+
+    value: str
+    label: str
+
+
 class ToolApprovalRequest(HumanInputRequest):
     """A human-input request asking whether one tool call may go ahead.
 
     A :class:`HumanInputRequest` carrying the call it is about, so a transport
     rendering the question can name it rather than making the human read it out
     of the prose.
+
+    ``choices`` lists answers the asker accepts besides a plain yes or no, so a
+    transport can offer one button per choice instead of two. Empty means yes
+    or no is the whole of it.
     """
 
     tool_call_id: str = Field(compare=False)
+    choices: list[ApprovalChoice] = Field(default_factory=list)
 
 
 class HumanMessage(BaseEvent):
