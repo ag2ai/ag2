@@ -52,25 +52,43 @@ def parse_client_capabilities(
     v0.9 and v0.9.1 read ``metadata.a2uiClientCapabilities["v0.9"]``; v1.0 reads
     ``metadata.a2uiRendererCapabilities["1.0"]``. Callers serving a non-default
     agent pass its ``protocol_version``.
-    Returns ``None`` if the metadata is missing, malformed, or does not declare
-    the requested version. ``supportedCatalogIds`` entries are coerced to ``str``
-    and non-dict ``inlineCatalogs`` entries are dropped.
+    Returns ``None`` if the metadata does not carry the key or does not declare
+    the requested version (no capabilities). Capabilities that are present but
+    break the schema (``renderer_capabilities.json``: ``supportedCatalogIds`` a
+    required array of strings, ``inlineCatalogs`` an array of objects with a
+    string ``catalogId``) are logged and read as supporting no catalog, so the
+    turn sends no A2UI: a2ui-core rejects them
+    (``conformance/agent/renderer_capabilities.yaml``), and guessing at them
+    could offer a renderer catalogs it never named.
     """
-    if not metadata:
+    if not metadata or (caps := metadata.get((protocol := get_protocol(version_key)).capabilities_key)) is None:
         return None
-    protocol = get_protocol(version_key)
-    caps = metadata.get(protocol.capabilities_key)
     if not isinstance(caps, dict):
+        return _malformed(protocol.capabilities_key, "is not an object")
+    if (v := caps.get(protocol.capabilities_version_key)) is None:
         return None
-    v = caps.get(protocol.capabilities_version_key)
     if not isinstance(v, dict):
-        return None
+        return _malformed(protocol.capabilities_key, f"entry {protocol.capabilities_version_key!r} is not an object")
     raw_ids = v.get("supportedCatalogIds")
-    raw_inline = v.get("inlineCatalogs")
-    return A2UIClientCapabilities(
-        supported_catalog_ids=[str(x) for x in raw_ids] if isinstance(raw_ids, list) else [],
-        inline_catalogs=[c for c in raw_inline if isinstance(c, dict)] if isinstance(raw_inline, list) else [],
+    ids = [x for x in raw_ids if isinstance(x, str)] if isinstance(raw_ids, list) else []
+    if not isinstance(raw_ids, list) or len(ids) != len(raw_ids):
+        return _malformed(protocol.capabilities_key, "'supportedCatalogIds' is not an array of strings")
+    raw_inline = v.get("inlineCatalogs", [])
+    inline = (
+        [c for c in raw_inline if isinstance(c, dict) and isinstance(c.get("catalogId"), str)]
+        if isinstance(raw_inline, list)
+        else []
     )
+    if not isinstance(raw_inline, list) or len(inline) != len(raw_inline):
+        return _malformed(protocol.capabilities_key, "'inlineCatalogs' is not an array of catalogs with a 'catalogId'")
+    return A2UIClientCapabilities(supported_catalog_ids=ids, inline_catalogs=inline)
+
+
+def _malformed(key: str, problem: str) -> A2UIClientCapabilities:
+    logger.warning(
+        "A2UI renderer capabilities %r are malformed (%s); treating them as supporting no catalog.", key, problem
+    )
+    return A2UIClientCapabilities()
 
 
 def capabilities_to_prompt(caps: A2UIClientCapabilities | None, *, catalog_id: str) -> str:

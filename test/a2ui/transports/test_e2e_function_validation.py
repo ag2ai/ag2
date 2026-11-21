@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from ag2 import Agent
-from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui import A2UIFunctionError, A2UIServer, a2ui_action
 from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
@@ -88,14 +88,17 @@ async def test_empty_function_name_receives_an_invalid_function_call_reply() -> 
 
 
 @pytest.mark.asyncio
-async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
+async def test_a_function_call_with_an_empty_id_is_refused_without_running_the_handler() -> None:
+    # An empty id cannot be correlated: a2ui-core refuses the call (conformance/agent/agent_functions.yaml).
+    called: list[str] = []
+
     @a2ui_action
     def lookup() -> str:
+        called.append("lookup")
         return "found"
 
-    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
     app = A2UIServer(
-        Agent("ui", config=tracking),
+        Agent("ui", config=TestConfig("Hi.")),
         actions=[lookup],
         protocol_version="v1.0",
         transport=RestTransport(encoding="jsonl"),
@@ -116,8 +119,8 @@ async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
         },
     )
 
-    assert messages == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "", "value": "found"}}]
-    assert tracking.calls == []
+    assert called == []
+    assert messages == [{"text": "Hi."}]
 
 
 @pytest.mark.asyncio
@@ -640,3 +643,69 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
     assert "fc-1" in text
     assert "23" in text
     assert "function=otherLookup" not in text
+
+
+def _call(name: str) -> dict[str, Any]:
+    return {
+        "a2ui": [
+            {
+                "version": "1.0",
+                "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": {"@call": name}},
+            }
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_handler_answers_with_its_own_error_code() -> None:
+    # v1_0 a2ui_protocol.md, agentFunctionResponse: a function may report its own code ("PROVIDER_NOT_FOUND");
+    # conformance/agent/agent_functions.yaml expects it passed through as is.
+    @a2ui_action
+    def lookup() -> str:
+        raise A2UIFunctionError("PROVIDER_NOT_FOUND", "No provider for this region.")
+
+    app = A2UIServer(Agent("ui"), actions=[lookup], protocol_version="v1.0", transport=RestTransport(encoding="jsonl"))
+
+    messages = await _post(app, _call("lookup"))
+
+    assert messages == [
+        {
+            "version": "1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "PROVIDER_NOT_FOUND", "message": "No provider for this region."},
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("validate_responses", [True, False])
+async def test_a_call_is_answered_once_even_when_the_handler_returns_a_response(validate_responses: bool) -> None:
+    # Only the server answers a call, exactly once per functionCallId, whatever the validation setting.
+    @a2ui_action
+    def lookup() -> dict[str, Any]:
+        return {
+            "version": "1.0",
+            "agentFunctionResponse": {"functionCallId": "fc-1", "error": {"code": "MINE", "message": "x"}},
+        }
+
+    app = A2UIServer(
+        Agent("ui"),
+        actions=[lookup],
+        protocol_version="v1.0",
+        validate_responses=validate_responses,
+        transport=RestTransport(encoding="jsonl"),
+    )
+
+    messages = await _post(app, _call("lookup"))
+
+    assert messages == [
+        {
+            "version": "1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "EXECUTION_ERROR", "message": "Function 'lookup' failed."},
+            },
+        }
+    ]

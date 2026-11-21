@@ -12,12 +12,13 @@ from ag2.exceptions import missing_optional_dependency
 from ._types import A2UIVersion
 
 try:
-    from .actions import A2UIAction, a2ui_action
+    from .actions import A2UIAction, A2UIFunctionError, a2ui_action
     from .capabilities import A2UIClientCapabilities
     from .events import A2UIClientEvent, A2UIMessageEvent, A2UIValidationFailedEvent
 except ImportError as e:
     a2ui_action = missing_optional_dependency("a2ui_action", "a2ui", e)
     A2UIAction = missing_optional_dependency("A2UIAction", "a2ui", e)  # type: ignore[misc]
+    A2UIFunctionError = missing_optional_dependency("A2UIFunctionError", "a2ui", e)  # type: ignore[misc]
     A2UIClientCapabilities = missing_optional_dependency("A2UIClientCapabilities", "a2ui", e)  # type: ignore[misc]
     A2UIClientEvent = missing_optional_dependency("A2UIClientEvent", "a2ui", e)  # type: ignore[misc]
     A2UIMessageEvent = missing_optional_dependency("A2UIMessageEvent", "a2ui", e)  # type: ignore[misc]
@@ -33,6 +34,7 @@ __all__ = (
     "A2UIAction",
     "A2UIClientCapabilities",
     "A2UIClientEvent",
+    "A2UIFunctionError",
     "A2UIMessageEvent",
     "A2UIServer",
     "A2UIValidationFailedEvent",

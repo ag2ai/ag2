@@ -66,7 +66,9 @@ A client advertises what its renderer supports via `#!python A2UIClientCapabilit
 - **No catalog in common**: the turn runs **without A2UI**, and a warning is logged. The prompt has no A2UI section, the model's answer reaches the client as text only, and the surface messages of server-side handlers are dropped (the handlers still run). A `#!python callAgentFunction` still gets its `#!python agentFunctionResponse`, which the renderer is waiting for. The call names one of the renderer's own catalogs, so its handler is matched by name alone; only an unregistered name gets `#!python UNKNOWN_FUNCTION`.
 - **No capabilities**: with v1.0, the turn offers no A2UI on every transport, since the specification says "omitting them withdraws A2UI for that turn": nothing A2UI is sent, not even an `#!python agentFunctionResponse`. A v1.0 renderer must send `#!python a2uiRendererCapabilities` with every request. Before v1.0, every catalog the agent serves is offered.
 
-Inline catalogs are never offered: the agent validates only against catalogs it was configured with.
+Capabilities that are present but malformed (not an object, `#!python supportedCatalogIds` missing or not an array of strings, an inline catalog without a `#!python catalogId`) count as supporting no catalog: the turn runs without A2UI and a warning is logged, as the official SDK rejects them.
+
+Inline catalogs are never offered: the agent validates only against catalogs it was configured with. So leave `#!python accepts_inline_catalogs` off when building the A2A agent card with `#!python get_a2ui_agent_extension()`.
 
 How capabilities reach the agent depends on the transport:
 

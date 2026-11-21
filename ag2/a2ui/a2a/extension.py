@@ -35,9 +35,13 @@ def get_a2ui_agent_extension(
         supported_catalog_ids: List of catalog IDs the agent can generate.
             Defaults to the basic catalog for ``version``. Matches
             ``agent_capabilities.json#/<version>/supportedCatalogIds`` (``server_capabilities.json`` before v1.0).
+            For an :class:`~ag2.a2ui.a2a.A2UIAgentExecutor` with ``custom_catalog=``, pass the custom
+            catalog's ``catalogId`` (before v1.0 it replaces the basic catalog, so list only it).
         accepts_inline_catalogs: Whether the agent accepts inline catalogs
             from the client. Matches
             ``agent_capabilities.json#/<version>/acceptsInlineCatalogs`` (``server_capabilities.json`` before v1.0).
+            Leave it ``False`` for an :class:`~ag2.a2ui.a2a.A2UIAgentExecutor`: it never uses a renderer's
+            inline catalogs (ADR 0041), and a renderer that trusts the card may send only those.
 
     Returns:
         A configured ``AgentExtension`` for the requested A2UI version.

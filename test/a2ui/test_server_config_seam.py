@@ -16,7 +16,7 @@ from ag2 import Agent
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import RestTransport
 
-from .seam import a2ui_reply, serve_turn
+from .seam import BASIC_CATALOG, a2ui_reply, serve_turn
 
 
 def _server(**kwargs: Any) -> A2UIServer:
@@ -38,6 +38,15 @@ def test_custom_catalog_is_identified_by_its_catalog_id(version: str, catalog: d
     # v0_9 a2ui_protocol.md L317 / v1_0 L543: "Each catalog is identified by a `catalogId` string".
     with pytest.raises(ValueError, match="Custom catalog must include a non-empty string 'catalogId'"):
         _server(protocol_version=version, custom_catalog={"protocolVersion": "1.0", **catalog})
+
+
+@pytest.mark.parametrize("version", ["v0.9", "v0.9.1", "v1.0"])
+def test_custom_catalog_cannot_take_the_basic_catalogs_id(version: str) -> None:
+    # Two catalogs under one id cannot be told apart; a2ui_agent rejects duplicate catalog ids
+    # (conformance/agent/multi_catalog_formats.yaml, test_direct_json_create_format_rejects_duplicate_catalog_ids).
+    catalog = {"catalogId": BASIC_CATALOG[version], "protocolVersion": "1.0" if version == "v1.0" else "0.9"}
+    with pytest.raises(ValueError, match="is the basic catalog's id"):
+        _server(protocol_version=version, custom_catalog={**catalog, "components": {}})
 
 
 def test_custom_catalog_dollar_id_must_match_its_catalog_id() -> None:

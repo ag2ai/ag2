@@ -274,3 +274,106 @@ async def test_v0_9_custom_catalog_keeps_the_basic_components_it_references() ->
 
     assert turn.feedback == []
     assert turn.ui == messages
+
+
+@pytest.mark.asyncio
+class TestSeveralBlocks:
+    """A response may hold "one or more A2UI JSON blocks" (a2ui_agent ``constants.py``)."""
+
+    async def test_every_block_is_parsed_and_the_text_between_is_prose(self) -> None:
+        delete = {"version": "v0.9", "deleteSurface": {"surfaceId": "s1"}}
+        reply = f"First.\n<a2ui-json>\n{json.dumps([SURFACE])}\n</a2ui-json>\nThen.\n<a2ui-json>\n{json.dumps([delete])}\n</a2ui-json>\nDone."
+
+        turn = await serve_turn(reply)
+
+        assert turn.frames == [{"text": "First. Then. Done."}, SURFACE, delete]
+
+    async def test_a_broken_second_block_is_retried(self) -> None:
+        reply = f"Here.\n<a2ui-json>\n{json.dumps([SURFACE])}\n</a2ui-json>\n<a2ui-json>\n{{oops\n</a2ui-json>"
+
+        turn = await serve_turn(reply, a2ui_reply([SURFACE]))
+
+        assert turn.ui == [SURFACE]
+        assert turn.feedback[0].startswith("Your A2UI output had validation errors:\n- Block 2: Invalid JSON")
+
+    async def test_a_close_tag_inside_a_json_string_does_not_end_the_block(self) -> None:
+        text = {
+            "version": "v0.9",
+            "updateComponents": {
+                "surfaceId": "s1",
+                "components": [{"id": "root", "component": "Text", "text": "write </a2ui-json> to close"}],
+            },
+        }
+
+        turn = await serve_turn(a2ui_reply([SURFACE, text], prose="Here."))
+
+        assert turn.frames == [{"text": "Here."}, SURFACE, text]
+
+
+def _text_bound_to(protocol_version: str, path: str) -> list[dict[str, Any]]:
+    version = WIRE_VERSION[protocol_version]
+    key = "@path" if protocol_version == "v1.0" else "path"
+    return [
+        {"version": version, "createSurface": {"surfaceId": "s", "catalogId": BASIC_CATALOG[protocol_version]}},
+        {
+            "version": version,
+            "updateComponents": {
+                "surfaceId": "s",
+                "components": [{"id": "root", "component": "Text", "text": {key: path}}],
+            },
+        },
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("protocol_version", ["v0.9", "v1.0"])
+class TestBindingPaths:
+    """A data binding names a JSON Pointer (v1_0 a2ui_protocol.md, "Data binding"); a relative one in a collection
+    scope. conformance/core/validator_v*.yaml ``test_v*_invalid_binding_path_error``."""
+
+    async def test_an_invalid_escape_is_reported(self, protocol_version: str) -> None:
+        key = "@path" if protocol_version == "v1.0" else "path"
+
+        turn = await serve_turn(
+            a2ui_reply(_text_bound_to(protocol_version, "/invalid/escape/~2")),
+            "Plain text.",
+            protocol_version=protocol_version,
+        )
+
+        assert turn.errors == [
+            [
+                "- Operation 1: '/invalid/escape/~2' is not a valid data path: '~' must be written '~0' or '~1' "
+                f"(at /updateComponents/components/0/text/{key})"
+            ]
+        ]
+
+    @pytest.mark.parametrize("path", ["/user/name", "/a~1b/~0c", "name", "item/0/label", ""])
+    async def test_absolute_and_relative_pointers_pass(self, protocol_version: str, path: str) -> None:
+        messages = _text_bound_to(protocol_version, path)
+
+        turn = await serve_turn(a2ui_reply(messages), protocol_version=protocol_version)
+
+        assert turn.ui == messages
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("key", ["functionCallId", "surfaceId"])
+async def test_call_renderer_function_needs_non_empty_ids(key: str) -> None:
+    # a2ui_agent refuses an empty functionCallId and drops an empty surfaceId (renderer_function_calls.yaml).
+    call = {
+        "functionCallId": "fc-1",
+        "surfaceId": "s",
+        "callFunction": {"@call": "now", "catalogId": BASIC_CATALOG["v1.0"]},
+    }
+    call[key] = ""
+    messages = [
+        {"version": "1.0", "createSurface": {"surfaceId": "s", "catalogId": BASIC_CATALOG["v1.0"]}},
+        {"version": "1.0", "callRendererFunction": call},
+    ]
+
+    turn = await serve_turn(a2ui_reply(messages), "Plain text.", protocol_version="v1.0")
+
+    assert (
+        f"- Operation 1: 'callRendererFunction' needs a non-empty {key!r} (at /callRendererFunction/{key})"
+        in (turn.errors[0])
+    )

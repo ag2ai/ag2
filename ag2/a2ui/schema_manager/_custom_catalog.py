@@ -221,6 +221,13 @@ def _load_custom_catalog(custom_catalog: "str | os.PathLike[str] | JsonSchema", 
             raise FileNotFoundError(f"Custom catalog file not found: {path}")
         catalog = _load_object(path)
     catalog_id = _checked_catalog_id(catalog)
+    if catalog_id == protocol.catalog_id:
+        # Two catalogs under one id cannot be told apart in createSurface or negotiation; a2ui_agent rejects
+        # duplicate ids (conformance/agent/multi_catalog_formats.yaml, test_direct_json_create_format_rejects_
+        # duplicate_catalog_ids), and a renderer would draw this id with its own basic catalog.
+        raise ValueError(
+            f"Custom catalog 'catalogId' {catalog_id!r} is the basic catalog's id; give the custom catalog its own URI."
+        )
     _check_catalog_protocol_version(catalog, protocol)
     if protocol.entity_naming_rules:
         # Before the full schema, for clearer messages on the rules a catalog author most often breaks.

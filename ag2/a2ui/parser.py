@@ -5,7 +5,7 @@
 import json
 import logging
 import re
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal, cast
@@ -73,6 +73,52 @@ def strip_markdown_fences(text: str) -> str:
     return _CLOSING_FENCE_RE.sub("", text, count=1).strip()
 
 
+def _split_blocks(response: str) -> tuple[list[str], list[str]]:
+    """The prose segments and the non-empty ``<a2ui-json>`` block bodies of ``response``, each in order.
+
+    Upstream lets a response hold "one or more A2UI JSON blocks" (``a2ui_agent`` ``constants.py``), and a close tag
+    written inside a JSON string does not end its block (``conformance/agent/direct_json/response_parser.yaml``).
+    """
+    texts: list[str] = []
+    blocks: list[str] = []
+    pos = 0
+    while (open_idx := response.find(A2UI_JSON_OPEN_TAG, pos)) != -1:
+        texts.append(response[pos:open_idx])
+        body_start = open_idx + len(A2UI_JSON_OPEN_TAG)
+        close_idx = _find_close_tag(response, body_start)
+        body_end = len(response) if close_idx is None else close_idx
+        if body := strip_markdown_fences(response[body_start:body_end]):
+            blocks.append(body)
+        pos = len(response) if close_idx is None else close_idx + len(A2UI_JSON_CLOSE_TAG)
+    texts.append(response[pos:])
+    return texts, blocks
+
+
+def _find_close_tag(response: str, start: int) -> int | None:
+    """Where the close tag of the block whose body starts at ``start`` is, skipping JSON strings; ``None`` if absent."""
+    in_string = False
+    i = start
+    n = len(response)
+    while i < n:
+        c = response[i]
+        if in_string:
+            if c == "\\":
+                i += 2
+                continue
+            if c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif response.startswith(A2UI_JSON_CLOSE_TAG, i):
+            return i
+        i += 1
+    if in_string:
+        # An unterminated string (malformed block): fall back to the first close tag, so the prose after it survives.
+        close_idx = response.find(A2UI_JSON_CLOSE_TAG, start)
+        return None if close_idx == -1 else close_idx
+    return None
+
+
 def _parse_json_block(json_part: str, kinds: Collection[str]) -> "tuple[list[ServerToClientMessage], str | None]":
     """Parse an ``<a2ui-json>`` block (JSON array/object, or JSONL) into A2UI messages.
 
@@ -134,6 +180,43 @@ def _data_path_errors(messages: Sequence[JsonObject]) -> list[str]:
         if isinstance(path, str) and not is_json_pointer(path):
             errors.append(f"Operation {i}: {path!r} is not a JSON Pointer (at /updateDataModel/path)")
     return errors
+
+
+# An absolute JSON Pointer, or a relative path read in a collection scope (v1_0 a2ui_protocol.md "Collection scopes
+# (relative paths)"); either way ``~`` only as ``~0`` / ``~1``. The same pattern as a2ui-core's RELAXED_PATH_PATTERN.
+_BINDING_PATH = re.compile(r"(?:/(?:[^~/]|~[01])*)*|(?:[^~/]|~[01])+(?:/(?:[^~/]|~[01])*)*")
+# A data binding (``{"path"}`` in v0.9, ``{"@path"}`` in v1.0) and a template child list (``{componentId, path}``).
+_BINDING_SHAPES = (frozenset({"path"}), frozenset({"@path"}), frozenset({"componentId", "path"}))
+
+
+def _binding_path_errors(messages: Sequence[JsonObject]) -> list[str]:
+    """A data binding in a component must name a JSON Pointer, absolute or relative (v1_0 a2ui_protocol.md, "Data
+    binding": "Data bindings in A2UI are defined using JSON Pointers ([RFC 6901])")."""
+    errors: list[str] = []
+    for i, message in enumerate(messages):
+        payload = message.get("updateComponents")
+        components = payload.get("components") if isinstance(payload, dict) else None
+        if isinstance(components, list):
+            location = ("updateComponents", "components")
+            errors.extend(f"Operation {i}: {error}" for error in _bindings_in(components, location))
+    return errors
+
+
+def _bindings_in(node: JsonValue, location: tuple[str, ...]) -> Iterator[str]:
+    if isinstance(node, list):
+        for n, item in enumerate(node):
+            yield from _bindings_in(item, (*location, str(n)))
+        return
+    if not isinstance(node, dict):
+        return
+    if node.keys() in _BINDING_SHAPES:
+        key = "@path" if "@path" in node else "path"
+        path = node[key]
+        if isinstance(path, str) and _BINDING_PATH.fullmatch(path) is None:
+            pointer = "/".join(part.replace("~", "~0").replace("/", "~1") for part in (*location, key))
+            yield f"{path!r} is not a valid data path: '~' must be written '~0' or '~1' (at /{pointer})"
+    for key, value in node.items():
+        yield from _bindings_in(value, (*location, key))
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,8 +285,8 @@ def _surface_catalog(
 class A2UIResponseParser:
     """Parses and validates A2UI messages from agent responses.
 
-    Extracts the block the LLM wraps between the official A2UI tags
-    (``<a2ui-json>…</a2ui-json>``), treating everything outside the tag as
+    Extracts the blocks the LLM wraps between the official A2UI tags
+    (``<a2ui-json>…</a2ui-json>``), treating everything outside them as
     conversational prose, and optionally validates the messages against the
     A2UI schema.
     """
@@ -243,56 +326,32 @@ class A2UIResponseParser:
     def parse(self, response: str) -> A2UIParseResult:
         """Extract conversational text and A2UI messages from a response.
 
-        Text before/after the ``<a2ui-json>`` block is the prose; the block
-        content is parsed as a JSON array/object or JSONL. A missing closing
-        tag is tolerated — the block runs to the end of the response.
+        A response may hold several ``<a2ui-json>`` blocks; text outside them is
+        the prose. Each block is parsed as a JSON array/object or JSONL, and the
+        messages of every block are returned in order. A close tag inside a JSON
+        string does not end a block, and a missing close tag is tolerated: the
+        last block then runs to the end of the response.
         """
-        open_idx = response.find(A2UI_JSON_OPEN_TAG)
-        if open_idx == -1:
-            return A2UIParseResult(
-                text=response.strip(),
-                operations=[],
-                has_a2ui=False,
-            )
+        texts, blocks = _split_blocks(response)
+        text = " ".join(part.strip() for part in texts if part.strip())
+        if not blocks:
+            return A2UIParseResult(text=text, operations=[], has_a2ui=False)
 
-        text_before = response[:open_idx]
-        after_open = response[open_idx + len(A2UI_JSON_OPEN_TAG) :]
+        operations: list[ServerToClientMessage] = []
+        for n, block in enumerate(blocks):
+            block_operations, parse_error = _parse_json_block(block, self._protocol.server_to_client_keys)
+            if parse_error is not None:
+                where = f"Block {n + 1}: " if len(blocks) > 1 else ""
+                return A2UIParseResult(
+                    text=text,
+                    operations=[],
+                    has_a2ui=True,
+                    raw_json="\n".join(blocks),
+                    parse_error=where + parse_error,
+                )
+            operations.extend(block_operations)
 
-        close_idx = after_open.find(A2UI_JSON_CLOSE_TAG)
-        if close_idx == -1:
-            # Tolerate a missing closing tag: take everything to the end.
-            json_part = after_open
-            text_after = ""
-        else:
-            json_part = after_open[:close_idx]
-            text_after = after_open[close_idx + len(A2UI_JSON_CLOSE_TAG) :]
-
-        text = " ".join(part.strip() for part in (text_before, text_after) if part.strip())
-        json_part = strip_markdown_fences(json_part)
-
-        if not json_part:
-            return A2UIParseResult(
-                text=text,
-                operations=[],
-                has_a2ui=False,
-            )
-
-        operations, parse_error = _parse_json_block(json_part, self._protocol.server_to_client_keys)
-        if parse_error is not None:
-            return A2UIParseResult(
-                text=text,
-                operations=[],
-                has_a2ui=True,
-                raw_json=json_part,
-                parse_error=parse_error,
-            )
-
-        return A2UIParseResult(
-            text=text,
-            operations=operations,
-            has_a2ui=True,
-            raw_json=json_part,
-        )
+        return A2UIParseResult(text=text, operations=operations, has_a2ui=True, raw_json="\n".join(blocks))
 
     def format_validation_error(self, errors: Sequence[str]) -> str:
         """Format validation errors as feedback for the LLM to self-correct."""
@@ -355,6 +414,7 @@ class A2UIResponseParser:
 
         errors.extend(self._check_function_messages(operations))
         errors.extend(_data_path_errors(objects))
+        errors.extend(_binding_path_errors(objects))
         walk = walk_surfaces(objects, lifetime_unique_surface_ids=self._protocol.lifetime_unique_surface_ids)
         errors.extend(walk.errors)
         # A surface on an unknown catalog gets that one error: its components have no catalog to be judged by.
@@ -382,5 +442,14 @@ class A2UIResponseParser:
                 errors.append(
                     f"Operation {i}: 'agentFunctionResponse' is sent by the server in reply to a "
                     "'callAgentFunction'; do not emit it."
+                )
+            call = op.get("callRendererFunction")
+            if isinstance(call, dict):
+                # The renderer correlates its response by id and runs the call on a surface: neither may be empty
+                # (a2ui_agent refuses both; conformance/agent/renderer_function_calls.yaml).
+                errors.extend(
+                    f"Operation {i}: 'callRendererFunction' needs a non-empty {key!r} (at /callRendererFunction/{key})"
+                    for key in ("functionCallId", "surfaceId")
+                    if call.get(key) == ""
                 )
         return errors

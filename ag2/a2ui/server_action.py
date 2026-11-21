@@ -18,8 +18,9 @@ instead. That runs the same registered action (its ``args`` become the keyword
 arguments) and always answers with an ``agentFunctionResponse`` that echoes the
 call's ``functionCallId``: the returned value on success, or an ``error``
 (``UNKNOWN_FUNCTION`` when nothing is registered under that name,
-``INVALID_FUNCTION_CALL`` when the arguments do not fit, ``EXECUTION_ERROR``
-when the handler raised). Messages the handler returns are emitted too, ahead
+``INVALID_FUNCTION_CALL`` when the arguments do not fit, the handler's own
+code when it raised :class:`~ag2.a2ui.A2UIFunctionError`, ``EXECUTION_ERROR``
+when it raised anything else). Messages the handler returns are emitted too, ahead
 of the response.
 
 The handler's return is coerced to JSON (``pydantic_core``) before any of the
@@ -42,7 +43,7 @@ from ag2.utils import CONTEXT_OPTION_NAME
 from ._messages import is_server_message, mentions_server_message
 from ._types import A2UIWireVersion, JsonObject, JsonValue, ServerToClientMessage, server_to_client_payload_keys
 from ._versions import A2UIProtocol
-from .actions import A2UIAction
+from .actions import A2UIAction, A2UIFunctionError
 from .incoming import (
     A2UIIncomingAction,
     A2UIIncomingActionResult,
@@ -170,7 +171,7 @@ async def run_server_action(
         return []
 
     messages = _messages_of(result, version, handler=click.name)
-    if _invalid(messages, validator, handler=click.name):
+    if _answers_itself(messages, handler=click.name) or _invalid(messages, validator, handler=click.name):
         return []
     if not messages and result is not None:
         logger.debug(
@@ -242,12 +243,14 @@ async def run_agent_function(
     except ValidationError as e:
         logger.warning("A2UI function %r called with invalid arguments: %s", call.call, e)
         return [_invalid_function_arguments(call, version)]
+    except A2UIFunctionError as e:
+        return [_function_response(call.function_call_id, version, error={"code": e.code, "message": e.message})]
     except Exception:  # noqa: BLE001 - a handler failure must not tear down the turn
         logger.exception("A2UI function %r failed", call.call)
         return [_execution_error(call, version)]
 
     messages = _messages_of(result, version, handler=call.call)
-    if _invalid(messages, validator, handler=call.call):
+    if _answers_itself(messages, handler=call.call) or _invalid(messages, validator, handler=call.call):
         return [_execution_error(call, version)]
     # Messages are the handler's surface updates; there is no separate value to return.
     value = None if messages else result
@@ -321,6 +324,22 @@ async def run_client_interactions(
         handled = handled or bool(answer)
         messages.extend(answer)
     return offer.deliverable(messages, source="handlers"), handled
+
+
+def _answers_itself(messages: list[ServerToClientMessage], *, handler: str) -> bool:
+    """Whether a handler returned an ``agentFunctionResponse``, which only the server sends, once per call (logged).
+
+    Checked whatever the validation setting, so a call is never answered twice; a handler reports its own error
+    by raising :class:`A2UIFunctionError`.
+    """
+    if not any("agentFunctionResponse" in message for message in messages):
+        return False
+    logger.warning(
+        "A2UI handler %r returned an 'agentFunctionResponse'; not sending its messages. "
+        "Raise A2UIFunctionError to answer a call with an error.",
+        handler,
+    )
+    return True
 
 
 def _invalid(messages: list[ServerToClientMessage], validator: A2UIResponseParser | None, *, handler: str) -> bool:

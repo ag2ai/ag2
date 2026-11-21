@@ -33,7 +33,8 @@ The differences come from what core is, not from bugs:
   child reference and a CheckBox `value: "yes"` both pass, and fail only under `STRICT_VALIDATION`.
   ag2 has one mode, and it always runs both.
 - Its type-error texts are Pydantic union noise a model cannot act on.
-- It has no prompt generator and no parser for the LLM's `<a2ui-json>` text format.
+- It has no prompt generator and no parser for the LLM's `<a2ui-json>` text format (at 0.6.0; `a2ui-agent-sdk`
+  has since added both, and ag2 follows their documented behaviour where it is spec, see below).
 - `a2ui-a2a` pins `a2a-sdk<0.4`; ag2 requires `>=1.3`.
 - Every package is 0.x and ships breaking changes every one to three weeks.
 
@@ -67,7 +68,9 @@ compares the vendored schemas with the SDK's. It never becomes a runtime extra.
 ## Deviations from upstream
 
 Upstream A2UI at `6e79b2e20fe2e1543aff3b9928613daa2b37189c` is the only authority. ag2 departs from it on purpose
-in these places; line numbers are at that commit.
+in these places; line numbers are at that commit. Re-checked on 2026-11-20 against
+`496df0e76e2ad9aba4cc2a12abe066f43d4f171d`, including its `conformance/` suites: the vendored schemas and catalogs are
+unchanged, and the deviations below still hold. Suite paths below are at that later commit.
 
 - **`root` in the same response.** `specification/v1_0/docs/a2ui_protocol.md` L180 says one of the components sent
   to a surface MUST have `"id": "root"`, and L787 (v0.9: `specification/v0_9/docs/a2ui_protocol.md` L331) lets the
@@ -123,3 +126,27 @@ in these places; line numbers are at that commit.
   object per DataPart. ag2 follows the spec: `A2UIAgentExecutor` consumes a renderer DataPart whose `data` is a single
   envelope with a warning and acts on none of it, and `create_a2ui_parts(legacy_split=True)`, which writes that shape,
   is deprecated (removed in 1.4.0).
+- **Upstream conformance data that breaks the prose.** `conformance/core/multi_catalog.yaml` puts `catalogId`
+  without `@` on components (L179; the prose is `@catalogId`, v1.0 L503/L509), and its L155 catalog `$ref`s a
+  `#/$defs/DynamicString` it does not declare ("Restricted `$ref` Targets", L583–586). `core/catalog.yaml`
+  `test_v10_catalog_from_json_leaf_defs` loads a catalog with `metadata.displayName`, which the vendored
+  `catalog_definition.json` forbids (`additionalProperties: false`). ag2 follows the prose and the schema.
+- **No markup recovery or JSON repair.** `a2ui-agent-sdk` recovers a block without its open tag, tags in backticks
+  and tags with attributes, and repairs trailing commas, smart quotes and raw newlines
+  (`conformance/agent/direct_json/response_parser.yaml`, `compiler.yaml`). ag2 reads only the literal
+  `<a2ui-json>` tags and strict JSON, and asks for a retry otherwise: a retry is cheap, and a guessed repair could
+  send UI the model did not mean. It does read every block of a response and ignores a close tag inside a JSON
+  string, as the SDK does.
+- **SDK-only limits.** `blueprints/modules/a2ui_core.blueprint.md` L1004 caps nesting (50 levels, 5 nested function
+  calls, 100 for expressions), and the SDK parses `formatString` templates and rejects `@index` outside a list
+  template before sending. The prose sets no such limits and makes `@index` misuse a renderer `EXECUTION_ERROR`
+  (v1.0 L319); ag2 checks none of them.
+- **Agent function arguments.** v1.0 L1486 answers arguments that do not match the definition with
+  `INVALID_FUNCTION_CALL`. ag2 checks the names, and then validates the values as it does a tool's: through the
+  handler's Pydantic signature, which coerces `"25"` to an `int` parameter. A value that cannot be coerced is still
+  `INVALID_FUNCTION_CALL`.
+- **Catalog preference order.** `conformance/agent/request_processor.yaml` L181 orders the active catalogs by the
+  renderer's `supportedCatalogIds`. In v1.0 ag2 keeps the basic catalog as the surface default whenever the renderer
+  supports it (ADR 0040).
+- **Legacy A2A MIME type.** `a2ui_a2a` still reads `application/json+a2ui`; ag2 reads only the
+  `application/a2ui+json` the extension specification names.

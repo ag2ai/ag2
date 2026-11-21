@@ -72,8 +72,9 @@ _SURFACE_ERROR_KEYS = frozenset({"code", "path", "message", "surfaceId"})
 def _function_call_problem(call: JsonObject) -> str | None:
     if problem := _unknown_properties(call, "'callAgentFunction'", _CALL_AGENT_FUNCTION_KEYS):
         return problem
-    if not isinstance(call.get("functionCallId"), str):
-        return "'callAgentFunction' needs a string 'functionCallId'"
+    # An empty id cannot be correlated: the call is refused (and, having no id, not answered), as by the SDK.
+    if not isinstance(call.get("functionCallId"), str) or not call["functionCallId"]:
+        return "'callAgentFunction' needs a non-empty string 'functionCallId'"
     # The official SDK answers an empty surfaceId or function name with INVALID_FUNCTION_CALL, as here.
     if not isinstance(call.get("surfaceId"), str) or not call["surfaceId"]:
         return "'callAgentFunction' needs a non-empty string 'surfaceId'"

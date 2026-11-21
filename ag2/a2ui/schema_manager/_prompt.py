@@ -76,6 +76,10 @@ def _component_lines(spec: _VendoredSpec, components: JsonObject, envelope: froz
     return lines + "\n" if lines else ""
 
 
+def _compact(schema: JsonSchema) -> str:
+    return json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
+
+
 def _fill_template(text: str, protocol: A2UIProtocol, catalog: _AgentCatalogs) -> str:
     return text.replace("{catalog_id}", catalog.id).replace("{version_string}", protocol.wire_version)
 
@@ -103,13 +107,14 @@ def _prompt_section(
         "When you want to display a UI, write your conversational text first, "
         f"then wrap a JSON array of A2UI message objects between the "
         f"`{A2UI_JSON_OPEN_TAG}` and `{A2UI_JSON_CLOSE_TAG}` tags.\n\n"
-        "Example response format:\n"
-        "```\n"
+        "A response may hold more than one such block, with text between them. "
+        "Write the tags literally: do not wrap them in backticks, and do not replace the opening tag with a "
+        "markdown code fence such as ```json.\n\n"
+        "Example response:\n\n"
         "Here is the UI you requested.\n"
         f"{A2UI_JSON_OPEN_TAG}\n"
         f"{example_json}\n"
-        f"{A2UI_JSON_CLOSE_TAG}\n"
-        "```"
+        f"{A2UI_JSON_CLOSE_TAG}"
     )
 
     message_types = _fill_template(spec.prompt_message_types, protocol, catalog)
@@ -185,5 +190,11 @@ def _prompt_section(
     if include_schema:
         schema_str = json.dumps(spec.server_to_client, indent=2)
         sections.append(f"\n\n## A2UI Message Schema ({protocol_version})\n\n```json\n{schema_str}\n```")
+        # The prompt carries "The A2UI JSON schema, including the component catalog" (v1_0 a2ui_protocol.md,
+        # "Usage pattern: the prompt-generate-validate loop"; "simply include it in the prompt"): each served catalog and the common types
+        # its components and functions reference. Compact, as a2ui_agent writes them.
+        for catalog_id, catalog_schema in catalog.by_id.items():
+            sections.append(f"\n\n## A2UI Catalog Schema: {catalog_id}\n\n```json\n{_compact(catalog_schema)}\n```")
+        sections.append(f"\n\n## A2UI Common Types Schema\n\n```json\n{_compact(common_types)}\n```")
 
     return "\n".join(sections)

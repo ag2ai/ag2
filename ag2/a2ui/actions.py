@@ -52,6 +52,21 @@ _TYPE_PLACEHOLDERS: dict[str, JsonValue] = {
 }
 
 
+class A2UIFunctionError(Exception):
+    """Raise from an action to answer a v1.0 ``callAgentFunction`` with this error ``code`` and ``message``.
+
+    Any other exception is answered ``EXECUTION_ERROR`` with a generic message. The spec lets a function report its
+    own code (v1_0 a2ui_protocol.md, ``agentFunctionResponse``, e.g. ``"PROVIDER_NOT_FOUND"``), and the renderer
+    shows ``message``, so put nothing in it the user should not see. A click has no response channel: there the
+    error is only logged.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+
+
 @dataclass(slots=True, frozen=True)
 class A2UIEventAction:
     """A server ``event`` action — the declaration behind a clickable button.
@@ -295,6 +310,7 @@ def a2ui_action(
 __all__ = (
     "A2UIAction",
     "A2UIEventAction",
+    "A2UIFunctionError",
     "a2ui_action",
     "collect_action_declarations",
     "collect_server_actions",

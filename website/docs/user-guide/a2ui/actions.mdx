@@ -121,11 +121,26 @@ The reply is always exactly one of `#!python value` or `#!python error`. Any mes
 |---|---|
 | `#!python UNKNOWN_FUNCTION` | No action is registered under that name, or an explicit `#!python catalogId` names a catalog this turn does not offer (see [Capability negotiation](/docs/user-guide/a2ui/capabilities#client-capability-negotiation)). |
 | `#!python INVALID_FUNCTION_CALL` | The envelope is malformed but carries a `#!python functionCallId` (a missing or empty `#!python surfaceId`, an empty `#!python @call`, as the official A2UI SDK also treats them; an unknown property, in the envelope or in `#!python callFunction`; a `#!python catalogId` that is not a string; `#!python args` that is not an object), or `#!python args` does not fit the handler's parameters, including unknown keyword names when the handler has no `#!python **kwargs`. An omitted `#!python args` uses the handler's defaults. |
-| `#!python EXECUTION_ERROR` | The handler raised, or returned messages that fail validation (the error text is logged, not sent to the renderer). |
+| `#!python EXECUTION_ERROR` | The handler raised, returned messages that fail validation, or returned an `#!python agentFunctionResponse` of its own (the error text is logged, not sent to the renderer). |
+| your own code | The handler raised `#!python A2UIFunctionError(code, message)`: the renderer gets that `#!python code` and `#!python message` as is, so keep the message fit for the user. |
+
+```python
+from ag2.a2ui import A2UIFunctionError, a2ui_action
+
+
+KNOWN_PROVIDERS = {"PRV-102"}
+
+
+@a2ui_action
+async def verify_provider(provider_id: str) -> dict[str, bool]:
+    if provider_id not in KNOWN_PROVIDERS:
+        raise A2UIFunctionError("PROVIDER_NOT_FOUND", f"Unknown provider: {provider_id}.")
+    return {"valid": True}
+```
 
 If `#!python callFunction` omits `#!python catalogId`, the call is still answered. The spec asks the renderer to send it, but the message schema does not require it, so the server does not reject a call without one.
 
-Every envelope must conform to the served version's renderer→agent schema: exactly `#!python version` and one of `#!python action`, `#!python callAgentFunction`, `#!python rendererFunctionResponse` and `#!python error`; the version's own `#!python version` value; and each payload's required fields. An `#!python action` needs `#!python name`, `#!python surfaceId`, `#!python sourceComponentId`, a `#!python context` object and an RFC 3339 `#!python timestamp`. A malformed envelope is dropped with a warning: it reaches no handler, no prompt and no `#!python A2UIClientEvent`, and the turn is handed to the agent as usual. The one exception is a v1.0 `#!python callAgentFunction` that still carries a `#!python functionCallId`: the renderer is waiting on it, so the server answers `#!python INVALID_FUNCTION_CALL`.
+Every envelope must conform to the served version's renderer→agent schema: exactly `#!python version` and one of `#!python action`, `#!python callAgentFunction`, `#!python rendererFunctionResponse` and `#!python error`; the version's own `#!python version` value; and each payload's required fields. An `#!python action` needs `#!python name`, `#!python surfaceId`, `#!python sourceComponentId`, a `#!python context` object and an RFC 3339 `#!python timestamp`. A malformed envelope is dropped with a warning: it reaches no handler, no prompt and no `#!python A2UIClientEvent`, and the turn is handed to the agent as usual. The one exception is a v1.0 `#!python callAgentFunction` that still carries a non-empty `#!python functionCallId`: the renderer is waiting on it, so the server answers `#!python INVALID_FUNCTION_CALL`. A call with an empty `#!python functionCallId` cannot be correlated, so it is dropped and its handler never runs.
 
 `#!python callAgentFunction` and `#!python rendererFunctionResponse` do not exist before v1.0: on v0.9 and v0.9.1 they are dropped the same way.
 

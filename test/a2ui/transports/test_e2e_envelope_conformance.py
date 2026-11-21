@@ -148,11 +148,11 @@ async def test_a_malformed_function_call_with_an_id_is_answered_invalid(call: di
     [
         (
             {key: value for key, value in _CALL.items() if key != "functionCallId"},
-            "'callAgentFunction' needs a string 'functionCallId'",
+            "'callAgentFunction' needs a non-empty string 'functionCallId'",
         ),
         (
             {"functionCallId": "", "callFunction": _CALL["callFunction"]},
-            "'callAgentFunction' needs a non-empty string 'surfaceId'",
+            "'callAgentFunction' needs a non-empty string 'functionCallId'",
         ),
     ],
     ids=["no-id", "empty-id"],

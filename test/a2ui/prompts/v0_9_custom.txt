@@ -4,13 +4,14 @@ You are a helpful AI assistant that can generate rich user interfaces using the 
 
 You can generate rich UI responses using the A2UI v0.9 protocol. When you want to display a UI, write your conversational text first, then wrap a JSON array of A2UI message objects between the `<a2ui-json>` and `</a2ui-json>` tags.
 
-Example response format:
-```
+A response may hold more than one such block, with text between them. Write the tags literally: do not wrap them in backticks, and do not replace the opening tag with a markdown code fence such as ```json.
+
+Example response:
+
 Here is the UI you requested.
 <a2ui-json>
 [{"version": "v0.9","createSurface": {"surfaceId": "s1","catalogId": "https://example.com/cat.json"}}]
 </a2ui-json>
-```
 
 
 ## A2UI Message Types
