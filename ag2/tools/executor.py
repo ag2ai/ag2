@@ -131,6 +131,9 @@ class ToolExecutor:
                     results.append(ev)
 
         if client_calls:
+            if results:
+                # Keep completed calls in replay without starting another model call.
+                await context.stream.history.append(ToolResultsEvent(results), context)
             # Preserve provider fields from the model's calls while dispatching
             # the names and arguments that tool middleware actually approved.
             pending = {call.id: call for call in client_calls}
