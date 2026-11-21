@@ -317,18 +317,38 @@ request. `permission_policy` controls the response:
 | `"auto"` | Approve automatically (headless orchestration) |
 | `"deny"` | Reject automatically |
 
-Under `"ask"`, the hook receives an `ACPPermissionRequest`: the agent's request
-as it sent it, with the options it offers (`option_id`, `name`, `kind`), the
-tool call's `kind`, `locations` and `raw_input`, and its title as `content`.
-To select an option, answer with an `ApprovalChoiceMessage` holding its
-`option_id`:
-
 ```python linenums="1"
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+
+agent = Agent(
+    "coder",
+    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
+)
+```
+
+`"auto"` and `"deny"` select the agent's one-time option, and fall back to the
+remembered one only when the agent offers nothing else. The order in which the
+agent lists its options never decides.
+
+### Choosing one of the agent's options
+
+Under `"ask"`, the hook receives an `ACPPermissionRequest`. It carries the
+request as the agent sent it:
+
+- `options`: the choices the agent offers, each with an `option_id`, a `name`
+  (the agent's label, for example *Allow for this session*) and a `kind`
+  (`allow_once`, `allow_always`, `reject_once` or `reject_always`);
+- `kind`, `locations` and `raw_input`: what the tool call is and what it touches;
+- `content`: the tool call's title.
+
+To select an option, return an `ApprovalChoiceMessage` holding its `option_id`:
+
+```python linenums="1" hl_lines="16-17"
 from ag2 import Agent
 from ag2.acp import ClaudeCodeConfig
 from ag2.acp.events import ACPPermissionRequest
 from ag2.events import ApprovalChoiceMessage, HumanInputRequest, HumanMessage
-
 
 def choose(event: HumanInputRequest) -> str | HumanMessage:
     if isinstance(event, ACPPermissionRequest):
@@ -345,37 +365,31 @@ def choose(event: HumanInputRequest) -> str | HumanMessage:
             print(f"Enter a number from 1 to {len(event.options)}.")
     return input(event.content)
 
-
 agent = Agent("coder", config=ClaudeCodeConfig(cwd="/repo"), hitl_hook=choose)
 ```
 
-The range check matters: Python reads `options[-1]` as the last option, so an
-unchecked `0` would select an option nobody picked.
+!!! warning "Check the number before indexing"
 
-A plain string answer is a yes or no in words and is never matched against
-option ids, so an option whose id happens to read `"y"` or `"n"` cannot be
-selected by accident. `ACPPermissionRequest` is a `ToolApprovalRequest`, so a
-hook or UI that answers any tool approval works too, without being told about
-the agent's options: a plain **yes** (or AG-UI's approve button) selects the
-agent's one-time allow option, whatever order the agent lists its options in,
-**always** selects the remembered one (for example Gemini CLI's *Allow for this
-session*), and any other answer, AG-UI's refuse button included, rejects.
+    Python reads `options[-1]` as the last option, so an unchecked `0` would
+    select an option the user never picked. Accept only `1` to
+    `len(event.options)` and ask again otherwise.
+
+A plain string answer is read as a yes or no in words, never as an option id,
+so an option whose id happens to be `"y"` or `"n"` cannot be selected by
+accident. This keeps hooks and UIs that only know tool approvals working,
+because `ACPPermissionRequest` is a `ToolApprovalRequest`:
+
+| Answer | Selects |
+| :--- | :--- |
+| `yes`, `y`, `1` | The one-time allow option, whatever order the agent lists its options in; a rejection if there is none |
+| `always` | The remembered option (for example Gemini CLI's *Allow for this session*); the one-time allow option if there is none |
+| anything else | A rejection |
+| `ApprovalChoiceMessage(option_id)` | Exactly that option; a rejection if the id was not offered |
+
 Served over [AG-UI](/docs/user-guide/ag-ui/overview#gating-a-tool-call-instead-of-asking-a-question),
-the interrupt's `responseSchema` lists the agent's options, so the client can
-offer each one; resuming with an option's value selects exactly that option.
-
-`"auto"` and `"deny"` select the one-time option, and fall back to the
-remembered one only when the agent offers nothing else.
-
-```python linenums="1"
-from ag2 import Agent
-from ag2.acp import ClaudeCodeConfig
-
-agent = Agent(
-    "coder",
-    config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
-)
-```
+the interrupt's `responseSchema` lists the agent's options. The client resumes
+with `{"choice": <option_id>}` to select one; `true`, `false` and plain strings
+keep their yes-or-no meaning.
 
 ## Questions the agent asks you (elicitation)
 

@@ -16,7 +16,7 @@ import pytest
 from dirty_equals import IsPartialDict, IsStr
 
 from ag2 import Agent, Context
-from ag2.ag_ui import NOT_PROVEN, TOOL_CALL_REASON, AGUIStream
+from ag2.ag_ui import NOT_PROVEN, PAYLOAD_REFUSED, TOOL_CALL_REASON, AGUIStream, ChoicePayload, ResumePayload
 from ag2.events import ApprovalChoice, ApprovalChoiceMessage, HumanMessage, ToolApprovalRequest, ToolCallEvent
 from ag2.middleware import ToolExecution, ToolResultType, approval_required
 from ag2.testing import TestConfig
@@ -193,15 +193,28 @@ class TestChoices:
 
         assert interrupt["responseSchema"] == {
             "title": "Approval",
-            "description": "true to let the tool call go ahead, false to refuse it, or one of the choices.",
+            "description": (
+                'true to let the tool call go ahead, false to refuse it, or {"choice": <value>} to pick one of the choices.'
+            ),
             "anyOf": [
-                {"type": "boolean"},
+                # Answers in words and the two buttons keep the meaning they have without choices.
+                {"type": ["string", "boolean"]},
+                # A pick has its own shape, so it is never inferred from a string.
                 {
-                    "type": "string",
-                    "oneOf": [
-                        {"const": "opt-b", "title": "Allow for this session"},
-                        {"const": "opt-a", "title": "Allow"},
-                    ],
+                    "type": "object",
+                    "title": "Choice",
+                    "description": "Picks one of the approval's choices by its value.",
+                    "properties": {
+                        "choice": {
+                            "type": "string",
+                            "oneOf": [
+                                {"const": "opt-b", "title": "Allow for this session"},
+                                {"const": "opt-a", "title": "Allow"},
+                            ],
+                        }
+                    },
+                    "required": ["choice"],
+                    "additionalProperties": False,
                 },
             ],
         }
@@ -209,16 +222,19 @@ class TestChoices:
     @pytest.mark.parametrize(
         ("payload", "received"),
         [
-            # A choice arrives as picked, so the asker never reads it as a word.
-            pytest.param("opt-b", ApprovalChoiceMessage("opt-b"), id="a choice"),
+            # A pick arrives as picked, so the asker never reads it as a word.
+            pytest.param({"choice": "opt-b"}, ApprovalChoiceMessage("opt-b"), id="a picked choice"),
             # The buttons are a plain yes or no, never widened to the first choice.
             pytest.param(True, HumanMessage("y"), id="approve button"),
             pytest.param(False, HumanMessage("n"), id="refuse button"),
-            # A string that is not one of the choices is an ordinary answer.
-            pytest.param("always", HumanMessage("always"), id="not a choice"),
+            # A string is an answer in words, even when it equals a choice's value.
+            pytest.param("opt-b", HumanMessage("opt-b"), id="a string equal to a choice"),
+            pytest.param("no", HumanMessage("no"), id="a refusal in words"),
         ],
     )
-    async def test_the_answer_reaches_the_asker(self, payload: str | bool, received: HumanMessage) -> None:
+    async def test_the_answer_reaches_the_asker(
+        self, payload: str | bool | ChoicePayload, received: HumanMessage
+    ) -> None:
         agent, answers = choosing_agent()
         app = app_for(AGUIStream(agent))
 
@@ -227,3 +243,36 @@ class TestChoices:
 
         [reply] = answers
         assert (type(reply), reply.content) == (type(received), received.content)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param({"choice": "opt-z"}, id="a choice not offered"),
+            pytest.param({"choice": ["opt-b"]}, id="a choice that is not a string"),
+            pytest.param({"choice": "opt-b", "extra": 1}, id="more than a choice"),
+        ],
+    )
+    async def test_a_malformed_pick_is_refused(self, payload: ResumePayload) -> None:
+        agent, answers = choosing_agent()
+        app = app_for(AGUIStream(agent))
+
+        interrupt = await ask_once(app)
+        events = await post_run(
+            app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, payload))
+        )
+
+        assert types_of(events) == ["RUN_ERROR"]
+        assert only(events, "RUN_ERROR") == IsPartialDict({"code": PAYLOAD_REFUSED})
+        assert answers == []
+
+
+async def test_a_pick_is_refused_where_no_choices_were_offered() -> None:
+    agent, _ = gated_agent()
+    app = app_for(AGUIStream(agent))
+
+    interrupt = await ask_once(app)
+    events = await post_run(
+        app, run_body(thread_id="t1", run_id="r2", text=None, resume=answer(interrupt, {"choice": "y"}))
+    )
+
+    assert only(events, "RUN_ERROR") == IsPartialDict({"code": PAYLOAD_REFUSED})
