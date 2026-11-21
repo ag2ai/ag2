@@ -49,11 +49,15 @@ boolean answer.
 4. **`"auto"` and `"deny"` select the one-time option**, and the remembered one
    only when the agent offers no other. The agent's option order never decides.
 5. **`ToolApprovalRequest.choices` (a list of `ApprovalChoice(value, label)`) is the
-   transport-neutral way to offer more than yes or no.** AG-UI turns it into a
-   titled constant per choice in the interrupt's `responseSchema`, beside the
-   boolean. A resume carrying a boolean reaches the asker as `"y"` / `"n"`, and
-   one carrying a string naming a choice as an `ApprovalChoiceMessage`, so the
-   kind of answer survives the transport. `ACPPermissionRequest` fills
+   transport-neutral way to offer more than yes or no.** AG-UI adds an object
+   branch to the interrupt's `responseSchema` whose `choice` is one titled
+   constant per choice, and a pick is resumed as `{"choice": value}`. A pick has
+   its own wire shape rather than being inferred from a string matching a
+   value: existing clients answer in words (a typed refusal included), and a
+   string that happened to equal a value would otherwise change meaning. So a
+   boolean reaches the asker as `"y"` / `"n"`, a string as itself, and only a
+   `{"choice": ...}` payload naming an offered value as an
+   `ApprovalChoiceMessage`; anything else under that shape is refused. `ACPPermissionRequest` fills
    `choices` from its options, so `ag_ui` needs no knowledge of ACP.
 
 ## Consequences
