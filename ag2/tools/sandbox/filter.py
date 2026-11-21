@@ -146,7 +146,141 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
             if denied is not None:
                 return denied
 
+    if not tokens or PurePosixPath(tokens[0]).name not in _DIRECTORY_READERS:
+        return None
+    if not isinstance(workdir, Path):
+        return f"Access denied: {tokens[0]} can read files inside a directory, which cannot be checked on this backend"
+    return _check_directory_operands(tokens, expanded_tokens, workdir, resolved_workdir, patterns)
+
+
+# Programs in READONLY_COMMANDS that open files inside a directory operand on
+# their own: ``grep -r``, ``diff -r``, and ``diff -N dir1 dir2`` even without
+# recursion. Matching a directory word against the patterns is not enough, so
+# every file under such an operand is checked.
+_DIRECTORY_READERS = frozenset({"grep", "egrep", "fgrep", "diff"})
+_GREP_FAMILY = frozenset({"grep", "egrep", "fgrep"})
+
+# grep options whose value may be the next word. Treating an option as taking a
+# value when it does not only makes the check stricter, so long names match by
+# prefix (getopt accepts unambiguous abbreviations).
+_GREP_SHORT_WITH_VALUE = "efmABCdD"
+_GREP_LONG_WITH_VALUE = (
+    "regexp",
+    "file",
+    "max-count",
+    "after-context",
+    "before-context",
+    "context",
+    "directories",
+    "devices",
+    "label",
+    "include",
+    "exclude",
+    "exclude-from",
+    "exclude-dir",
+    "binary-files",
+    "group-separator",
+)
+
+
+def _check_directory_operands(
+    tokens: list[str],
+    expanded_tokens: list[str],
+    workdir: Path,
+    resolved_workdir: PurePath,
+    patterns: list[str],
+) -> str | None:
+    directories = [workdir / token for token in expanded_tokens[1:] if _is_dir(workdir / token)]
+    if PurePosixPath(tokens[0]).name in _GREP_FAMILY and not any(
+        _exists(workdir / operand) for operand in _grep_file_operands(tokens[1:])
+    ):
+        # With no file operand a recursive grep searches the working directory.
+        directories.append(workdir)
+
+    for directory in directories:
+        denied = _ignored_inside(directory, resolved_workdir, patterns)
+        if denied is not None:
+            return denied
     return None
+
+
+def _grep_file_operands(args: list[str]) -> list[str]:
+    """Return the words grep takes as files (best effort, erring towards none).
+
+    The first positional word is the pattern unless ``-e`` / ``-f`` gives one.
+    When this guesses wrong it returns fewer operands, which makes the caller
+    check the whole working directory.
+    """
+    positionals: list[str] = []
+    explicit_pattern = False
+    options_ended = False
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        i += 1
+        if options_ended or arg == "-" or not arg.startswith("-"):
+            positionals.append(arg)
+        elif arg == "--":
+            options_ended = True
+        elif arg.startswith("--"):
+            name, eq, _ = arg[2:].partition("=")
+            explicit_pattern = explicit_pattern or name in ("regexp", "file")
+            if not eq and any(option.startswith(name) for option in _GREP_LONG_WITH_VALUE):
+                i += 1
+        else:
+            for pos, letter in enumerate(arg[1:], start=1):
+                explicit_pattern = explicit_pattern or letter in "ef"
+                if letter in _GREP_SHORT_WITH_VALUE:
+                    if pos == len(arg) - 1:
+                        i += 1
+                    break
+    return positionals if explicit_pattern else positionals[1:]
+
+
+def _ignored_inside(directory: Path, resolved_workdir: PurePath, patterns: list[str]) -> str | None:
+    """Return ``"Access denied: <path>"`` for the first file under *directory* that is ignored or leaves the workdir.
+
+    Symlinks are followed (``grep -R`` and ``diff -r`` follow them), and each
+    entry is checked both by the path it is listed under and by its target.
+    """
+    seen: set[Path] = set()
+    pending = [directory]
+    while pending:
+        current = pending.pop()
+        try:
+            real = current.resolve()
+            entries = list(current.iterdir())
+        except (OSError, RuntimeError):
+            continue
+        if real in seen:
+            continue
+        seen.add(real)
+        for entry in entries:
+            try:
+                target = entry.resolve()
+            except (OSError, RuntimeError):
+                continue
+            for candidate in (real / entry.name, target):
+                denied = _denied(candidate, resolved_workdir, patterns)
+                if denied is not None:
+                    return denied
+            if _is_dir(entry):
+                pending.append(entry)
+    return None
+
+
+def _is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
 
 
 def _embedded_paths(token: str) -> list[str]:

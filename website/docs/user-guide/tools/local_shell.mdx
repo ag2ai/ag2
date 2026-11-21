@@ -105,11 +105,13 @@ Filtering is applied in this order on every `run_shell_command(command)` call:
 1. **`allowed`** — if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
 2. **Shell syntax** — in [restricted mode](#restricted-mode), a command with unquoted pipes, redirects or chaining is rejected.
 3. **`blocked`** — if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
-4. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+4. **`ignore`** — literal file paths parsed from the command string are resolved and checked against the patterns. For `grep`, `egrep`, `fgrep` and `diff`, every file inside a directory operand is checked too (the working directory when a recursive `grep` names no file). On match: `"Access denied: <path>"`.
 5. **Execute** — the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only. A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
+    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only.
+
+    The read-only programs that open files inside a directory on their own, `grep -r` and `diff` given directories, are refused when an ignored file (or a symlink out of the working directory) lies inside that directory, so `grep -r TODO src` works while `grep -r TODO .` is refused in a project with an ignored `.env`. On a remote backend the directory contents cannot be checked from the host, so with `ignore` set `grep` and `diff` are refused there. File *names* stay visible to `ls` and `du`. Any other program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 

@@ -343,6 +343,6 @@ sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), blocked=["rm -rf", "c
 # Read-only mode — agent can inspect but not modify
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True)
 
-# Hide sensitive files from the agent
-sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*.key", "secrets/**"])
+# Refuse commands that read sensitive files (names stay visible to `ls`)
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True, ignore=["**/.env", "*.key", "secrets/**"])
 ```

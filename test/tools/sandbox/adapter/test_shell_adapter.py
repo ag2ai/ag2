@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import locale
+import sys
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
@@ -260,6 +261,119 @@ class TestShellAdapterFiltering:
         adapter = ShellAdapter(sandbox)
         await adapter.run("echo a | cat")
         assert sandbox.execs == [["sh", "-c", "echo a | cat"]]
+
+
+SECRETS = ["**/.env", "*.key", "secrets/**"]
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=SECRET-ENV\n")
+    (tmp_path / "deploy.key").write_text("SECRET-KEY\n")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "db.txt").write_text("DB_PASSWORD=SECRET-DB\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hello')\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "app.py").write_text("print('hello docs')\n")
+    return tmp_path
+
+
+@pytest.mark.asyncio
+class TestIgnoreWithDirectoryReaders:
+    """``grep`` and ``diff`` open files inside a directory operand on their own."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("grep -r SECRET", id="grep-recursive-no-path"),
+            pytest.param("grep -r SECRET .", id="grep-recursive-dot"),
+            pytest.param("grep -rn SECRET .", id="grep-bundled-options"),
+            pytest.param("grep -R SECRET .", id="grep-dereference-recursive"),
+            pytest.param("grep --recursive SECRET .", id="grep-long-option"),
+            pytest.param("grep -d recurse SECRET", id="grep-directories-recurse"),
+            pytest.param("grep --directories=recurse SECRET", id="grep-directories-recurse-long"),
+            pytest.param("grep -r -m 5 SECRET", id="grep-option-with-value"),
+            pytest.param("grep -r -e SECRET", id="grep-explicit-pattern"),
+            pytest.param("grep -r src", id="grep-pattern-names-a-directory"),
+            pytest.param("grep -r . secrets", id="grep-ignored-directory-contents"),
+            pytest.param("egrep -r SECRET .", id="egrep"),
+            pytest.param("fgrep -r SECRET .", id="fgrep"),
+            pytest.param("diff -rN src .", id="diff-recursive"),
+            pytest.param("diff -N . src", id="diff-directories-without-recursion"),
+            pytest.param("diff --new-file secrets src", id="diff-ignored-directory"),
+        ],
+    )
+    async def test_readonly_refuses_reading_ignored_files_through_a_directory(
+        self, project: Path, command: str
+    ) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command)
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    @pytest.mark.parametrize(
+        ("command", "expected"),
+        [
+            pytest.param("grep -r hello src", "hello", id="grep-recursive-clean-directory"),
+            pytest.param("grep -rn hello src docs", "hello docs", id="grep-several-clean-directories"),
+            pytest.param("grep hello src/app.py", "hello", id="grep-file"),
+            pytest.param("diff -r src docs", "hello docs", id="diff-clean-directories"),
+        ],
+    )
+    async def test_readonly_still_reads_directories_without_ignored_files(
+        self, project: Path, command: str, expected: str
+    ) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command)
+
+        assert expected in result
+        assert "Access denied" not in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    async def test_symlink_inside_a_directory_counts_as_its_target(self, project: Path) -> None:
+        (project / "src" / "settings").symlink_to(project / ".env")
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -R SECRET src")
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    async def test_symlink_out_of_the_workdir_inside_a_directory_is_refused(
+        self, project: Path, tmp_path_factory: pytest.TempPathFactory
+    ) -> None:
+        outside = tmp_path_factory.mktemp("outside")
+        (outside / "id_rsa").write_text("SECRET-OUTSIDE\n")
+        (project / "src" / "home").symlink_to(outside)
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -R SECRET src")
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    async def test_remote_backend_refuses_directory_readers(self) -> None:
+        # The contents of a remote directory cannot be checked from the host.
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -r SECRET .")
+
+        assert "Access denied" in result
+        assert sandbox.execs == []
+
+    async def test_remote_backend_without_ignore_runs_directory_readers(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True)
+
+        await adapter.run("grep -r hello .")
+
+        assert sandbox.execs == [["grep", "-r", "hello", "."]]
 
 
 @pytest.mark.asyncio
