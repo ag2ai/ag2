@@ -366,9 +366,11 @@ def _glob_matches(workdir: Path, resolved_workdir: Path, token: str, budget: _Bu
 
     The command runs as argv, but a program may expand a wildcard itself (MSYS
     tools do on Windows), so a pattern naming an ignored file, or a directory
-    holding one, must be refused. Each match is charged to *budget*. A pattern
-    that cannot be expanded here raises :class:`_UncheckableError`: ``**``, whose
-    scan the budget cannot bound, and patterns ``Path.glob`` rejects.
+    holding one, must be refused. The pattern is expanded one path segment at a
+    time and every directory entry read on the way, matching or not, is charged
+    to *budget*. A pattern that cannot be expanded here raises
+    :class:`_UncheckableError`: ``**``, whose scan the budget cannot bound, and a
+    pattern crossing a directory that cannot be listed.
     """
     if not any(c in token for c in "*?["):
         return []
@@ -380,14 +382,29 @@ def _glob_matches(workdir: Path, resolved_workdir: Path, token: str, budget: _Bu
         pattern = pattern.relative_to(base)
     if "**" in token:
         raise _UncheckableError(f"cannot check recursive wildcard {token!r}")
-    found: list[PurePath] = []
-    try:
-        for match in workdir.glob(str(pattern)):
-            budget.spend()
-            found.append(match.relative_to(workdir))
-    except (ValueError, NotImplementedError, OSError) as exc:
-        raise _UncheckableError(f"cannot check wildcard {token!r}") from exc
+    found = [PurePath()]
+    for part in pattern.parts:
+        if any(c in part for c in "*?["):
+            found = [match for prefix in found for match in _matching_entries(workdir, prefix, part, budget)]
+        else:
+            found = [prefix / part for prefix in found]
     return found
+
+
+def _matching_entries(workdir: Path, prefix: PurePath, part: str, budget: _Budget) -> list[PurePath]:
+    """Return ``prefix / name`` for each entry of the *prefix* directory whose name matches the wildcard *part*."""
+    matched: list[PurePath] = []
+    try:
+        with os.scandir(workdir / prefix) as entries:
+            for entry in entries:
+                budget.spend()
+                if fnmatch.fnmatch(entry.name, part):
+                    matched.append(prefix / entry.name)
+    except (FileNotFoundError, NotADirectoryError):
+        return []  # nothing there for the wildcard to match
+    except (OSError, ValueError) as exc:
+        raise _UncheckableError(f"cannot list {workdir / prefix}") from exc
+    return matched
 
 
 def _denied(resolved: PurePath, resolved_workdir: PurePath, patterns: list[str]) -> str | None:
