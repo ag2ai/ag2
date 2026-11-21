@@ -36,15 +36,13 @@ class SkillsClient:
     def __init__(self, config: SkillsClientConfig | None = None) -> None:
         cfg = config or SkillsClientConfig()
 
-        self._headers: dict[str, str] = {
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "ag2-skill-search/1.0",
-        }
+        self._headers = httpx.Headers({"User-Agent": "ag2-skill-search/1.0"})
+        self._headers.update(cfg.headers)
+
+        self._github_headers = httpx.Headers({"Accept": "application/vnd.github+json"})
         token = cfg.github_token or os.environ.get("GITHUB_TOKEN")
         if token:
-            self._headers["Authorization"] = f"Bearer {token}"
-        if cfg.headers:
-            self._headers.update(cfg.headers)
+            self._github_headers["Authorization"] = f"Bearer {token}"
 
         self._timeout = cfg.timeout
         self._proxy = cfg.proxy
@@ -92,8 +90,11 @@ class SkillsClient:
             tar_path = Path(tmp_dir) / "skill.tar.gz"
             hash_obj = hashlib.sha256()
 
+            headers = self._github_headers.copy()
+            headers.update(self._headers)
+
             async with (
-                self._make_client(timeout=120) as client,
+                self._make_client(timeout=120, headers=headers) as client,
                 client.stream(
                     "GET",
                     f"{self.GITHUB_API}/repos/{source}/tarball",
