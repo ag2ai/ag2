@@ -385,12 +385,12 @@ class Hub:
         self._audit_log = AuditLog(store, clock=self._clock)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
-        # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
+        # channel_id → set of (expectation_index, expectation_name, violator_id, turn_key) fired.
         # The position-based index disambiguates same-name expectations
         # (e.g. two ``turn_within`` entries with different ``on_violation``
         # handlers — without the index the first to fire would suppress
         # the second). Empty violator_id ("") = channel-wide violations.
-        self._fired_violations: dict[str, set[tuple[int, str, str]]] = {}
+        self._fired_violations: dict[str, set[tuple[int, str, str, str | None]]] = {}
 
         # Identity caches.
         self._passports: dict[str, Passport] = {}
@@ -1061,7 +1061,7 @@ class Hub:
         """One sweeper tick: evaluate every expectation on every active
         channel; fire registered handlers on new violations.
 
-        Per-(channel, expectation, violator) dedup lives in
+        Per-(channel, expectation, violator, turn occurrence) dedup lives in
         ``_fired_violations`` so handlers don't re-fire on every tick.
         Cleared on terminal channel transitions.
         """
@@ -1070,14 +1070,22 @@ class Hub:
         now_iso = self._clock()
         now_seconds = datetime.fromisoformat(now_iso).timestamp()
         for channel_id, metadata in list(self._active_channels.items()):
-            adapter_state = self._adapter_states.get(channel_id)
-            wal = await self.read_wal(channel_id)
+            async with self._wal_lock(channel_id):
+                adapter_state = self._adapter_states.get(channel_id)
+                wal = await self.read_wal(channel_id)
+            adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
+            expected_turn = (
+                adapter.expected_next(metadata, adapter_state)
+                if adapter is not None and adapter_state is not None
+                else None
+            )
             context = ExpectationContext(
                 metadata=metadata,
                 state=adapter_state,
                 wal=wal,
                 now_iso=now_iso,
                 now_seconds=now_seconds,
+                expected_turn=expected_turn,
             )
             terminal = False
             for idx, expectation in enumerate(metadata.manifest.expectations):
@@ -1093,7 +1101,7 @@ class Hub:
                 fired = self._fired_violations.setdefault(channel_id, set())
                 violator_keys = violation.violator_ids or [""]
                 for vid in violator_keys:
-                    key = (idx, expectation.name, vid)
+                    key = (idx, expectation.name, vid, violation.turn_key)
                     if key in fired:
                         continue
                     fired.add(key)

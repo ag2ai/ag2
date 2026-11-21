@@ -85,6 +85,9 @@ class _NoOpAdapter:
     def on_accepted(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
         return AdapterResult()
 
+    def expected_next(self, _meta: ChannelMetadata, _state: dict) -> None:
+        return None
+
     def default_view_policy(self, _meta: ChannelMetadata, _participant_id: str) -> FullTranscript:
         return FullTranscript()
 
