@@ -266,21 +266,21 @@ class BaseEvent(metaclass=_ConditionMeta):
         return self
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # MRO walk: map positional args and collect defaults.
+        # Keep inherited field order while allowing more-derived definitions to override.
         positional_names: list[str] = []
         defaults: dict[str, Any] = {}
-        seen: set[str] = set()
+        fields: dict[str, FieldInfo] = {}
 
         for klass in reversed(type(self).__mro__):
-            for name, f in getattr(klass, "_event_fields_", {}).items():
-                if name not in seen:
-                    if not f.kw_only:
-                        positional_names.append(name)
-                    if name not in kwargs:
-                        default = f.get_default()
-                        if default is not Ellipsis:
-                            defaults[name] = default
-                seen.add(name)
+            fields.update(getattr(klass, "_event_fields_", {}))
+
+        for name, f in fields.items():
+            if not f.kw_only:
+                positional_names.append(name)
+            if name not in kwargs:
+                default = f.get_default()
+                if default is not Ellipsis:
+                    defaults[name] = default
 
         if args:
             if len(args) > len(positional_names):

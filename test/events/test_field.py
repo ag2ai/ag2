@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+import pytest
+
 from ag2.events import BaseEvent, Field
 
 
@@ -63,6 +65,55 @@ class TestFieldBasics:
 
 
 class TestFieldInit:
+    def test_subclass_default_overrides_parent_default(self):
+        class Parent(BaseEvent):
+            state: str = "pending"
+
+        class Child(Parent):
+            state: str = "ready"
+
+        assert Child().state == "ready"
+        assert Child().to_dict()["state"] == "ready"
+        assert Child(state="explicit").state == "explicit"
+        assert Parent().state == "pending"
+
+    def test_subclass_factory_overrides_parent_factory(self):
+        class Parent(BaseEvent):
+            items: list = Field(default_factory=lambda: ["parent"])
+
+        class Child(Parent):
+            items: list = Field(default_factory=list)
+
+        first, second = Child(), Child()
+        assert first.items == []
+        assert first.items is not second.items
+
+    def test_multiple_inheritance_default_follows_mro(self):
+        class Left(BaseEvent):
+            label: str = "left"
+
+        class Right(BaseEvent):
+            label: str = "right"
+
+        class Child(Left, Right):
+            pass
+
+        assert Child().label == "left"
+
+    def test_subclass_can_make_inherited_field_keyword_only(self):
+        class Parent(BaseEvent):
+            value: str = Field(default="parent", kw_only=False)
+
+        class Child(Parent):
+            value: str = Field(default="child", kw_only=True)
+
+        # Exercise runtime validation of an intentionally invalid call.
+        with pytest.raises(TypeError, match="0 positional"):
+            Child("unexpected")  # type: ignore[call-arg, arg-type]
+
+        assert Child().value == "child"
+        assert Child(value="explicit").value == "explicit"
+
     def test_init_true_accepts_value(self):
         class Event(BaseEvent):
             a: str = Field(init=True)
