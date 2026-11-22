@@ -20,7 +20,7 @@ Four evaluators ship today, addressed by name in adapter manifests:
 | `#!python "acks_within"` | `#!python AcksWithinEvaluator` | All invitees must ack within `params["seconds"]` of channel creation. |
 | `#!python "reply_within"` | `#!python ReplyWithinEvaluator` | The respondent must reply within `params["seconds"]` of the initiator's first send (consulting only). |
 | `#!python "max_silence"` | `#!python MaxSilenceEvaluator` | No participant may go silent for longer than `params["seconds"]`. |
-| `#!python "turn_within"` | `#!python TurnWithinEvaluator` | The next speaker must speak within `params["seconds"]` of being scheduled. |
+| `#!python "turn_within"` | `#!python TurnWithinEvaluator` | The adapter's expected next speaker must speak within `params["seconds"]` of the envelope that handed them the turn (of the channel opening, for the first turn). Fires once per turn. |
 
 Each evaluator implements:
 
@@ -67,6 +67,8 @@ expectations = [
 | `#!python "hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
 The default registry exposes them as `#!python default_handlers()`.
+
+A violation whose `on_violation` names no registered handler is still written to the audit log, but nothing else happens; a handler registered later with `#!python hub.register_violation_handler(...)` applies to violations that fire after that. That is the case today for `#!python DiscussionAdapter`'s `turn_within(600s, hide)`: the violation is audited, and the channel stays active, because no built-in `"hide"` handler ships yet.
 
 ## The Sweeper Loop
 

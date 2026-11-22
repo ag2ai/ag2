@@ -42,12 +42,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from ..adapters.base import ExpectedTurn
 from ..channel import ChannelMetadata, ChannelState, Expectation
-from ..envelope import EV_EXPECTATION_VIOLATED, EV_TEXT, Envelope
-
-logger = logging.getLogger(__name__)
+from ..envelope import EV_CHANNEL_OPENED, EV_EXPECTATION_VIOLATED, EV_TEXT, Envelope
 
 if TYPE_CHECKING:
     from .core import Hub
+
+logger = logging.getLogger(__name__)
 
 __all__ = (
     "AcksWithinEvaluator",
@@ -74,8 +74,10 @@ class Violation:
     ``violator_ids`` is the list of participants the violation applies
     to; an empty list represents a channel-wide violation (e.g.
     ``max_silence`` — nobody specifically is silent, the channel is).
-    ``turn_key`` identifies the turn/occurrence for recurring expectations
-    (``None`` for evaluators that are not turn-scoped).
+    ``turn_key`` names the turn a turn-scoped violation belongs to (the
+    envelope that handed over the turn), so the same participant can fire
+    again on a later turn. ``None`` for a channel's opening turn and for
+    evaluators that are not turn-scoped.
     """
 
     expectation: Expectation
@@ -118,7 +120,7 @@ class ViolationHandler(Protocol):
 
     Handlers are async because they may post envelopes or transition
     channels. They must be tolerant of duplicate calls — the sweeper
-    deduplicates per (channel, expectation, violator) before invoking,
+    deduplicates per (channel, expectation, violator, turn) before invoking,
     but transient re-fires across hub restarts are possible since the
     fired-violation cache is in-memory only.
     """
@@ -279,7 +281,13 @@ class MaxSilenceEvaluator:
 
 
 class TurnWithinEvaluator:
-    """Fire when the adapter's expected next speaker misses their turn window."""
+    """Fire when the adapter's expected next speaker misses their turn window.
+
+    The window starts at the envelope that handed over the turn
+    (``ExpectedTurn.triggering_envelope_id``), or at ``EV_CHANNEL_OPENED``
+    for a channel's opening turn, so time spent waiting for invite acks
+    doesn't count against the first speaker. Fires once per turn.
+    """
 
     name = "turn_within"
 
@@ -293,23 +301,9 @@ class TurnWithinEvaluator:
         expected = context.expected_turn
         if expected is None:
             return None
-
-        if expected.triggering_envelope_id is None:
-            anchor_iso = context.metadata.created_at
-        else:
-            triggering_envelope = next(
-                (env for env in context.wal if env.envelope_id == expected.triggering_envelope_id),
-                None,
-            )
-            if triggering_envelope is None:
-                logger.warning(
-                    "turn_within expectation for channel %s cannot find triggering envelope %s in WAL",
-                    context.metadata.channel_id,
-                    expected.triggering_envelope_id,
-                )
-                return None
-            anchor_iso = triggering_envelope.created_at
-
+        anchor_iso = _turn_started_at(context, expected)
+        if anchor_iso is None:
+            return None
         seconds = float(expectation.params.get("seconds", 600))
         elapsed = context.now_seconds - _parse_iso_seconds(anchor_iso)
         if elapsed < seconds:
@@ -321,12 +315,32 @@ class TurnWithinEvaluator:
                 "elapsed_seconds": elapsed,
                 "threshold_seconds": seconds,
             },
-            turn_key=(
-                expected.triggering_envelope_id
-                if expected.triggering_envelope_id is not None
-                else context.metadata.created_at
-            ),
+            turn_key=expected.triggering_envelope_id,
         )
+
+
+def _turn_started_at(context: ExpectationContext, expected: ExpectedTurn) -> str | None:
+    """``created_at`` of the envelope that started ``expected``'s turn.
+
+    ``None`` if that envelope isn't in the WAL. The hub folds state only
+    after appending to the append-only WAL, so this means the inputs are
+    inconsistent and there's nothing sound to measure from. The turn then
+    never times out, so it is logged rather than skipped silently.
+    """
+    if expected.triggering_envelope_id is None:
+        for env in context.wal:
+            if env.event_type == EV_CHANNEL_OPENED:
+                return env.created_at
+        return context.metadata.created_at
+    for env in context.wal:
+        if env.envelope_id == expected.triggering_envelope_id:
+            return env.created_at
+    logger.warning(
+        "turn_within on channel %s cannot find triggering envelope %s in the WAL",
+        context.metadata.channel_id,
+        expected.triggering_envelope_id,
+    )
+    return None
 
 
 # ── Handlers ────────────────────────────────────────────────────────────────
@@ -367,28 +381,16 @@ class NotifyChannelHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        metadata = hub._channels.get(channel_id)
-        if metadata is None or metadata.is_terminal():
-            return
-        envelope = Envelope(
-            channel_id=channel_id,
-            sender_id=metadata.creator_id,
-            audience=None,
-            event_type=EV_EXPECTATION_VIOLATED,
-            event_data={
-                "expectation": violation.expectation.name,
-                "violators": list(violation.violator_ids),
-                "detail": dict(violation.detail),
-            },
-        )
-        # Posting violations is best-effort — a closed/closing
-        # channel shouldn't crash the sweeper.
-        with contextlib.suppress(Exception):
-            await hub.post_envelope(envelope)
+        await _post_violation(hub, channel_id, violation, audience=None)
 
 
 class WarnHandler:
-    """Post ``EV_EXPECTATION_VIOLATED`` only to violating participants."""
+    """Post ``EV_EXPECTATION_VIOLATED`` only to the violating participant(s).
+
+    A channel-wide violation (no violators) is broadcast, as with
+    ``notify_channel``. Audit emission is owned by the ``AuditLog``
+    listener.
+    """
 
     name = "warn"
 
@@ -398,24 +400,34 @@ class WarnHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        metadata = hub._channels.get(channel_id)
-        if metadata is None or metadata.is_terminal():
-            return
-        envelope = Envelope(
-            channel_id=channel_id,
-            sender_id=metadata.creator_id,
-            audience=violation.violator_ids,
-            event_type=EV_EXPECTATION_VIOLATED,
-            event_data={
-                "expectation": violation.expectation.name,
-                "violators": list(violation.violator_ids),
-                "detail": dict(violation.detail),
-            },
-        )
-        # Posting violations is best-effort — a closed/closing
-        # channel shouldn't crash the sweeper.
-        with contextlib.suppress(Exception):
-            await hub.post_envelope(envelope)
+        await _post_violation(hub, channel_id, violation, audience=list(violation.violator_ids) or None)
+
+
+async def _post_violation(
+    hub: "Hub",
+    channel_id: str,
+    violation: Violation,
+    *,
+    audience: list[str] | None,
+) -> None:
+    metadata = hub._channels.get(channel_id)
+    if metadata is None or metadata.is_terminal():
+        return
+    envelope = Envelope(
+        channel_id=channel_id,
+        sender_id=metadata.creator_id,
+        audience=audience,
+        event_type=EV_EXPECTATION_VIOLATED,
+        event_data={
+            "expectation": violation.expectation.name,
+            "violators": list(violation.violator_ids),
+            "detail": dict(violation.detail),
+        },
+    )
+    # Posting violations is best-effort — a closed/closing
+    # channel shouldn't crash the sweeper.
+    with contextlib.suppress(Exception):
+        await hub.post_envelope(envelope)
 
 
 class AutoCloseHandler:
