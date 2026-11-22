@@ -574,6 +574,19 @@ class TestTurnWithinEvaluator:
         assert exact.violator_ids == ["alice"]
         assert under is None
 
+    def test_silent_when_channel_not_active(self) -> None:
+        metadata = _conv_metadata(state=ChannelState.PENDING)
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice")
+
+        assert TurnWithinEvaluator().evaluate(expectation, _ctx(metadata, expected_turn=expected)) is None
+
+    def test_silent_when_no_expected_turn(self) -> None:
+        metadata = _conv_metadata()
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+
+        assert TurnWithinEvaluator().evaluate(expectation, _ctx(metadata, expected_turn=None)) is None
+
 
 @pytest.mark.asyncio
 async def test_warn_handler_delivers_violation_only_to_violator() -> None:
@@ -622,6 +635,44 @@ async def test_warn_handler_delivers_violation_only_to_violator() -> None:
     assert not any(e.event_type == EV_EXPECTATION_VIOLATED for e in alice_capture.received)
 
     await hub.close()
+
+
+@pytest.mark.asyncio
+async def test_warn_handler_noops_on_missing_or_terminal_channel() -> None:
+    clock = _MockClock("2026-01-01T00:00:00+00:00")
+    hub = await Hub.open(
+        MemoryKnowledgeStore(),
+        clock=clock,
+        ttl_sweep_interval=0,
+        expectation_sweep_interval=0,
+    )
+    try:
+        alice = await hub.register(_agent("alice"))
+        bob = await hub.register(_agent("bob"))
+        graph = TransitionGraph.round_robin([alice.agent_id, bob.agent_id])
+        channel = await alice.open(
+            type=WORKFLOW_TYPE,
+            target=[bob.agent_id],
+            knobs={"graph": graph.to_dict()},
+        )
+        await hub.close_channel(channel.channel_id)
+
+        handler = WarnHandler()
+        violation = Violation(
+            expectation=Expectation(name="turn_within", on_violation="warn", params={"seconds": 120}),
+            violator_ids=[bob.agent_id],
+            detail={"elapsed_seconds": 121, "threshold_seconds": 120},
+        )
+
+        # Closed channel: metadata.is_terminal() is True -> early return, no post.
+        await handler.handle(hub, channel.channel_id, violation)
+        # Missing channel: metadata is None -> early return, no post.
+        await handler.handle(hub, "missing-channel", violation)
+
+        wal = await hub.read_wal(channel.channel_id)
+        assert not any(e.event_type == EV_EXPECTATION_VIOLATED for e in wal)
+    finally:
+        await hub.close()
 
 
 @pytest.mark.asyncio
