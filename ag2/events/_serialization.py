@@ -16,6 +16,20 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from .base import BaseEvent
 
+# Wraps a plain dict whose keys collide with a wire marker, so data supplied by
+# users, tools or remote peers is restored as a dict and never read as a type tag.
+_DICT_MARKER = "__ag2_dict__"
+_RESERVED_KEYS = frozenset({
+    "__event__",
+    "__enum__",
+    "__exception__",
+    "__bytes__",
+    "__uuid__",
+    "__dataclass__",
+    "__pydantic__",
+    _DICT_MARKER,
+})
+
 
 def _is_event_instance(value: Any) -> bool:
     return hasattr(type(value), "_event_fields_")
@@ -23,6 +37,14 @@ def _is_event_instance(value: Any) -> bool:
 
 def _is_event_class(obj: Any) -> "TypeGuard[type[BaseEvent]]":
     return isinstance(obj, type) and hasattr(obj, "_event_fields_")
+
+
+def event_field_names(cls: type) -> set[str]:
+    """Names of the fields an event class declares across its MRO."""
+    names: set[str] = set()
+    for klass in cls.__mro__:
+        names.update(getattr(klass, "_event_fields_", {}))
+    return names
 
 
 def qualified_name(event: "BaseEvent") -> str:
@@ -58,7 +80,10 @@ def serialize_value(value: Any) -> Any:
     if isinstance(value, Exception):
         return {"__exception__": type(value).__name__, "message": str(value)}
     if isinstance(value, dict):
-        return {k: serialize_value(v) for k, v in value.items()}
+        serialized = {k: serialize_value(v) for k, v in value.items()}
+        if _RESERVED_KEYS.intersection(serialized):
+            return {_DICT_MARKER: serialized}
+        return serialized
     if isinstance(value, (list, tuple)):
         return [serialize_value(v) for v in value]
     if isinstance(value, (bytes, bytearray)):
@@ -93,12 +118,19 @@ def deserialize_payload(
 def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
     """Recursively deserialize a value from wire format."""
     if isinstance(value, dict):
+        if _DICT_MARKER in value:
+            # Escaped plain dict: restore its items without reading their keys as markers.
+            inner = value[_DICT_MARKER]
+            if not isinstance(inner, dict):
+                raise ValueError(f"{_DICT_MARKER} must wrap an object")
+            return {k: deserialize_value(v, event_registry) for k, v in inner.items()}
         if "__event__" in value:
             # Nested event
             event_type_name = value["__event__"]
             event_cls = _resolve_event_type(event_type_name, event_registry)
             if event_cls is not None:
-                nested_data = {k: deserialize_value(v, event_registry) for k, v in value.items() if k != "__event__"}
+                known = event_field_names(event_cls)
+                nested_data = {k: deserialize_value(v, event_registry) for k, v in value.items() if k in known}
                 return event_cls(**nested_data)
         if "__bytes__" in value:
             return base64.b64decode(value["__bytes__"])
@@ -120,12 +152,19 @@ def deserialize_value(value: Any, event_registry: Any | None = None) -> Any:
             return Exception(value.get("message", ""))
         if "__dataclass__" in value:
             cls = _resolve_class(value["__dataclass__"])
-            data = {k: deserialize_value(v, event_registry) for k, v in value.get("data", {}).items()}
+            # Check the type before calling it: the tag names a class to construct.
+            if not is_dataclass(cls):
+                raise TypeError(f"{value['__dataclass__']!r} is not a dataclass")
+            raw_data = value.get("data", {})
+            if not isinstance(raw_data, dict):
+                raise ValueError("__dataclass__ data must be an object")
+            data = {k: deserialize_value(v, event_registry) for k, v in raw_data.items()}
             return cls(**data)
         if "__pydantic__" in value:
             cls = _resolve_class(value["__pydantic__"])
+            if not issubclass(cls, BaseModel):
+                raise TypeError(f"{value['__pydantic__']!r} is not a pydantic model")
             raw = deserialize_value(value.get("data", {}), event_registry)
-            assert issubclass(cls, BaseModel)
             return cls.model_validate(raw)
         return {k: deserialize_value(v, event_registry) for k, v in value.items()}
     if isinstance(value, list):

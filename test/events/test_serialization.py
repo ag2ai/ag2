@@ -5,14 +5,16 @@
 """Tests for the shared event-serialization layer."""
 
 import datetime
+import json
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel
 
-from ag2.events import BaseEvent, BinaryInput, BinaryType, ModelMessage, ModelRequest, ToolCallEvent
+from ag2.events import BaseEvent, BinaryInput, BinaryType, DataInput, ModelMessage, ModelRequest, ToolCallEvent
 from ag2.events._serialization import (
     deserialize_value,
     import_event_class,
@@ -183,3 +185,37 @@ class TestEventRoundTrip:
         assert isinstance(part, BinaryInput)
         assert part.kind is BinaryType.IMAGE
         assert part.data == b"\x89PNG"
+
+
+class TestUntrustedMarkers:
+    @pytest.mark.parametrize(
+        "marker",
+        [
+            "__event__",
+            "__enum__",
+            "__bytes__",
+            "__uuid__",
+            "__dataclass__",
+            "__pydantic__",
+            "__exception__",
+            "__ag2_dict__",
+        ],
+    )
+    def test_user_dict_marker_round_trip(self, marker: str) -> None:
+        payload: dict[str, Any] = {marker: "subprocess.Popen", "data": {"__dataclass__": "subprocess.Popen"}}
+        request = ModelRequest([DataInput(payload)])
+        restored = ModelRequest.from_dict(json.loads(json.dumps(request.to_dict())))
+        part = restored.parts[0]
+        assert isinstance(part, DataInput)
+        assert part.data == payload
+
+    def test_untrusted_dataclass_cannot_construct_arbitrary_class(self) -> None:
+        payload = {"__dataclass__": "subprocess.Popen", "data": {"args": ["true"]}}
+        with pytest.raises(TypeError, match="not a dataclass"):
+            deserialize_value(payload)
+
+    def test_unknown_event_field_is_not_deserialized(self) -> None:
+        # Popen without ``args`` raises if anything tries to build it, so the
+        # field is only harmless when it is dropped before deserialization.
+        payload = {"content": "ok", "untrusted": {"__dataclass__": "subprocess.Popen", "data": {}}}
+        assert ModelMessage.from_dict(payload).content == "ok"
