@@ -7912,8 +7912,8 @@ sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), blocked=["rm -rf", "c
 # Read-only mode - agent can inspect but not modify
 sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True)
 
-# Hide sensitive files from the agent
-sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), ignore=["**/.env", "*.key", "secrets/**"])
+# Refuse commands that read sensitive files (names stay visible to `ls`)
+sh = SandboxShellTool(LocalEnvironment("/tmp/my_project"), readonly=True, ignore=["**/.env", "*.key", "secrets/**"])
 ```
 
 ---
@@ -10147,7 +10147,7 @@ from ag2.tools import AnthropicBashTool
 
 bash = AnthropicBashTool(
     DockerEnvironment(image="python:3.12-slim", network_mode="none"),
-    allowed=["ls", "cat", "python"],
+    allowed=["ls", "cat", "grep"],
     ignore=["**/.env", "*.key"],
 )
 ```
@@ -10156,8 +10156,8 @@ bash = AnthropicBashTool(
 | :--- | :--- |
 | `environment` | Execution backend (`LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or a custom one). `None` means a local subprocess. |
 | `allowed` | Whitelist of command prefixes. |
-| `blocked` | Blacklist of command prefixes. Best-effort: it matches the head command only, so chaining bypasses it. |
-| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. |
+| `blocked` | Blacklist of command prefixes, matched against the argv. It cannot stop a program that starts another one (`sh -c`, `env`, `xargs`), so use `allowed` or an isolated backend for a hard boundary. |
+| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. It does not cover programs that run code (`python`, `node`, `sh`); see [Command Filtering](local_shell.md#command-filtering). |
 | `readonly` | When `True` and `allowed` is unset, restricts to a built-in read-only command set (`cat`, `ls`, `grep`, ...). |
 
 The semantics are identical to `SandboxShellTool`'s - see [Command Filtering](local_shell.md#command-filtering) for the details.
@@ -10703,11 +10703,14 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(
     LocalEnvironment("/tmp/my_project"),
-    allowed=["python", "uv run", "git"],
-    blocked=["rm -rf", "curl", "wget"],
+    allowed=["git", "ls", "cat", "grep"],
+    blocked=["git push", "git config"],
     ignore=["**/.env", "*.key", "secrets/**"],
 )
 ```
+
+!!! warning
+    `ignore` cannot protect files from a program that runs code. If `allowed` includes an interpreter or a runner (`python`, `node`, `perl`, `uv run`, `sh`), the agent can open an ignored file from inside that code: `python -c "print(open('.env').read())"` contains no path word to check. To keep secrets away from an agent that can run code, leave them out of the environment, for example with an isolated container backend that does not mount them.
 
 ### Tool Parameters
 
@@ -10736,11 +10739,13 @@ Filtering is applied in this order on every `run_shell_command(command)` call:
 1. **`allowed`** - if set, the command must match at least one prefix. Otherwise: `"Command not allowed: <cmd>"`.
 2. **Shell syntax** - in [restricted mode](#restricted-mode), a command with unquoted pipes, redirects or chaining is rejected.
 3. **`blocked`** - if set, the command must not match any prefix. Otherwise: `"Command not allowed: <cmd>"`.
-4. **`ignore`** - literal file paths parsed from the command string are resolved and checked against the patterns. On match: `"Access denied: <path>"`.
+4. **`ignore`** - literal file paths parsed from the command string are resolved and checked against the patterns. For `grep`, `egrep`, `fgrep` and `diff`, every file inside a directory operand is checked too (the working directory when a recursive `grep` names no file). On match: `"Access denied: <path>"`.
 5. **Execute** - the command runs in the environment: through `sh -c`, or as a plain argv in [restricted mode](#restricted-mode).
 
 !!! note
-    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only. A program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
+    `ignore` checks only the literal path words of the command. Because restricted mode runs no shell, nothing is computed after the check (variables and command substitution are passed on literally). A glob word is expanded for the check, and the command is refused if it matches an ignored file, since some programs expand globs themselves (MSYS tools on Windows). That expansion needs the host filesystem, so it applies to the local backend only.
+
+    The read-only programs that open files inside a directory on their own, `grep -r` and `diff` given directories, are refused when an ignored file (or a symlink out of the working directory) lies inside that directory, so `grep -r TODO src` works while `grep -r TODO .` is refused in a project with an ignored `.env`. Each file is matched both by the path it is reached under (a rule such as `src/conf/**` covers a symlinked `src/conf`) and by its real location. Anything the check cannot inspect refuses the command: a path that does not resolve, a directory that cannot be listed, a `**` wildcard, or more than 20,000 wildcard matches and directory entries in total (name a smaller directory instead). On a remote backend the directory contents cannot be checked from the host, so with `ignore` set `grep` and `diff` are refused there. File *names* stay visible to `ls` and `du`. Any other program that opens paths on its own (`sh -c`, `find`) is not covered; use an isolated backend for that.
 
 ## Read-Only Mode
 
@@ -17419,6 +17424,42 @@ splits across the two exchanges exactly as above - `toolCallId` names the
 `TOOL_CALL_START` the first exchange already emitted, so a client has something
 to attach the prompt to.
 
+#### Offering more than yes or no
+
+An approval can offer its own choices through `ToolApprovalRequest.choices`, as
+a permission request from an
+[ACP agent](../acp/client.md#choosing-one-of-the-agents-options) does
+with the agent's options. The interrupt's `responseSchema` then gains an object
+branch with one titled constant per choice, so a client can draw a button for
+each:
+
+```json
+{"title": "Approval",
+ "anyOf": [{"type": ["string", "boolean"]},
+           {"type": "object", "title": "Choice", "required": ["choice"], "additionalProperties": false,
+            "properties": {"choice": {"type": "string",
+                                      "oneOf": [{"const": "proceed_always", "title": "Allow for this session"},
+                                                {"const": "proceed_once", "title": "Allow"},
+                                                {"const": "cancel", "title": "Reject"}]{{ "}}" }}}]}
+```
+
+Resume with the picked value under `choice`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": {"choice": "proceed_once"},
+             "metadata": {"ag2": {"proof": "g7Qk..."{{ "}}" }}}]}
+```
+
+A pick has its own shape on the wire and is never inferred from a string:
+
+- `{"choice": <value>}` reaches the asker as an `ApprovalChoiceMessage` and
+  selects exactly that choice. A value that was not offered is refused with
+  `PAYLOAD_REFUSED`.
+- `true`, `false` and strings mean what they mean without choices, even a
+  string equal to a choice's value. A client that only draws approve and refuse
+  buttons, or answers in words, works unchanged.
+
 ### With a hook, nothing changes
 
 Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
@@ -21174,6 +21215,70 @@ agent = Agent(
     config=ClaudeCodeConfig(cwd="/repo", permission_policy="auto"),  # autonomous
 )
 ```
+
+`"auto"` and `"deny"` select the agent's one-time option, and fall back to the
+remembered one only when the agent offers nothing else. The order in which the
+agent lists its options never decides.
+
+### Choosing one of the agent's options
+
+Under `"ask"`, the hook receives an `ACPPermissionRequest`. It carries the
+request as the agent sent it:
+
+- `options`: the choices the agent offers, each with an `option_id`, a `name`
+  (the agent's label, for example *Allow for this session*) and a `kind`
+  (`allow_once`, `allow_always`, `reject_once` or `reject_always`);
+- `kind`, `locations` and `raw_input`: what the tool call is and what it touches;
+- `content`: the tool call's title.
+
+To select an option, return an `ApprovalChoiceMessage` holding its `option_id`:
+
+```python
+from ag2 import Agent
+from ag2.acp import ClaudeCodeConfig
+from ag2.acp.events import ACPPermissionRequest
+from ag2.events import ApprovalChoiceMessage, HumanInputRequest, HumanMessage
+
+def choose(event: HumanInputRequest) -> str | HumanMessage:
+    if isinstance(event, ACPPermissionRequest):
+        for i, option in enumerate(event.options, 1):
+            print(f"{i}. {option.name} [{option.kind}]")
+        while True:
+            reply = input(f"{event.content} [1-{len(event.options)}]: ")
+            try:
+                picked = int(reply)
+            except ValueError:
+                picked = 0
+            if 1 <= picked <= len(event.options):
+                return ApprovalChoiceMessage(event.options[picked - 1].option_id)
+            print(f"Enter a number from 1 to {len(event.options)}.")
+    return input(event.content)
+
+agent = Agent("coder", config=ClaudeCodeConfig(cwd="/repo"), hitl_hook=choose)
+```
+
+!!! warning "Check the number before indexing"
+
+    Python reads `options[-1]` as the last option, so an unchecked `0` would
+    select an option the user never picked. Accept only `1` to
+    `len(event.options)` and ask again otherwise.
+
+A plain string answer is read as a yes or no in words, never as an option id,
+so an option whose id happens to be `"y"` or `"n"` cannot be selected by
+accident. This keeps hooks and UIs that only know tool approvals working,
+because `ACPPermissionRequest` is a `ToolApprovalRequest`:
+
+| Answer | Selects |
+| :--- | :--- |
+| `yes`, `y`, `1` | The one-time allow option, whatever order the agent lists its options in; a rejection if there is none |
+| `always` | The remembered option (for example Gemini CLI's *Allow for this session*); the one-time allow option if there is none |
+| anything else | A rejection |
+| `ApprovalChoiceMessage(option_id)` | Exactly that option; a rejection if the id was not offered |
+
+Served over [AG-UI](../ag-ui/overview.md#gating-a-tool-call-instead-of-asking-a-question),
+the interrupt's `responseSchema` lists the agent's options. The client resumes
+with `{"choice": <option_id>}` to select one; `true`, `false` and plain strings
+keep their yes-or-no meaning.
 
 ## Questions the agent asks you (elicitation)
 
@@ -27216,14 +27321,14 @@ The hub enforces governance and surfaces observability through a few layered sea
 
 ## Evaluators
 
-Three evaluators ship today, addressed by name in adapter manifests:
+Four evaluators ship today, addressed by name in adapter manifests:
 
 | Name | Class | Threshold |
 |---|---|---|
 | `"acks_within"` | `AcksWithinEvaluator` | All invitees must ack within `params["seconds"]` of channel creation. |
 | `"reply_within"` | `ReplyWithinEvaluator` | The respondent must reply within `params["seconds"]` of the initiator's first send (consulting only). |
 | `"max_silence"` | `MaxSilenceEvaluator` | No participant may go silent for longer than `params["seconds"]`. |
-| `"turn_within"` | (composes from the above) | The next speaker must speak within `params["seconds"]` of being scheduled. |
+| `"turn_within"` | `TurnWithinEvaluator` | The adapter's expected next speaker must speak within `params["seconds"]` of the envelope that handed them the turn (of the channel opening, for the first turn). Fires once per turn. |
 
 Each evaluator implements:
 
@@ -27265,10 +27370,13 @@ expectations = [
 |---|---|---|
 | `"audit"` | `AuditHandler` | Write to the audit log only. Channel continues. |
 | `"notify_channel"` | `NotifyChannelHandler` | Post `EV_EXPECTATION_VIOLATED` on the channel WAL. |
+| `"warn"` | `WarnHandler` | Post `EV_EXPECTATION_VIOLATED` to the violating participant(s) only. |
 | `"auto_close"` | `AutoCloseHandler` | Close the channel with `reason="expectation_violated:<name>"`; record to audit. |
 | `"hide"` | (custom) | Hide later turns from the offending participant; not yet implemented as a built-in. |
 
 The default registry exposes them as `default_handlers()`.
+
+A violation whose `on_violation` names no registered handler is still written to the audit log, but nothing else happens; a handler registered later with `hub.register_violation_handler(...)` applies to violations that fire after that. That is the case today for `DiscussionAdapter`'s `turn_within(600s, hide)`: the violation is audited, and the channel stays active, because no built-in `"hide"` handler ships yet.
 
 ## The Sweeper Loop
 
