@@ -242,6 +242,14 @@ def _process_fields(cls: type) -> None:
     cls._event_fields_ = fields  # type: ignore[attr-defined]
 
 
+def _get_event_fields(cls: type) -> dict[str, FieldInfo]:
+    """Keep inherited field order while selecting definitions by MRO precedence."""
+    fields: dict[str, FieldInfo] = {}
+    for klass in reversed(cls.__mro__):
+        fields.update(getattr(klass, "_event_fields_", {}))
+    return fields
+
+
 class BaseEvent(metaclass=_ConditionMeta):
     # Subclasses may set ``__transient__ = True`` to mark themselves as
     # ephemeral streaming / lifecycle artifacts that should NOT be persisted
@@ -266,15 +274,10 @@ class BaseEvent(metaclass=_ConditionMeta):
         return self
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # Keep inherited field order while allowing more-derived definitions to override.
         positional_names: list[str] = []
         defaults: dict[str, Any] = {}
-        fields: dict[str, FieldInfo] = {}
 
-        for klass in reversed(type(self).__mro__):
-            fields.update(getattr(klass, "_event_fields_", {}))
-
-        for name, f in fields.items():
+        for name, f in _get_event_fields(type(self)).items():
             if not f.kw_only:
                 positional_names.append(name)
             if name not in kwargs:
@@ -306,19 +309,14 @@ class BaseEvent(metaclass=_ConditionMeta):
         if type(self) is not type(other):
             return NotImplemented
 
-        for klass in type(self).__mro__:
-            for name, f in getattr(klass, "_event_fields_", {}).items():
-                if f.compare and getattr(self, name) != getattr(other, name):
-                    return False
+        for name, f in _get_event_fields(type(self)).items():
+            if f.compare and getattr(self, name) != getattr(other, name):
+                return False
 
         return True
 
     def __repr__(self) -> str:
-        hidden = set()
-        for klass in type(self).__mro__:
-            for name, f in getattr(klass, "_event_fields_", {}).items():
-                if not f.repr:
-                    hidden.add(name)
+        hidden = {name for name, f in _get_event_fields(type(self)).items() if not f.repr}
 
         fields = ", ".join(
             f"{k}={truncate_repr(v)}" for k, v in self.__dict__.items() if not k.startswith("_") and k not in hidden

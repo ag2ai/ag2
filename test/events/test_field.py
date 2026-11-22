@@ -241,6 +241,48 @@ class TestFieldCompare:
         assert Child(a="x", b=1) != Child(a="y", b=1)
 
 
+class TestFieldInheritance:
+    @pytest.mark.parametrize(("parent_compare", "child_compare"), [(True, False), (False, True)])
+    def test_subclass_compare_flag_overrides_parent(self, parent_compare: bool, child_compare: bool) -> None:
+        class Parent(BaseEvent):
+            value: int = Field(default=1, compare=parent_compare)
+
+        class Child(Parent):
+            value: int = Field(default=1, compare=child_compare)
+
+        assert (Child(value=1) == Child(value=2)) is (not child_compare)
+        assert (Parent(value=1) == Parent(value=2)) is (not parent_compare)
+
+    @pytest.mark.parametrize(("parent_repr", "child_repr"), [(False, True), (True, False)])
+    def test_subclass_repr_flag_overrides_parent(self, parent_repr: bool, child_repr: bool) -> None:
+        class Parent(BaseEvent):
+            value: int = Field(default=1, repr=parent_repr)
+
+        class Child(Parent):
+            value: int = Field(default=1, repr=child_repr)
+
+        assert ("value=1" in repr(Child())) is child_repr
+        assert ("value=1" in repr(Parent())) is parent_repr
+
+    def test_multiple_inheritance_flags_follow_mro(self) -> None:
+        class Left(BaseEvent):
+            value: int = Field(default=1, compare=False, repr=True)
+
+        class Right(BaseEvent):
+            value: int = Field(default=1, compare=True, repr=False)
+
+        class LeftFirst(Left, Right):
+            pass
+
+        class RightFirst(Right, Left):
+            pass
+
+        assert LeftFirst(value=1) == LeftFirst(value=2)
+        assert "value=1" in repr(LeftFirst())
+        assert RightFirst(value=1) != RightFirst(value=2)
+        assert "value=" not in repr(RightFirst())
+
+
 class TestFieldPositionalArgs:
     def test_positional_arg(self):
         class Event(BaseEvent):
