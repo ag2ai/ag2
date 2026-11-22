@@ -156,6 +156,8 @@ class LocalRuntime(SkillRuntime):
                 f"file-based script {script!r} requires positional string arguments (an array); "
                 "named arguments (an object) are only supported for in-process scripts"
             )
+        if args and any(not isinstance(arg, str) for arg in args):
+            raise TypeError(f"file-based script {script!r} requires string arguments")
         scripts_dir = self._loader.get_path(name) / "scripts"
         resolved_script = _resolve_within(scripts_dir / script, scripts_dir)
         if script not in {s.name for s in skill.scripts} or resolved_script is None:
