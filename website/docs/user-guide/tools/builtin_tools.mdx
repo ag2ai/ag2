@@ -366,7 +366,7 @@ from ag2.tools import AnthropicBashTool
 
 bash = AnthropicBashTool(
     DockerEnvironment(image="python:3.12-slim", network_mode="none"),
-    allowed=["ls", "cat", "python"],
+    allowed=["ls", "cat", "grep"],
     ignore=["**/.env", "*.key"],
 )
 ```
@@ -375,8 +375,8 @@ bash = AnthropicBashTool(
 | :--- | :--- |
 | `environment` | Execution backend (`LocalEnvironment`, `DockerEnvironment`, `DaytonaEnvironment`, `TenkiEnvironment`, or a custom one). `None` means a local subprocess. |
 | `allowed` | Whitelist of command prefixes. |
-| `blocked` | Blacklist of command prefixes. Best-effort: it matches the head command only, so chaining bypasses it. |
-| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. |
+| `blocked` | Blacklist of command prefixes, matched against the argv. It cannot stop a program that starts another one (`sh -c`, `env`, `xargs`), so use `allowed` or an isolated backend for a hard boundary. |
+| `ignore` | Gitignore-style path patterns. A command referencing a matching path is refused. It does not cover programs that run code (`python`, `node`, `sh`); see [Command Filtering](/docs/user-guide/tools/local_shell#command-filtering). |
 | `readonly` | When `True` and `allowed` is unset, restricts to a built-in read-only command set (`cat`, `ls`, `grep`, …). |
 
 The semantics are identical to `SandboxShellTool`'s — see [Command Filtering](/docs/user-guide/tools/local_shell#command-filtering) for the details.
