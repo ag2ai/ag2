@@ -115,6 +115,12 @@ async def transfer_to_nobody() -> Handoff:
     return Handoff(target="nobody", reason="escalate")
 
 
+@tool
+async def transfer_to_carol() -> Handoff:
+    """Hand the workflow to carol, who is on the hub but not in the channel."""
+    return Handoff(target="carol", reason="escalate")
+
+
 @pytest.fixture
 def clock() -> _MockClock:
     return _MockClock("2026-01-01T00:00:00+00:00")
@@ -799,6 +805,33 @@ class TestWorkflowStall:
             state=ChannelState.CLOSED,
             close_reason="expectation_violated:turn_within",
         )
+
+    async def test_warn_for_a_non_participant_goes_to_the_channel_not_to_them(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient
+    ) -> None:
+        carol = await hub.register(_agent("carol"))
+        bob = await hub.register(
+            Agent(
+                name="bob",
+                config=TestConfig(ToolCallEvent(name="transfer_to_carol", arguments="{}"), "escalating"),
+                tools=[transfer_to_carol],
+            )
+        )
+        channel = await alice.open(
+            type=WORKFLOW_TYPE, target=[bob.agent_id], knobs=_round_robin(alice.agent_id, bob.agent_id)
+        )
+        alice.ensure_channel_inbox(channel.channel_id)
+        await channel.send("bob, route this")
+        await alice.wait_for_channel_event(
+            channel_id=channel.channel_id, predicate=lambda envelope: envelope.event_type == EV_PACKET, timeout=5.0
+        )
+
+        clock.advance(121)
+        await hub._expectation_tick()
+
+        assert await _violation_envelopes(hub, channel.channel_id) == [
+            HasAttributes(audience=None, event_data=IsPartialDict({"violators": [carol.agent_id]}))
+        ]
 
 
 @pytest.mark.asyncio

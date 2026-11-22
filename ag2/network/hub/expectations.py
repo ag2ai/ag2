@@ -381,15 +381,17 @@ class NotifyChannelHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        await _post_violation(hub, channel_id, violation, audience=None)
+        await _post_violation(hub, channel_id, violation, to_violators=False)
 
 
 class WarnHandler:
     """Post ``EV_EXPECTATION_VIOLATED`` only to the violating participant(s).
 
-    A channel-wide violation (no violators) is broadcast, as with
-    ``notify_channel``. Audit emission is owned by the ``AuditLog``
-    listener.
+    Violators outside the channel (e.g. a workflow handed off to an agent
+    that isn't a participant) are never addressed; if no violator is a
+    participant, or the violation is channel-wide, it is broadcast to the
+    channel, as with ``notify_channel``. Audit emission is owned by the
+    ``AuditLog`` listener.
     """
 
     name = "warn"
@@ -400,7 +402,7 @@ class WarnHandler:
         channel_id: str,
         violation: Violation,
     ) -> None:
-        await _post_violation(hub, channel_id, violation, audience=list(violation.violator_ids) or None)
+        await _post_violation(hub, channel_id, violation, to_violators=True)
 
 
 async def _post_violation(
@@ -408,11 +410,15 @@ async def _post_violation(
     channel_id: str,
     violation: Violation,
     *,
-    audience: list[str] | None,
+    to_violators: bool,
 ) -> None:
     metadata = hub._channels.get(channel_id)
     if metadata is None or metadata.is_terminal():
         return
+    audience: list[str] | None = None
+    if to_violators:
+        participant_ids = set(metadata.participant_ids())
+        audience = [vid for vid in violation.violator_ids if vid in participant_ids] or None
     envelope = Envelope(
         channel_id=channel_id,
         sender_id=metadata.creator_id,
