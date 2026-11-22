@@ -12,7 +12,7 @@ import pytest
 import pytest_asyncio
 
 from ag2 import Agent, Context, tool
-from ag2.events import ImageInput, ModelMessage, TextInput, ToolCallEvent, ToolResultEvent
+from ag2.events import DataInput, ImageInput, ModelMessage, TextInput, ToolCallEvent, ToolResultEvent
 from ag2.streams.redis.serializer import Serializer
 from ag2.testing import TestConfig
 
@@ -518,4 +518,6 @@ class TestUntrustedToolData:
 
         assert reply.body == "done"
         [result_event] = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
-        assert result_event.result.parts[0].data == {"profile": profile}
+        part = result_event.result.parts[0]
+        assert isinstance(part, DataInput)
+        assert part.data == {"profile": profile}

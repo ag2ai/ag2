@@ -159,7 +159,7 @@ class TrackingConfig(ModelConfig):
         return self.config.provider
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
         return self.config.model
 
     def copy(self) -> Self:
