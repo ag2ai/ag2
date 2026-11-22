@@ -11,23 +11,23 @@ from typing import Any
 import acp
 import pytest
 from acp import RequestError, schema
-from acp.agent.connection import AgentSideConnection
 
 from ag2 import Agent
 from ag2.acp import PermissionPolicy
 from ag2.acp.events import ACPPermissionOption, ACPPermissionRequest, ACPToolLocation
 from ag2.acp.testing import duplex_acp_config
 from ag2.events import ApprovalChoice, ApprovalChoiceMessage, HumanInputRequest, HumanMessage
+from ag2.hitl import HumanHook
 
 SESSION_ID = "calling-session"
 
-Act = Callable[[AgentSideConnection, str], Awaitable[Any]]
+Act = Callable[[acp.Client, str], Awaitable[Any]]
 
 
 class CallingAgent:
     """An ACP agent whose one prompt turn is a script of requests to the client."""
 
-    def __init__(self, conn: AgentSideConnection, act: Act, outcome: list[Any]) -> None:
+    def __init__(self, conn: acp.Client, act: Act, outcome: list[Any]) -> None:
         self._conn = conn
         self._act = act
         self._outcome = outcome
@@ -50,7 +50,7 @@ async def agent_asks(
     act: Act,
     workspace: Path,
     permission_policy: PermissionPolicy = "ask",
-    hitl_hook: Callable[[HumanInputRequest], str] | None = None,
+    hitl_hook: HumanHook | None = None,
 ) -> Any:
     """Run one turn in which the agent does ``act``, and return what ``act`` returned.
 
@@ -58,7 +58,9 @@ async def agent_asks(
     """
     outcome: list[Any] = []
     cfg = duplex_acp_config(
-        lambda conn: CallingAgent(conn, act, outcome), cwd=str(workspace), permission_policy=permission_policy
+        lambda conn: CallingAgent(conn, act, outcome),
+        cwd=str(workspace),
+        permission_policy=permission_policy,
     )
     try:
         await Agent("acp", config=cfg, hitl_hook=hitl_hook).ask("go")
@@ -71,7 +73,7 @@ async def agent_asks(
 @pytest.mark.asyncio
 class TestFiles:
     async def test_a_file_the_agent_writes_can_be_read_back(self, tmp_path: Path) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> str:
+        async def act(conn: acp.Client, sid: str) -> str:
             await conn.write_text_file(session_id=sid, path="notes.txt", content="hi\nthere\n")
             return (await conn.read_text_file(session_id=sid, path="notes.txt")).content
 
@@ -81,7 +83,7 @@ class TestFiles:
     async def test_an_absolute_path_inside_the_workspace_is_fine(self, tmp_path: Path) -> None:
         (tmp_path / "notes.txt").write_text("hi\n")
 
-        async def act(conn: AgentSideConnection, sid: str) -> str:
+        async def act(conn: acp.Client, sid: str) -> str:
             return (await conn.read_text_file(session_id=sid, path=str(tmp_path / "notes.txt"))).content
 
         assert await agent_asks(act, tmp_path) == "hi\n"
@@ -89,14 +91,14 @@ class TestFiles:
     async def test_a_read_can_ask_for_a_window_of_lines(self, tmp_path: Path) -> None:
         (tmp_path / "f.txt").write_text("l1\nl2\nl3\nl4\n")
 
-        async def act(conn: AgentSideConnection, sid: str) -> str:
+        async def act(conn: acp.Client, sid: str) -> str:
             return (await conn.read_text_file(session_id=sid, path="f.txt", line=2, limit=2)).content
 
         assert await agent_asks(act, tmp_path) == "l2\nl3\n"
 
     @pytest.mark.parametrize("path", ["../../etc/passwd", "/etc/passwd"])
     async def test_a_path_outside_the_workspace_is_refused(self, tmp_path: Path, path: str) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> str:
+        async def act(conn: acp.Client, sid: str) -> str:
             return (await conn.read_text_file(session_id=sid, path=path)).content
 
         assert isinstance(await agent_asks(act, tmp_path), RequestError)
@@ -105,7 +107,7 @@ class TestFiles:
         workspace = tmp_path / "work"
         workspace.mkdir()
 
-        async def act(conn: AgentSideConnection, sid: str) -> None:
+        async def act(conn: acp.Client, sid: str) -> None:
             await conn.write_text_file(session_id=sid, path="../escaped.txt", content="x")
 
         assert isinstance(await agent_asks(act, workspace), RequestError)
@@ -143,10 +145,10 @@ class TestPermission:
         workspace: Path,
         policy: PermissionPolicy,
         options: list[schema.PermissionOption],
-        hitl_hook: Callable[[HumanInputRequest], str | HumanMessage] | None = None,
+        hitl_hook: HumanHook | None = None,
         tool_call: schema.ToolCallUpdate = TOOL_CALL,
     ) -> Any:
-        async def act(conn: AgentSideConnection, sid: str) -> schema.RequestPermissionResponse:
+        async def act(conn: acp.Client, sid: str) -> schema.RequestPermissionResponse:
             return await conn.request_permission(session_id=sid, options=options, tool_call=tool_call)
 
         response = await agent_asks(act, workspace, permission_policy=policy, hitl_hook=hitl_hook)
@@ -249,7 +251,8 @@ class TestPermission:
     async def test_the_answer_selects_an_option(
         self, tmp_path: Path, reply: str | HumanMessage, options: list[schema.PermissionOption], outcome: Any
     ) -> None:
-        assert await self.ask_permission(tmp_path, "ask", options, lambda event: reply) == outcome
+        hook: HumanHook = (lambda event: reply) if isinstance(reply, str) else (lambda event: reply)
+        assert await self.ask_permission(tmp_path, "ask", options, hook) == outcome
 
     @pytest.mark.parametrize(
         ("policy", "options", "outcome"),
@@ -275,7 +278,7 @@ class TestPermission:
 @pytest.mark.asyncio
 class TestTerminal:
     async def test_a_command_runs_and_its_output_is_captured(self, tmp_path: Path) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> tuple[Any, ...]:
+        async def act(conn: acp.Client, sid: str) -> tuple[Any, ...]:
             terminal = await conn.create_terminal(session_id=sid, command="printf", args=["hello"])
             exited = await conn.wait_for_terminal_exit(session_id=sid, terminal_id=terminal.terminal_id)
             output = await conn.terminal_output(session_id=sid, terminal_id=terminal.terminal_id)
@@ -288,7 +291,7 @@ class TestTerminal:
         assert (output.output, output.truncated) == ("hello", False)
 
     async def test_output_past_the_byte_limit_is_truncated(self, tmp_path: Path) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> Any:
+        async def act(conn: acp.Client, sid: str) -> Any:
             terminal = await conn.create_terminal(
                 session_id=sid, command="printf", args=["abcdefghij"], output_byte_limit=4
             )
@@ -300,13 +303,13 @@ class TestTerminal:
         assert (output.output, output.truncated) == ("abcd", True)
 
     async def test_a_working_directory_outside_the_workspace_is_refused(self, tmp_path: Path) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> Any:
+        async def act(conn: acp.Client, sid: str) -> Any:
             return await conn.create_terminal(session_id=sid, command="printf", args=["x"], cwd="../../etc")
 
         assert isinstance(await agent_asks(act, tmp_path), RequestError)
 
     async def test_a_running_command_can_be_killed(self, tmp_path: Path) -> None:
-        async def act(conn: AgentSideConnection, sid: str) -> Any:
+        async def act(conn: acp.Client, sid: str) -> Any:
             terminal = await conn.create_terminal(session_id=sid, command="sleep", args=["30"])
             await conn.kill_terminal(session_id=sid, terminal_id=terminal.terminal_id)
             exited = await conn.wait_for_terminal_exit(session_id=sid, terminal_id=terminal.terminal_id)

@@ -11,19 +11,18 @@ where a yes or no and a picked option could be taken for each other.
 """
 
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
 pytest.importorskip("acp")
 
+import acp  # noqa: E402
 from acp import schema  # noqa: E402
-from acp.agent.connection import AgentSideConnection  # noqa: E402
 
 from ag2 import Agent  # noqa: E402
 from ag2.acp.testing import duplex_acp_config  # noqa: E402
 from ag2.ag_ui import AGUIStream, ChoicePayload  # noqa: E402
-from ag2.config import ModelConfig  # noqa: E402
 from ag2.events import ToolCallEvent  # noqa: E402
 from ag2.testing import TestConfig  # noqa: E402
 from test.acp.test_bridge import ALLOW, ALLOW_ALWAYS, REJECT, CallingAgent, selected  # noqa: E402
@@ -41,19 +40,16 @@ async def outcome_for(
     """
     outcome: list[schema.RequestPermissionResponse] = []
 
-    async def act(conn: AgentSideConnection, sid: str) -> schema.RequestPermissionResponse:
+    async def act(conn: acp.Client, sid: str) -> schema.RequestPermissionResponse:
         tool_call = schema.ToolCallUpdate(tool_call_id="tc1", title="git status", kind="execute")
         return await conn.request_permission(session_id=sid, options=options, tool_call=tool_call)
 
-    cfg = duplex_acp_config(
-        lambda conn: CallingAgent(cast(AgentSideConnection, conn), act, outcome), cwd=str(workspace)
-    )
+    cfg = duplex_acp_config(lambda conn: CallingAgent(conn, act, outcome), cwd=str(workspace))
     try:
         parent = Agent(
             "parent",
             config=TestConfig(ToolCallEvent(name="task_coder", arguments='{"objective": "check"}'), "done"),
-            # An ACP config is a model config in all but its missing `provider`.
-            tools=[Agent("coder", config=cast(ModelConfig, cfg)).as_tool(description="Delegate to the coder.")],
+            tools=[Agent("coder", config=cfg).as_tool(description="Delegate to the coder.")],
         )
         app = app_for(AGUIStream(parent))
         interrupt = await ask_once(app)
