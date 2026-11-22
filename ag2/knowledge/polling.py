@@ -76,7 +76,7 @@ class PollingChangeWatcher:
             return
         try:  # noqa: SIM105
             await self._callback(path)
-        except Exception:  # pragma: no cover
+        except Exception:
             pass  # callbacks must never crash the watcher
 
     async def close(self) -> None:
