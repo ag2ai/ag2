@@ -230,6 +230,18 @@ class ConversationContext:
         Raises:
             HumanInputError: every way this fails to produce an answer.
         """
+        return (await self.ask_message(request)).content
+
+    async def ask_message(self, request: HumanInputRequest) -> HumanMessage:
+        """What :meth:`ask` does, returning the whole reply rather than its text.
+
+        For an asker that tells kinds of answer apart by type, such as an
+        :class:`~ag2.events.ApprovalChoiceMessage` picking one of a
+        :class:`~ag2.events.ToolApprovalRequest`'s choices.
+
+        Raises:
+            HumanInputError: every way this fails to produce an answer.
+        """
         async with self.stream.get(HumanMessage.parent_id == request.id) as response:
             try:
                 # The hook runs inline inside ``send``, so the timeout has to
@@ -247,7 +259,7 @@ class ConversationContext:
                 # timeouts included, left _ask_human as a HumanInputError.
                 raise HumanInputTimeoutError(request.timeout) from exc  # type: ignore[arg-type]
 
-        return result.content
+        return result
 
     async def send(self, event: BaseEvent) -> None:
         if isinstance(event, InertEvent):

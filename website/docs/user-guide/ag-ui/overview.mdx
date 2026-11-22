@@ -586,6 +586,42 @@ splits across the two exchanges exactly as above — `toolCallId` names the
 `TOOL_CALL_START` the first exchange already emitted, so a client has something
 to attach the prompt to.
 
+#### Offering more than yes or no
+
+An approval can offer its own choices through `ToolApprovalRequest.choices`, as
+a permission request from an
+[ACP agent](/docs/user-guide/acp/client#choosing-one-of-the-agents-options) does
+with the agent's options. The interrupt's `responseSchema` then gains an object
+branch with one titled constant per choice, so a client can draw a button for
+each:
+
+```json
+{"title": "Approval",
+ "anyOf": [{"type": ["string", "boolean"]},
+           {"type": "object", "title": "Choice", "required": ["choice"], "additionalProperties": false,
+            "properties": {"choice": {"type": "string",
+                                      "oneOf": [{"const": "proceed_always", "title": "Allow for this session"},
+                                                {"const": "proceed_once", "title": "Allow"},
+                                                {"const": "cancel", "title": "Reject"}]}}}]}
+```
+
+Resume with the picked value under `choice`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": {"choice": "proceed_once"},
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+A pick has its own shape on the wire and is never inferred from a string:
+
+- `{"choice": <value>}` reaches the asker as an `ApprovalChoiceMessage` and
+  selects exactly that choice. A value that was not offered is refused with
+  `PAYLOAD_REFUSED`.
+- `true`, `false` and strings mean what they mean without choices, even a
+  string equal to a choice's value. A client that only draws approve and refuse
+  buttons, or answers in words, works unchanged.
+
 ### With a hook, nothing changes
 
 Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
