@@ -656,6 +656,62 @@ class TestSqliteKnowledgeStore:
         finally:
             store.close()
 
+    @pytest.mark.parametrize("mutate", ["write", "append"])
+    async def test_fresh_store_bumps_version_on_second_mutation(self, tmp_path: Path, mutate: str) -> None:
+        store = SqliteKnowledgeStore(tmp_path / "store.db")
+        try:
+            await getattr(store, mutate)("/a.txt", "v1")
+            first = (await store.list_versions_under("/"))["/a.txt"]
+            await getattr(store, mutate)("/a.txt", "v2")
+            second = (await store.list_versions_under("/"))["/a.txt"]
+            assert second > first
+        finally:
+            store.close()
+
+    async def test_reopened_store_does_not_reuse_versions(self, tmp_path: Path) -> None:
+        database = tmp_path / "store.db"
+        first = SqliteKnowledgeStore(database)
+        try:
+            await first.write("/a.txt", "v1")
+            await first.write("/b.txt", "v1")
+            before = await first.list_versions_under("/")
+        finally:
+            first.close()
+
+        reopened = SqliteKnowledgeStore(database)
+        try:
+            await reopened.write("/a.txt", "v2")
+            after = await reopened.list_versions_under("/")
+            assert after["/a.txt"] > max(before.values())
+        finally:
+            reopened.close()
+
+    async def test_on_change_sees_write_from_another_store(self, tmp_path: Path) -> None:
+        database = tmp_path / "store.db"
+        seed = SqliteKnowledgeStore(database)
+        try:
+            await seed.write("/a.txt", "v1")
+            await seed.write("/b.txt", "v1")
+        finally:
+            seed.close()
+
+        watcher = SqliteKnowledgeStore(database, poll_interval_s=0.05)
+        writer = SqliteKnowledgeStore(database)
+        changed = asyncio.Event()
+
+        async def callback(path: str) -> None:
+            if path == "/a.txt":
+                changed.set()
+
+        sub = await watcher.on_change("/", callback)
+        try:
+            await writer.write("/a.txt", "v2")
+            await asyncio.wait_for(changed.wait(), timeout=5.0)
+        finally:
+            await sub.close()
+            watcher.close()
+            writer.close()
+
     async def test_underscore_prefix_does_not_match_sibling(self, tmp_path: Path) -> None:
         store = SqliteKnowledgeStore(str(tmp_path / "store.db"))
         try:
