@@ -12,7 +12,8 @@ Default expectations:
 * ``turn_within(120s, warn)`` — the expected next speaker should post
   within 2 minutes of being expected.
 * ``turn_within(600s, hide)`` — silenced from the channel if quiet for
-  10 minutes.
+  10 minutes. No built-in ``hide`` handler ships yet: the hub audits the
+  violation and takes no other action until one is registered.
 """
 
 from collections.abc import Mapping

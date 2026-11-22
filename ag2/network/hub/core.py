@@ -42,7 +42,7 @@ from pydantic import JsonValue
 from ag2.knowledge import KnowledgeStore
 from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
 
-from ..adapters.base import AdapterState, ChannelAdapter, StateT, _narrow_state
+from ..adapters.base import AdapterState, ChannelAdapter, ExpectedTurn, StateT, _narrow_state
 from ..adapters.consulting import ConsultingAdapter
 from ..adapters.conversation import ConversationAdapter
 from ..adapters.discussion import DiscussionAdapter
@@ -385,12 +385,12 @@ class Hub:
         self._audit_log = AuditLog(store, clock=self._clock)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
-        # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
-        # The position-based index disambiguates same-name expectations
-        # (e.g. two ``turn_within`` entries with different ``on_violation``
-        # handlers — without the index the first to fire would suppress
-        # the second). Empty violator_id ("") = channel-wide violations.
-        self._fired_violations: dict[str, set[tuple[int, str, str]]] = {}
+        # channel_id → set of (expectation_index, violator_id, turn_key) fired.
+        # The manifest is fixed for the channel's life, so the position-based
+        # index alone names the expectation and disambiguates same-name
+        # entries (e.g. two ``turn_within`` with different ``on_violation``).
+        # Empty violator_id ("") = channel-wide violation.
+        self._fired_violations: dict[str, set[tuple[int, str, str | None]]] = {}
 
         # Identity caches.
         self._passports: dict[str, Passport] = {}
@@ -1061,23 +1061,36 @@ class Hub:
         """One sweeper tick: evaluate every expectation on every active
         channel; fire registered handlers on new violations.
 
-        Per-(channel, expectation, violator) dedup lives in
-        ``_fired_violations`` so handlers don't re-fire on every tick.
-        Cleared on terminal channel transitions.
+        Per-(channel, expectation, violator, turn) dedup lives in
+        ``_fired_violations`` so nothing re-fires on every tick. Cleared on
+        terminal channel transitions. A violation whose ``on_violation``
+        names no registered handler is still fanned out (so ``AuditLog``
+        records it) but triggers no action.
         """
-        if not self._expectation_evaluators or not self._violation_handlers:
+        if not self._expectation_evaluators:
             return
         now_iso = self._clock()
         now_seconds = datetime.fromisoformat(now_iso).timestamp()
-        for channel_id, metadata in list(self._active_channels.items()):
-            adapter_state = self._adapter_states.get(channel_id)
-            wal = await self.read_wal(channel_id)
+        for channel_id in list(self._active_channels):
+            # ExpectationContext hands evaluators both the adapter state and
+            # the WAL, so both are read under the channel lock: a send landing
+            # mid-read would otherwise pair a fresh WAL with stale turn state.
+            # The built-in evaluators would reach the same verdict either way;
+            # the lock keeps the context consistent for custom evaluators.
+            async with self._wal_lock(channel_id):
+                metadata = self._active_channels.get(channel_id)
+                if metadata is None:
+                    continue
+                adapter_state = self._adapter_states.get(channel_id)
+                expected_turn = self._expected_turn(metadata, adapter_state)
+                wal = await self.read_wal(channel_id)
             context = ExpectationContext(
                 metadata=metadata,
                 state=adapter_state,
                 wal=wal,
                 now_iso=now_iso,
                 now_seconds=now_seconds,
+                expected_turn=expected_turn,
             )
             terminal = False
             for idx, expectation in enumerate(metadata.manifest.expectations):
@@ -1088,24 +1101,23 @@ class Hub:
                 if violation is None:
                     continue
                 handler = self._violation_handlers.get(expectation.on_violation)
-                if handler is None:
-                    continue
                 fired = self._fired_violations.setdefault(channel_id, set())
-                violator_keys = violation.violator_ids or [""]
-                for vid in violator_keys:
-                    key = (idx, expectation.name, vid)
+                for vid in violation.violator_ids or [""]:
+                    key = (idx, vid, violation.turn_key)
                     if key in fired:
                         continue
                     fired.add(key)
                     # Fan out before handler so listeners (including
                     # AuditLog) see every violation regardless of which
-                    # handler is configured.
+                    # handler is configured, or whether one is.
                     await self._fan_out(
                         "on_expectation_fired",
                         channel_id,
                         expectation,
                         violation,
                     )
+                    if handler is None:
+                        continue
                     # Sweeper must survive handler exceptions — they
                     # leave the violation marked as fired so we don't
                     # spin on a bad handler.
@@ -1119,6 +1131,23 @@ class Hub:
                         break
                 if terminal:
                     break
+
+    def _expected_turn(self, metadata: ChannelMetadata, adapter_state: AdapterState | None) -> ExpectedTurn | None:
+        """Ask the channel's adapter who should act next.
+
+        A failing adapter skips turn-scoped expectations on that channel
+        only; the sweep carries on for every other channel.
+        """
+        if adapter_state is None:
+            return None
+        adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
+        if adapter is None:
+            return None
+        try:
+            return adapter.expected_next(metadata, adapter_state)
+        except Exception:
+            logger.exception("adapter expected_next failed for channel %s", metadata.channel_id)
+            return None
 
     # ── Registration ────────────────────────────────────────────────────────
 

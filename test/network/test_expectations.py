@@ -7,10 +7,12 @@
 Three layers covered:
 
 * **Evaluators** (unit) — ``AcksWithinEvaluator``,
-  ``ReplyWithinEvaluator``, ``MaxSilenceEvaluator`` against synthesised
-  ``ExpectationContext`` inputs.
+  ``ReplyWithinEvaluator``, ``TurnWithinEvaluator``,
+  ``MaxSilenceEvaluator`` against synthesised ``ExpectationContext``
+  inputs.
 * **Handlers** (integration) — ``AuditHandler``,
-  ``NotifyChannelHandler``, ``AutoCloseHandler`` driven by the hub's
+  ``NotifyChannelHandler``, ``WarnHandler``, ``AutoCloseHandler``
+  driven by the hub's
   manual ``_expectation_tick()`` call with a controllable clock.
 * **Audit log** — ``register`` / ``unregister`` / ``set_*`` write the
   expected records via ``AuditLog.read_all()``.
@@ -22,25 +24,40 @@ disabled (``expectation_sweep_interval=0``); tests call
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 from datetime import datetime
+from typing import Any
 
 import pytest
+import pytest_asyncio
+from dirty_equals import HasAttributes, IsPartialDict
 
 from ag2 import Agent
+from ag2.events import ToolCallEvent
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
+    EV_CHANNEL_OPENED,
     EV_EXPECTATION_VIOLATED,
+    EV_PACKET,
     EV_TEXT,
+    WORKFLOW_TYPE,
+    AgentClient,
+    ConversationState,
     Envelope,
+    ExpectedTurn,
+    Handoff,
     Hub,
     Resume,
     Rule,
+    TransitionGraph,
+    WorkflowState,
 )
 from ag2.network.adapters.consulting import CONSULTING_TYPE
 from ag2.network.adapters.conversation import (
     CONVERSATION_TYPE,
     ConversationAdapter,
 )
+from ag2.network.adapters.discussion import DISCUSSION_TYPE
 from ag2.network.channel import (
     ChannelManifest,
     ChannelMetadata,
@@ -62,9 +79,13 @@ from ag2.network.hub import (
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
+    TurnWithinEvaluator,
+    Violation,
+    WarnHandler,
 )
 from ag2.network.views.builtin import WindowedSummary
 from ag2.testing import TestConfig
+from ag2.tools import tool
 
 from ._helpers import _MockClock
 
@@ -79,6 +100,87 @@ async def _silent_handler(_envelope: Envelope) -> None:
     Used to drive expectation paths that depend on a participant
     *not* responding (e.g. ``acks_within`` / ``reply_within`` tests).
     """
+
+
+class _BrokenTurnConversationAdapter(ConversationAdapter):
+    """Conversation adapter whose ``expected_next`` raises."""
+
+    def expected_next(self, metadata: ChannelMetadata, state: ConversationState) -> ExpectedTurn | None:
+        raise RuntimeError("adapter bug")
+
+
+@tool
+async def transfer_to_nobody() -> Handoff:
+    """Hand the workflow to an agent that isn't registered on the hub."""
+    return Handoff(target="nobody", reason="escalate")
+
+
+@tool
+async def transfer_to_carol() -> Handoff:
+    """Hand the workflow to carol, who is on the hub but not in the channel."""
+    return Handoff(target="carol", reason="escalate")
+
+
+@pytest.fixture
+def clock() -> _MockClock:
+    return _MockClock("2026-01-01T00:00:00+00:00")
+
+
+@pytest_asyncio.fixture
+async def hub(clock: _MockClock) -> AsyncGenerator[Hub]:
+    hub = await Hub.open(MemoryKnowledgeStore(), clock=clock, ttl_sweep_interval=0, expectation_sweep_interval=0)
+    yield hub
+    await hub.close()
+
+
+@pytest_asyncio.fixture
+async def alice(hub: Hub) -> AgentClient:
+    return await hub.register(_agent("alice"))
+
+
+@pytest_asyncio.fixture
+async def bob(hub: Hub) -> AgentClient:
+    return await hub.register(_agent("bob"))
+
+
+def _round_robin(*agent_ids: str) -> dict[str, Any]:
+    return {"graph": TransitionGraph.round_robin(list(agent_ids)).to_dict()}
+
+
+async def _open_turn_channel(alice: AgentClient, bob: AgentClient, channel_type: str) -> str:
+    """Open a round-robin channel alice → bob; bob acks, then never speaks."""
+    knobs = _round_robin(alice.agent_id, bob.agent_id) if channel_type == WORKFLOW_TYPE else None
+    channel = await alice.open(type=channel_type, target=[bob.agent_id], knobs=knobs)
+    bob.on_envelope(_silent_handler)
+    return channel.channel_id
+
+
+async def _violation_envelopes(hub: Hub, channel_id: str) -> list[Envelope]:
+    return [envelope for envelope in await hub.read_wal(channel_id) if envelope.event_type == EV_EXPECTATION_VIOLATED]
+
+
+def _is_violation(envelope: Envelope) -> bool:
+    return envelope.event_type == EV_EXPECTATION_VIOLATED
+
+
+async def _post_text(hub: Hub, channel_id: str, sender_id: str, text: str) -> None:
+    await hub.post_envelope(
+        Envelope(
+            channel_id=channel_id,
+            sender_id=sender_id,
+            audience=None,
+            event_type=EV_TEXT,
+            event_data={"text": text},
+        )
+    )
+
+
+async def _violation_records(hub: Hub, channel_id: str) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in await hub.audit_log.read_all()
+        if record["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED and record["channel_id"] == channel_id
+    ]
 
 
 def _conv_metadata(
@@ -127,6 +229,7 @@ def _ctx(
     *,
     wal: list[Envelope] | None = None,
     now: str = "2026-01-01T00:01:00+00:00",
+    expected_turn: ExpectedTurn | None = None,
 ) -> ExpectationContext:
     now_dt = datetime.fromisoformat(now)
     return ExpectationContext(
@@ -135,6 +238,7 @@ def _ctx(
         wal=wal or [],
         now_iso=now,
         now_seconds=now_dt.timestamp(),
+        expected_turn=expected_turn,
     )
 
 
@@ -476,3 +580,285 @@ async def test_audit_log_writer_round_trips() -> None:
         {"at": "2026-01-01T00:00:00", "kind": "test", "n": 1},
         {"at": "2026-01-01T00:00:01", "kind": "test", "n": 2},
     ]
+
+
+class TestTurnWithinEvaluator:
+    def test_fires_once_the_turn_window_has_passed(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+
+        violation = TurnWithinEvaluator().evaluate(
+            expectation,
+            _ctx(metadata, now="2026-01-01T00:01:01+00:00", expected_turn=ExpectedTurn(agent_id="alice")),
+        )
+
+        assert violation == HasAttributes(
+            violator_ids=["alice"],
+            detail={"elapsed_seconds": 61.0, "threshold_seconds": 60.0},
+        )
+
+    def test_exact_threshold_fires_and_just_under_is_silent(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice")
+
+        exact = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, now="2026-01-01T00:01:00+00:00", expected_turn=expected)
+        )
+        under = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, now="2026-01-01T00:00:59.999000+00:00", expected_turn=expected)
+        )
+
+        assert exact == HasAttributes(violator_ids=["alice"])
+        assert under is None
+
+    def test_window_restarts_from_the_envelope_that_handed_over_the_turn(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        first = _envelope("alice", "first", "2026-01-01T00:00:00+00:00")
+        latest = _envelope("bob", "latest", "2026-01-01T00:00:50+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice", triggering_envelope_id=latest.envelope_id)
+
+        before_deadline = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, wal=[first, latest], now="2026-01-01T00:01:20+00:00", expected_turn=expected)
+        )
+        at_deadline = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, wal=[first, latest], now="2026-01-01T00:01:50+00:00", expected_turn=expected)
+        )
+
+        assert before_deadline is None
+        assert at_deadline == HasAttributes(violator_ids=["alice"])
+
+    def test_first_turn_window_starts_when_the_channel_opens(self) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        opened = Envelope(
+            channel_id="s1",
+            sender_id="alice",
+            audience=["alice", "bob"],
+            event_type=EV_CHANNEL_OPENED,
+            event_data={"channel_id": "s1"},
+            created_at="2026-01-01T00:00:40+00:00",
+        )
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice")
+
+        before_deadline = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, wal=[opened], now="2026-01-01T00:01:30+00:00", expected_turn=expected)
+        )
+        at_deadline = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, wal=[opened], now="2026-01-01T00:01:40+00:00", expected_turn=expected)
+        )
+
+        assert before_deadline is None
+        assert at_deadline == HasAttributes(violator_ids=["alice"])
+
+    def test_missing_triggering_envelope_is_logged_and_does_not_fire(self, caplog: pytest.LogCaptureFixture) -> None:
+        metadata = _conv_metadata(created_at="2026-01-01T00:00:00+00:00")
+        expectation = Expectation(name="turn_within", on_violation="warn", params={"seconds": 60})
+        expected = ExpectedTurn(agent_id="alice", triggering_envelope_id="missing-trigger")
+
+        violation = TurnWithinEvaluator().evaluate(
+            expectation, _ctx(metadata, now="2026-01-01T01:00:00+00:00", expected_turn=expected)
+        )
+
+        assert violation is None
+        assert "missing-trigger" in caplog.text
+        assert "s1" in caplog.text
+
+
+@pytest.mark.asyncio
+class TestTurnWithinSweep:
+    @pytest.mark.parametrize("channel_type", [WORKFLOW_TYPE, DISCUSSION_TYPE])
+    async def test_warns_only_the_expected_speaker(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient, channel_type: str
+    ) -> None:
+        channel_id = await _open_turn_channel(alice, bob, channel_type)
+        bob.ensure_channel_inbox(channel_id)
+        await _post_text(hub, channel_id, alice.agent_id, "bob, your turn")
+
+        clock.advance(121)
+        await hub._expectation_tick()
+
+        warning = await bob.wait_for_channel_event(channel_id=channel_id, predicate=_is_violation, timeout=5.0)
+        assert warning == HasAttributes(
+            audience=[bob.agent_id],
+            event_data=IsPartialDict({"expectation": "turn_within", "violators": [bob.agent_id]}),
+        )
+        assert await _violation_envelopes(hub, channel_id) == [HasAttributes(envelope_id=warning.envelope_id)]
+
+    @pytest.mark.parametrize("channel_type", [WORKFLOW_TYPE, DISCUSSION_TYPE])
+    async def test_warns_the_first_speaker_of_a_fresh_channel(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient, channel_type: str
+    ) -> None:
+        channel_id = await _open_turn_channel(alice, bob, channel_type)
+
+        clock.advance(121)
+        await hub._expectation_tick()
+
+        assert await _violation_envelopes(hub, channel_id) == [
+            HasAttributes(event_data=IsPartialDict({"expectation": "turn_within", "violators": [alice.agent_id]}))
+        ]
+
+    async def test_fires_once_per_turn(self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient) -> None:
+        channel_id = await _open_turn_channel(alice, bob, DISCUSSION_TYPE)
+
+        await _post_text(hub, channel_id, alice.agent_id, "first turn")
+        clock.advance(121)
+        await hub._expectation_tick()
+        await hub._expectation_tick()
+        await _post_text(hub, channel_id, bob.agent_id, "second turn")
+        await _post_text(hub, channel_id, alice.agent_id, "third turn")
+        clock.advance(121)
+        await hub._expectation_tick()
+
+        assert await _violation_envelopes(hub, channel_id) == [
+            HasAttributes(event_data=IsPartialDict({"violators": [bob.agent_id]})),
+            HasAttributes(event_data=IsPartialDict({"violators": [bob.agent_id]})),
+        ]
+
+    async def test_failing_expected_next_does_not_stop_other_expectations(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient
+    ) -> None:
+        hub.register_adapter(_BrokenTurnConversationAdapter())
+        channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+
+        # Conversation declares max_silence(3600s, audit).
+        clock.advance(3700)
+        await hub._expectation_tick()
+
+        assert await _violation_records(hub, channel.channel_id) == [IsPartialDict({"expectation": "max_silence"})]
+
+
+@pytest.mark.asyncio
+class TestWorkflowStall:
+    async def test_auto_closes_when_the_expected_speaker_stays_silent(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient
+    ) -> None:
+        channel_id = await _open_turn_channel(alice, bob, WORKFLOW_TYPE)
+        await _post_text(hub, channel_id, alice.agent_id, "bob, your turn")
+
+        clock.advance(601)
+        await hub._expectation_tick()
+
+        assert await hub.get_channel(channel_id) == HasAttributes(
+            state=ChannelState.CLOSED,
+            close_reason="expectation_violated:turn_within",
+        )
+
+    async def test_warns_once_then_auto_closes(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient
+    ) -> None:
+        channel_id = await _open_turn_channel(alice, bob, WORKFLOW_TYPE)
+        await _post_text(hub, channel_id, alice.agent_id, "bob, your turn")
+
+        clock.advance(121)
+        await hub._expectation_tick()
+        await hub._expectation_tick()
+        assert await hub.get_channel(channel_id) == HasAttributes(state=ChannelState.ACTIVE)
+
+        clock.advance(480)
+        await hub._expectation_tick()
+
+        assert await _violation_envelopes(hub, channel_id) == [
+            HasAttributes(
+                audience=[bob.agent_id],
+                event_data=IsPartialDict({"detail": {"elapsed_seconds": 121.0, "threshold_seconds": 120.0}}),
+            )
+        ]
+        assert await hub.get_channel(channel_id) == HasAttributes(
+            state=ChannelState.CLOSED,
+            close_reason="expectation_violated:turn_within",
+        )
+
+    async def test_handoff_to_an_unknown_agent_auto_closes(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient
+    ) -> None:
+        """A tool returning ``Handoff(target="nobody")`` stalls the workflow
+        on a name the hub doesn't know; ``turn_within(600s, auto_close)``
+        ends it."""
+        bob = await hub.register(
+            Agent(
+                name="bob",
+                config=TestConfig(ToolCallEvent(name="transfer_to_nobody", arguments="{}"), "escalating"),
+                tools=[transfer_to_nobody],
+            )
+        )
+        channel = await alice.open(
+            type=WORKFLOW_TYPE, target=[bob.agent_id], knobs=_round_robin(alice.agent_id, bob.agent_id)
+        )
+        alice.ensure_channel_inbox(channel.channel_id)
+
+        await channel.send("bob, route this")
+        packet = await alice.wait_for_channel_event(
+            channel_id=channel.channel_id, predicate=lambda envelope: envelope.event_type == EV_PACKET, timeout=5.0
+        )
+
+        assert packet.event_data == IsPartialDict({
+            "routing": {"kind": "handoff", "tool": "transfer_to_nobody", "reason": "escalate", "target": "nobody"}
+        })
+        assert hub.adapter_state(channel.channel_id, WorkflowState) == HasAttributes(expected_next_speaker="nobody")
+
+        clock.advance(601)
+        await hub._expectation_tick()
+
+        assert await hub.get_channel(channel.channel_id) == HasAttributes(
+            state=ChannelState.CLOSED,
+            close_reason="expectation_violated:turn_within",
+        )
+
+    async def test_warn_for_a_non_participant_goes_to_the_channel_not_to_them(
+        self, hub: Hub, clock: _MockClock, alice: AgentClient
+    ) -> None:
+        carol = await hub.register(_agent("carol"))
+        bob = await hub.register(
+            Agent(
+                name="bob",
+                config=TestConfig(ToolCallEvent(name="transfer_to_carol", arguments="{}"), "escalating"),
+                tools=[transfer_to_carol],
+            )
+        )
+        channel = await alice.open(
+            type=WORKFLOW_TYPE, target=[bob.agent_id], knobs=_round_robin(alice.agent_id, bob.agent_id)
+        )
+        alice.ensure_channel_inbox(channel.channel_id)
+        await channel.send("bob, route this")
+        await alice.wait_for_channel_event(
+            channel_id=channel.channel_id, predicate=lambda envelope: envelope.event_type == EV_PACKET, timeout=5.0
+        )
+
+        clock.advance(121)
+        await hub._expectation_tick()
+
+        assert await _violation_envelopes(hub, channel.channel_id) == [
+            HasAttributes(audience=None, event_data=IsPartialDict({"violators": [carol.agent_id]}))
+        ]
+
+
+@pytest.mark.asyncio
+async def test_discussion_hide_is_audited_and_the_channel_stays_open(
+    hub: Hub, clock: _MockClock, alice: AgentClient, bob: AgentClient
+) -> None:
+    channel_id = await _open_turn_channel(alice, bob, DISCUSSION_TYPE)
+    await _post_text(hub, channel_id, alice.agent_id, "bob, your turn")
+
+    clock.advance(601)
+    await hub._expectation_tick()
+
+    assert await _violation_records(hub, channel_id) == [
+        IsPartialDict({"on_violation": "warn", "violators": [bob.agent_id]}),
+        IsPartialDict({"on_violation": "hide", "violators": [bob.agent_id]}),
+    ]
+    assert await hub.get_channel(channel_id) == HasAttributes(state=ChannelState.ACTIVE)
+
+
+@pytest.mark.asyncio
+async def test_warn_without_violators_broadcasts_to_the_channel(hub: Hub, alice: AgentClient, bob: AgentClient) -> None:
+    channel = await alice.open(type=CONVERSATION_TYPE, target=bob.agent_id)
+
+    await WarnHandler().handle(
+        hub,
+        channel.channel_id,
+        Violation(expectation=Expectation(name="max_silence", on_violation="warn", params={"seconds": 60})),
+    )
+
+    assert await _violation_envelopes(hub, channel.channel_id) == [HasAttributes(audience=None)]
