@@ -72,11 +72,14 @@ from ag2.tools import SandboxShellTool, LocalEnvironment
 
 sh = SandboxShellTool(
     LocalEnvironment("/tmp/my_project"),
-    allowed=["python", "uv run", "git"],
-    blocked=["rm -rf", "curl", "wget"],
+    allowed=["git", "ls", "cat", "grep"],
+    blocked=["git push", "git config"],
     ignore=["**/.env", "*.key", "secrets/**"],
 )
 ```
+
+!!! warning
+    `ignore` cannot protect files from a program that runs code. If `allowed` includes an interpreter or a runner (`python`, `node`, `perl`, `uv run`, `sh`), the agent can open an ignored file from inside that code: `python -c "print(open('.env').read())"` contains no path word to check. To keep secrets away from an agent that can run code, leave them out of the environment, for example with an isolated container backend that does not mount them.
 
 ### Tool Parameters
 
