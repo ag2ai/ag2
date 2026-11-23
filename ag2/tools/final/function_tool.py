@@ -252,6 +252,14 @@ def _normalize_parameters(schema: FunctionParameters | None, call_model: CallMod
     generated = get_schema(call_model, exclude=(CONTEXT_OPTION_NAME,))
     if generated.get("type") != "object":
         return {"type": "object", "properties": {}}
+    # fast-depends models **kwargs as an ordinary field, so the generated schema
+    # gains a bogus property named after it and no additionalProperties. A **kwargs
+    # parameter is not a real argument: drop it and advertise that extra arguments
+    # are accepted, matching what the runtime already does with them.
+    kwargs_name = call_model.kwargs_name
+    if kwargs_name is not None:
+        generated.get("properties", {}).pop(kwargs_name, None)
+        generated["additionalProperties"] = True
     return generated
 
 

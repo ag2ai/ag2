@@ -5,7 +5,6 @@
 from dataclasses import asdict
 from typing import Annotated, Any
 
-import pytest
 from dirty_equals import IsPartialDict
 from pydantic import Field
 
@@ -169,7 +168,6 @@ def test_explicit_schema_is_preserved() -> None:
     }
 
 
-@pytest.mark.xfail()
 def test_create_dynamic_options() -> None:
     @tool
     def my_tool(a: str | None = None, **kwargs: Any) -> str:
