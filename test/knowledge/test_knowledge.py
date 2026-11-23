@@ -363,6 +363,21 @@ class TestDiskKnowledgeStore:
         assert await store.read("/test.txt") == "hello"
         assert (tmp_path / "test.txt").read_text() == "hello"
 
+    async def test_read_preserves_line_endings(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        payload = "first\r\nsecond\rthird\n"
+        await store.write("/crlf.txt", payload)
+        assert (tmp_path / "crlf.txt").read_bytes() == payload.encode("utf-8")
+        assert await store.read("/crlf.txt") == payload
+        assert await store.read_range("/crlf.txt", 0) == payload
+
+    async def test_read_preserves_appended_line_endings(self, tmp_path: Path) -> None:
+        store = DiskKnowledgeStore(str(tmp_path))
+        await store.append("/log.txt", "a\r\n")
+        offset = await store.append("/log.txt", "b\r")
+        assert await store.read("/log.txt") == "a\r\nb\r"
+        assert await store.read_range("/log.txt", offset) == "b\r"
+
     async def test_persists_across_reopens(self, tmp_path: Path) -> None:
         store1 = DiskKnowledgeStore(str(tmp_path))
         await store1.write("/hello.txt", "world")
