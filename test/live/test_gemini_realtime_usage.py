@@ -23,11 +23,73 @@ def test_maps_live_fields() -> None:
         thoughts_token_count=5,
     )
 
+    # Thoughts are reported beside the response and, here, left out of the
+    # total: completion counts both, and the total is raised to match.
+    assert normalize_realtime_usage(metadata) == Usage(
+        prompt_tokens=80,
+        completion_tokens=25,
+        total_tokens=105,
+        cache_read_input_tokens=10,
+        thinking_tokens=5,
+    )
+
+
+def test_without_thoughts() -> None:
+    metadata = gtypes.UsageMetadata(
+        prompt_token_count=80,
+        response_token_count=20,
+        total_token_count=100,
+    )
+
     assert normalize_realtime_usage(metadata) == Usage(
         prompt_tokens=80,
         completion_tokens=20,
         total_tokens=100,
-        cache_read_input_tokens=10,
+    )
+
+
+def test_total_that_counts_thoughts_is_kept() -> None:
+    metadata = gtypes.UsageMetadata(
+        prompt_token_count=80,
+        response_token_count=20,
+        total_token_count=105,
+        thoughts_token_count=5,
+    )
+
+    assert normalize_realtime_usage(metadata) == Usage(
+        prompt_tokens=80,
+        completion_tokens=25,
+        total_tokens=105,
+        thinking_tokens=5,
+    )
+
+
+def test_total_above_prompt_plus_completion_is_kept() -> None:
+    metadata = gtypes.UsageMetadata(
+        prompt_token_count=80,
+        response_token_count=20,
+        total_token_count=120,
+        thoughts_token_count=5,
+    )
+
+    assert normalize_realtime_usage(metadata) == Usage(
+        prompt_tokens=80,
+        completion_tokens=25,
+        total_tokens=120,
+        thinking_tokens=5,
+    )
+
+
+def test_thoughts_without_response_or_total() -> None:
+    metadata = gtypes.UsageMetadata(
+        prompt_token_count=80,
+        thoughts_token_count=5,
+    )
+
+    assert normalize_realtime_usage(metadata) == Usage(
+        prompt_tokens=80,
+        completion_tokens=5,
+        total_tokens=85,
         thinking_tokens=5,
     )
 

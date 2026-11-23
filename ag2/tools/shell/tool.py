@@ -67,7 +67,10 @@ class SandboxShellTool(Tool):
                  that runs another one (``sh -c``, ``env``, ``xargs``), so it is
                  not a security boundary on its own — use ``allowed`` /
                  ``readonly`` or an isolated container backend for that.
-        ignore: Glob patterns of paths that may not appear in a command.
+        ignore: Glob patterns of paths that may not appear in a command. A
+                ``grep`` / ``diff`` directory operand is refused when an ignored
+                file lies inside it (on a remote backend, where that cannot be
+                checked, ``grep`` / ``diff`` are refused outright).
         readonly: Restrict to commands that cannot write files or run other
                   programs (cat/ls/grep/…), in restricted mode. Ignored when
                   ``allowed`` is given.

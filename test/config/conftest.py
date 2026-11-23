@@ -2,20 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import MagicMock
-
-import pytest
 import pytest_asyncio
 
 from ag2 import Agent, Context, MemoryStream, ToolResult, events, testing, tool
 from ag2.events import BaseEvent
 from ag2.tools.builtin.tool_search import ToolSearchTool
 from ag2.tools.schemas import ToolSchema
-
-
-@pytest.fixture
-def context() -> Context:
-    return Context(stream=MagicMock())
 
 
 def _lookup(order_id: str) -> str:

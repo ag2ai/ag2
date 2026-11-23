@@ -8,54 +8,25 @@ Reserved keys — the ``approval_required`` bypass among them — are the
 framework's own state: a peer neither writes them nor reads them.
 """
 
-from collections.abc import Callable, Sequence
-from typing import Any, Self
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import pytest
 
-from ag2 import Agent, Context
-from ag2.config import LLMClient, ModelConfig
-from ag2.events import BaseEvent, HumanInputRequest, ModelMessage, ModelResponse, ToolCallEvent
+from ag2 import Agent
+from ag2.config import ModelConfig
+from ag2.events import HumanInputRequest, ToolCallEvent
 from ag2.extensions.nlip import NlipConfig, NlipServer
 from ag2.extensions.nlip.executor import NlipExecutor
 from ag2.extensions.nlip.mappers import build_request_message, build_response_message, parse_response_message
 from ag2.extensions.nlip.testing import make_test_client_factory
 from ag2.middleware import approval_required
 from ag2.middleware.builtin.tools.approval import BYPASS_KEY
-from ag2.testing import TestConfig
+from ag2.testing import TestConfig, TrackingConfig
 
 SERVER_URL = "http://test"
 PREAPPROVAL: dict[str, Any] = {BYPASS_KEY: {"delete_account": True}}
-
-
-class VariablesRecordingConfig(ModelConfig):
-    """Records the variables each LLM call sees — the merged dict the tools get."""
-
-    def __init__(self, response: str) -> None:
-        self.response = response
-        self.seen: list[dict[str, Any]] = []
-
-    def copy(self) -> Self:
-        return self
-
-    def create(self) -> "VariablesRecordingClient":
-        return VariablesRecordingClient(self.response, self.seen)
-
-    def create_files_client(self) -> None:
-        raise NotImplementedError
-
-
-class VariablesRecordingClient(LLMClient):
-    def __init__(self, response: str, seen: list[dict[str, Any]]) -> None:
-        self._response = response
-        self._seen = seen
-
-    async def __call__(self, messages: Sequence[BaseEvent], context: Context, **kwargs: Any) -> ModelResponse:
-        self._seen.append(dict(context.variables))
-        msg = ModelMessage(self._response)
-        await context.send(msg)
-        return ModelResponse(message=msg)
 
 
 class Deletions:
@@ -109,14 +80,15 @@ class TestServingLeg:
         assert sink.deleted == []
 
     async def test_ordinary_variables_still_sync_in(self) -> None:
-        config = VariablesRecordingConfig("ok")
+        config = TrackingConfig(TestConfig("ok"))
         agent = Agent("server-agent", config=config)
 
         await NlipExecutor(agent).execute(
             build_request_message("hi", context={"tenant_note": "acme", **PREAPPROVAL}),
         )
 
-        [seen] = config.seen
+        [call] = config.calls
+        seen = call.variables
         assert seen["tenant_note"] == "acme"
         assert BYPASS_KEY not in seen
 
@@ -148,7 +120,7 @@ class TestDelegatingLeg:
         assert BYPASS_KEY not in reply.context.variables
 
     async def test_the_request_ships_no_reserved_variables(self) -> None:
-        config = VariablesRecordingConfig("ok")
+        config = TrackingConfig(TestConfig("ok"))
         server = NlipServer(Agent("server-agent", config=config))
         client = Agent(
             "client-agent",
@@ -158,6 +130,7 @@ class TestDelegatingLeg:
 
         await client.ask("delegate this")
 
-        [seen] = config.seen
+        [call] = config.calls
+        seen = call.variables
         assert seen["tenant_note"] == "acme"
         assert BYPASS_KEY not in seen

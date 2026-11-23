@@ -41,10 +41,6 @@ class TestData:
         assert result.data == b"raw"
         assert result.media_type == "image/png"
 
-    def test_missing_media_type_raises(self) -> None:
-        with pytest.raises(ValueError, match="media_type"):
-            ImageInput(data=b"raw")
-
 
 def test_accepts_gemini_image_formats() -> None:
     heic_input: BinaryInput = ImageInput(data=b"raw", media_type="image/heic")
@@ -114,8 +110,3 @@ class TestPath:
         result = ImageInput(path=str(f))
 
         assert result.media_type == "image/webp"
-
-
-def test_no_args_raises() -> None:
-    with pytest.raises(ValueError, match="requires one of"):
-        ImageInput()

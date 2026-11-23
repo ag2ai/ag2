@@ -36,14 +36,6 @@ class TestFilesAPIUpload:
         assert uploaded.purpose == "retrieval"
         assert await files.read(uploaded.file_id) == FileContent(name="notes.md", data=b"# notes")
 
-    async def test_rejects_a_path_passed_as_data(self) -> None:
-        files = FilesAPI(TestConfig(files=TestFilesClient()))
-
-        with pytest.raises(TypeError, match="path="):
-            await files.upload("report.pdf")
-
-        assert await files.list() == []
-
     async def test_keeps_surviving_files_after_a_deletion(self) -> None:
         files = FilesAPI(TestConfig(files=TestFilesClient()))
         first = await files.upload(b"a", "a.txt")

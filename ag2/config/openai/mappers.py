@@ -16,12 +16,14 @@ from openai.types.chat import (
     ChatCompletionContentPartParam,
     ChatCompletionContentPartTextParam,
     ChatCompletionFunctionToolParam,
+    ChatCompletionMessage,
     ChatCompletionMessageFunctionToolCallParam,
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionToolMessageParam,
     ChatCompletionUserMessageParam,
 )
+from openai.types.chat.chat_completion_chunk import ChoiceDelta
 from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from openai.types.chat.chat_completion_content_part_param import File
 from openai.types.responses import (
@@ -790,6 +792,21 @@ def responses_api_includes(tools: Iterable[ToolSchema]) -> list[ResponseIncludab
             # Off by default: results are full text chunks and inflate responses.
             includes.append("file_search_call.results")
     return includes
+
+
+def extract_reasoning(source: ChatCompletionMessage | ChoiceDelta) -> str | None:
+    """Reasoning text of a Chat Completions message or stream delta, if any.
+
+    OpenAI-compatible servers disagree on the field: DeepSeek, SGLang, xAI and
+    DashScope send ``reasoning_content``; vLLM, OpenRouter and Ollama send
+    ``reasoning``. ``reasoning_content`` wins when both are set, so a server
+    sending both yields one reasoning text, not two.
+    """
+    for field in ("reasoning_content", "reasoning"):
+        value = getattr(source, field, None)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def normalize_usage(usage: CompletionUsage) -> Usage:

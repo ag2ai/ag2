@@ -15,12 +15,11 @@ from ag2.compact import CompactionSummary
 from ag2.config.openai.decisions_mappers import (
     DecisionRefusedError,
     UnsupportedResponseSchemaError,
-    answer_metadata,
-    answer_to_content,
+    answers_to_reply,
     convert_input,
     find_answer,
     normalize_usage,
-    response_proto_to_question,
+    response_proto_to_questions,
 )
 from ag2.events import (
     BinaryInput,
@@ -94,7 +93,7 @@ class TestQuestion:
     def test_enum_is_a_choice_described_by_member_docstrings(
         self, embed: bool, instructions: str | None, expected_instructions: str
     ) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(Department, embed=embed), instructions=instructions, serializer=SerializerCls
         )
 
@@ -109,7 +108,7 @@ class TestQuestion:
         }
 
     def test_descriptions_outrank_docstrings(self) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(Department),
             instructions=None,
             descriptions={"billing": "Money."},
@@ -124,7 +123,7 @@ class TestQuestion:
         })
 
     def test_inputs_become_parts_with_the_question_as_a_trailing_text_part(self) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(Department),
             instructions=[
                 "You triage tickets.",
@@ -150,7 +149,7 @@ class TestQuestion:
         }
 
     def test_sdk_parts_pass_through_next_to_inputs(self) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(bool, description="Is it?"),
             instructions=[
                 {"type": "input_json", "data": {"tenant": "acme"}},
@@ -166,7 +165,7 @@ class TestQuestion:
         ]
 
     def test_hosted_image_url_is_allowed_in_instructions(self) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(bool, description="Is it?"),
             instructions=[UrlInput("https://x.test/y.png", kind=BinaryType.IMAGE)],
             serializer=SerializerCls,
@@ -179,7 +178,7 @@ class TestQuestion:
 
     def test_unsupported_input_in_instructions_is_refused(self) -> None:
         with pytest.raises(UnsupportedInputError):
-            response_proto_to_question(
+            response_proto_to_questions(
                 ResponseSchema(bool),
                 instructions=[UrlInput("https://x.test/y.pdf", kind=BinaryType.DOCUMENT)],
                 serializer=SerializerCls,
@@ -187,10 +186,10 @@ class TestQuestion:
 
     def test_empty_inputs_without_a_question_are_refused(self) -> None:
         with pytest.raises(ValueError, match="needs a question"):
-            response_proto_to_question(ResponseSchema(bool), instructions=[], serializer=SerializerCls)
+            response_proto_to_questions(ResponseSchema(bool), instructions=[], serializer=SerializerCls)
 
     def test_int_enum_is_a_score_labelled_by_member_names(self) -> None:
-        question = response_proto_to_question(
+        [question] = response_proto_to_questions(
             ResponseSchema(Severity, description="How severe is this issue?"),
             instructions=None,
             serializer=SerializerCls,
@@ -209,7 +208,7 @@ class TestQuestion:
 
     def test_score_levels_must_start_at_zero(self) -> None:
         with pytest.raises(UnsupportedResponseSchemaError, match="numbered from 0"):
-            response_proto_to_question(
+            response_proto_to_questions(
                 ResponseSchema(Gapped, description="How bad?"), instructions=None, serializer=SerializerCls
             )
 
@@ -219,7 +218,7 @@ class TestQuestion:
         ids=["bool", "probability"],
     )
     def test_bool_and_probability_are_predicates(self, schema: ResponseSchema[Any]) -> None:
-        question = response_proto_to_question(schema, instructions=None, serializer=SerializerCls)
+        [question] = response_proto_to_questions(schema, instructions=None, serializer=SerializerCls)
 
         assert question["type"] == "predicate"
         assert question["instructions"] in {"Is this a refund request?", "How likely is churn?"}
@@ -227,7 +226,7 @@ class TestQuestion:
     @pytest.mark.parametrize("embed", [True, False], ids=["embedded", "unembedded"])
     def test_bool_docstring_is_not_a_question(self, embed: bool) -> None:
         with pytest.raises(ValueError, match="needs a question"):
-            response_proto_to_question(ResponseSchema(bool, embed=embed), instructions=None, serializer=SerializerCls)
+            response_proto_to_questions(ResponseSchema(bool, embed=embed), instructions=None, serializer=SerializerCls)
 
     @pytest.mark.parametrize(
         "schema",
@@ -236,7 +235,7 @@ class TestQuestion:
     )
     def test_non_decision_schemas_are_rejected(self, schema: Any) -> None:
         with pytest.raises(UnsupportedResponseSchemaError):
-            response_proto_to_question(schema, instructions="Decide.", serializer=SerializerCls)
+            response_proto_to_questions(schema, instructions="Decide.", serializer=SerializerCls)
 
 
 class TestInput:
@@ -312,34 +311,34 @@ class TestInput:
 
 class TestAnswer:
     def test_bool_applies_threshold(self) -> None:
-        answer = find_answer(_decision({"type": "predicate", "name": "answer", "probability": 0.7}))
+        decision = _decision({"type": "predicate", "name": "answer", "probability": 0.7})
         schema = ResponseSchema(bool, description="Refund?")
 
-        assert json.loads(answer_to_content(schema, answer)) == {"data": True}
-        assert json.loads(answer_to_content(schema, answer, boolean_threshold=0.8)) == {"data": False}
+        assert answers_to_reply(schema, decision)[0] == '{"data": true}'
+        assert answers_to_reply(schema, decision, boolean_threshold=0.8)[0] == '{"data": false}'
 
     def test_probability_is_raw(self) -> None:
-        answer = find_answer(_decision({"type": "predicate", "name": "answer", "probability": 0.25}))
+        decision = _decision({"type": "predicate", "name": "answer", "probability": 0.25})
 
-        assert json.loads(answer_to_content(PROBABILITY, answer)) == 0.25
+        assert answers_to_reply(PROBABILITY, decision) == ("0.25", {"probability": 0.25})
 
     def test_score_snaps_to_nearest_level(self) -> None:
-        answer = find_answer(
-            _decision({
-                "type": "score",
-                "name": "answer",
-                "score": 1.6,
-                "confidence": 0.5,
-                "probabilities": [
-                    {"value": 0, "label": "Cosmetic", "probability": 0.1},
-                    {"value": 1, "label": "Workaround available", "probability": 0.2},
-                    {"value": 2, "label": "Fully blocked", "probability": 0.7},
-                ],
-            })
-        )
+        decision = _decision({
+            "type": "score",
+            "name": "answer",
+            "score": 1.6,
+            "confidence": 0.5,
+            "probabilities": [
+                {"value": 0, "label": "Cosmetic", "probability": 0.1},
+                {"value": 1, "label": "Workaround available", "probability": 0.2},
+                {"value": 2, "label": "Fully blocked", "probability": 0.7},
+            ],
+        })
 
-        assert json.loads(answer_to_content(ResponseSchema(Severity), answer)) == {"data": 2}
-        assert answer_metadata(answer)["score"] == 1.6
+        content, metadata = answers_to_reply(ResponseSchema(Severity), decision)
+
+        assert json.loads(content) == {"data": 2}
+        assert metadata == IsPartialDict({"score": 1.6})
 
     def test_refusal_raises(self) -> None:
         with pytest.raises(DecisionRefusedError, match="'answer'"):
@@ -355,9 +354,12 @@ class TestAnswer:
             find_answer(decision)
 
     def test_unnamed_single_answer_is_used(self) -> None:
-        answer = find_answer(_decision({"type": "choice", "choice": "billing", "confidence": 1, "probabilities": []}))
+        decision = _decision({"type": "choice", "choice": "billing", "confidence": 1, "probabilities": []})
 
-        assert answer_metadata(answer) == {"choice": "billing", "confidence": 1.0, "probabilities": []}
+        assert answers_to_reply(ResponseSchema(Department), decision) == (
+            '{"data": "billing"}',
+            {"choice": "billing", "confidence": 1.0, "probabilities": []},
+        )
 
     def test_usage(self) -> None:
         assert normalize_usage(_decision().usage) == Usage(

@@ -18,8 +18,10 @@ Claude Code, Codex, OpenCode and Kilo Code ACP adapters respectively.
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
+from ag2.config.config import ModelConfig, ModelProvider
 from ag2.hitl import ElicitationPolicy
 
+from .stdio import StdioConnection
 from .tool_gateway import GatewayAddress
 
 if TYPE_CHECKING:
@@ -53,7 +55,7 @@ PermissionPolicy = Literal["ask", "auto", "deny"]
 
 
 @dataclass(slots=True)
-class ACPConfig:
+class ACPConfig(ModelConfig):
     """Drive a CLI coding agent over ACP, launching it as a local subprocess.
 
     Also the base every other ACP config extends:
@@ -88,7 +90,8 @@ class ACPConfig:
             ``None`` keeps the agent's default. When the agent has no model
             option the value is response metadata only.
         permission_policy: How to answer ``session/request_permission``:
-            ``"ask"`` routes to the agent's ``hitl_hook``/``context.input``,
+            ``"ask"`` routes an ``ACPPermissionRequest`` to the agent's
+            ``hitl_hook``, answered with the ``option_id`` to select,
             ``"auto"`` allows, ``"deny"`` rejects.
         elicitation_policy: How to answer ``elicitation/create`` — the agent
             asking the *user* a question (a form, or a URL to complete an
@@ -168,21 +171,8 @@ class ACPConfig:
         self, client: "acp.Client"
     ) -> "AbstractAsyncContextManager[tuple[ClientSideConnection, Process | None]]":
         """Reach the agent by launching it, which is what this config is for."""
-        import acp
-
         executable, *args = self.command
-        # `use_unstable_protocol` is what registers the `elicitation/*` routes
-        # on the client side; without it the SDK answers the agent's question
-        # with method-not-found before the bridge ever sees it. Elicitation is
-        # the only unstable route a Client serves, so this enables nothing else.
-        return acp.spawn_agent_process(
-            client,
-            executable,
-            *args,
-            env=self.env,
-            cwd=self.cwd,
-            use_unstable_protocol=True,
-        )
+        return StdioConnection(client, executable, *args, env=self.env, cwd=self.cwd)
 
     def _gateway_address(self) -> GatewayAddress:
         """Where the tool gateway should bind, and what address the agent gets.
@@ -191,6 +181,10 @@ class ACPConfig:
         needs and nothing a remote one can reach.
         """
         return GatewayAddress()
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError("An ACP agent has no AG2 provider.")
 
     def copy(self, /, **overrides: object) -> Self:
         # dataclasses.replace can't statically check dynamic **overrides against
@@ -216,7 +210,7 @@ class ACPConfig:
 
         A session outlives the ``agent.run()`` that created it — ``reply.ask()``
         reuses it — so the config's scope, not the run's, is the conversation's
-        lifetime. Nothing reclaims a session implicitly.
+        lifetime. Without this scope a session lives until the event loop shuts down, and its subprocess exits with it.
         """
         return self
 

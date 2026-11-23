@@ -33,14 +33,16 @@ import fnmatch
 import json
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
+
+from pydantic import JsonValue
 
 from ag2.knowledge import KnowledgeStore
 from ag2.task import TERMINAL_TASK_STATES, TaskMetadata, TaskState
 
-from ..adapters.base import ChannelAdapter
+from ..adapters.base import AdapterState, ChannelAdapter, ExpectedTurn, StateT, _narrow_state
 from ..adapters.consulting import ConsultingAdapter
 from ..adapters.conversation import ConversationAdapter
 from ..adapters.discussion import DiscussionAdapter
@@ -125,11 +127,15 @@ try:
     # ``tracer_provider`` is passed.
     from ._envelope_tracing import EnvelopeTracer
 except ImportError:
-    EnvelopeTracer = None
+    _TRACING_INSTALLED = False
+else:
+    _TRACING_INSTALLED = True
 
 if TYPE_CHECKING:
     # Annotation-only — the hub forwards these to ``HubClient`` and never
     # touches a tenant ``Agent`` at runtime, preserving the trust boundary.
+    from opentelemetry.trace import SpanContext, TracerProvider
+
     from ag2.agent import Agent
 
     from ..client.agent_client import AgentClient
@@ -345,7 +351,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
-        tracer_provider: object | None = None,
+        tracer_provider: "TracerProvider | None" = None,
         allow_remote_agent_registration: bool = False,
     ) -> None:
         # __init__ stores params; side effects deferred to start()/hydrate().
@@ -363,9 +369,9 @@ class Hub:
         # append + dispatch in a span and injects its W3C traceparent into
         # ``envelope.trace_id`` before WAL (so the WAL is the source of
         # truth).
-        self._envelope_tracer = None
+        self._envelope_tracer: EnvelopeTracer | None = None
         if tracer_provider is not None:
-            if EnvelopeTracer is None:
+            if not _TRACING_INSTALLED:
                 raise ImportError(
                     "tracer_provider was given but OpenTelemetry is not installed. "
                     "Install it with: pip install ag2[tracing]"
@@ -379,12 +385,12 @@ class Hub:
         self._audit_log = AuditLog(store, clock=self._clock)
         self._expectation_evaluators: dict[str, ExpectationEvaluator] = {}
         self._violation_handlers: dict[str, ViolationHandler] = {}
-        # channel_id → set of (expectation_index, expectation_name, violator_id) fired.
-        # The position-based index disambiguates same-name expectations
-        # (e.g. two ``turn_within`` entries with different ``on_violation``
-        # handlers — without the index the first to fire would suppress
-        # the second). Empty violator_id ("") = channel-wide violations.
-        self._fired_violations: dict[str, set[tuple[int, str, str]]] = {}
+        # channel_id → set of (expectation_index, violator_id, turn_key) fired.
+        # The manifest is fixed for the channel's life, so the position-based
+        # index alone names the expectation and disambiguates same-name
+        # entries (e.g. two ``turn_within`` with different ``on_violation``).
+        # Empty violator_id ("") = channel-wide violation.
+        self._fired_violations: dict[str, set[tuple[int, str, str | None]]] = {}
 
         # Identity caches.
         self._passports: dict[str, Passport] = {}
@@ -400,12 +406,12 @@ class Hub:
         self._capability_index: dict[str, set[str]] = {}
 
         # Adapter registry.
-        self._adapters: dict[tuple[str, int], ChannelAdapter] = {}
+        self._adapters: dict[tuple[str, int], ChannelAdapter[Any]] = {}
 
         # Channel caches.
         self._channels: dict[str, ChannelMetadata] = {}
         self._active_channels: dict[str, ChannelMetadata] = {}
-        self._adapter_states: dict[str, object] = {}
+        self._adapter_states: dict[str, AdapterState] = {}
         self._channel_open_waiters: dict[str, asyncio.Future[ChannelMetadata]] = {}
 
         # Task caches (observed; not owned).
@@ -520,7 +526,7 @@ class Hub:
         ttl_sweep_interval: float = 30.0,
         expectation_sweep_interval: float = 10.0,
         invite_ack_timeout: float = 30.0,
-        tracer_provider: object | None = None,
+        tracer_provider: "TracerProvider | None" = None,
         register_default_adapters: bool = True,
         allow_remote_agent_registration: bool = False,
     ) -> "Hub":
@@ -732,7 +738,7 @@ class Hub:
 
     # ── Adapter registry ────────────────────────────────────────────────────
 
-    def register_adapter(self, adapter: ChannelAdapter) -> None:
+    def register_adapter(self, adapter: ChannelAdapter[Any]) -> None:
         """Register a ``ChannelAdapter`` keyed by ``(type, version)``.
 
         Re-registering at the same key replaces the prior adapter; the
@@ -742,7 +748,7 @@ class Hub:
         key = (adapter.manifest.type, adapter.manifest.version)
         self._adapters[key] = adapter
 
-    def _adapter_for(self, manifest_type: str, manifest_version: int) -> ChannelAdapter:
+    def _adapter_for(self, manifest_type: str, manifest_version: int) -> ChannelAdapter[Any]:
         adapter = self._adapters.get((manifest_type, manifest_version))
         if adapter is None:
             raise NotFoundError(f"no adapter registered for {manifest_type!r}@v{manifest_version}")
@@ -793,7 +799,7 @@ class Hub:
         self,
         task_id: str,
         kind: str,
-        payload: dict,
+        payload: dict[str, Any],
     ) -> None:
         """Fan out an ``on_task_event`` to every listener.
 
@@ -883,7 +889,7 @@ class Hub:
         """Read-only lookup against the proxy registry."""
         return self._remote_proxies.get(scheme)
 
-    def health(self) -> dict:
+    def health(self) -> dict[str, Any]:
         """Return an operational snapshot of hub state.
 
         Cheap to compute (in-memory only). Wire to a ``/health``
@@ -939,7 +945,7 @@ class Hub:
                 total += written
         return total
 
-    def _channel_span_context(self, channel_id: str) -> object | None:
+    def _channel_span_context(self, channel_id: str) -> "SpanContext | None":
         """Resolve an open channel span's context from a telemetry listener.
 
         Lets the Hub attach an envelope→channel SpanLink without coupling
@@ -947,7 +953,7 @@ class Hub:
         listener is registered or the channel span isn't open.
         """
         for listener in self._listeners:
-            getter = getattr(listener, "channel_span_context", None)
+            getter: Callable[[str], SpanContext | None] | None = getattr(listener, "channel_span_context", None)
             if getter is None:
                 continue
             ctx = getter(channel_id)
@@ -1011,10 +1017,10 @@ class Hub:
     ) -> None:  # noqa: ARG002
         return None
 
-    async def on_channel_event(self, channel_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_channel_event(self, channel_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
-    async def on_agent_event(self, agent_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_agent_event(self, agent_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
     async def on_expectation_fired(self, channel_id: str, expectation: object, violation: object) -> None:  # noqa: ARG002
@@ -1029,7 +1035,7 @@ class Hub:
     ) -> None:  # noqa: ARG002
         return None
 
-    async def on_task_event(self, task_id: str, kind: str, payload: dict) -> None:  # noqa: ARG002
+    async def on_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:  # noqa: ARG002
         return None
 
     async def on_inbox_pressure(self, agent_id: str, pending: int, cap: int) -> None:  # noqa: ARG002
@@ -1055,23 +1061,36 @@ class Hub:
         """One sweeper tick: evaluate every expectation on every active
         channel; fire registered handlers on new violations.
 
-        Per-(channel, expectation, violator) dedup lives in
-        ``_fired_violations`` so handlers don't re-fire on every tick.
-        Cleared on terminal channel transitions.
+        Per-(channel, expectation, violator, turn) dedup lives in
+        ``_fired_violations`` so nothing re-fires on every tick. Cleared on
+        terminal channel transitions. A violation whose ``on_violation``
+        names no registered handler is still fanned out (so ``AuditLog``
+        records it) but triggers no action.
         """
-        if not self._expectation_evaluators or not self._violation_handlers:
+        if not self._expectation_evaluators:
             return
         now_iso = self._clock()
         now_seconds = datetime.fromisoformat(now_iso).timestamp()
-        for channel_id, metadata in list(self._active_channels.items()):
-            adapter_state = self._adapter_states.get(channel_id)
-            wal = await self.read_wal(channel_id)
+        for channel_id in list(self._active_channels):
+            # ExpectationContext hands evaluators both the adapter state and
+            # the WAL, so both are read under the channel lock: a send landing
+            # mid-read would otherwise pair a fresh WAL with stale turn state.
+            # The built-in evaluators would reach the same verdict either way;
+            # the lock keeps the context consistent for custom evaluators.
+            async with self._wal_lock(channel_id):
+                metadata = self._active_channels.get(channel_id)
+                if metadata is None:
+                    continue
+                adapter_state = self._adapter_states.get(channel_id)
+                expected_turn = self._expected_turn(metadata, adapter_state)
+                wal = await self.read_wal(channel_id)
             context = ExpectationContext(
                 metadata=metadata,
                 state=adapter_state,
                 wal=wal,
                 now_iso=now_iso,
                 now_seconds=now_seconds,
+                expected_turn=expected_turn,
             )
             terminal = False
             for idx, expectation in enumerate(metadata.manifest.expectations):
@@ -1082,24 +1101,23 @@ class Hub:
                 if violation is None:
                     continue
                 handler = self._violation_handlers.get(expectation.on_violation)
-                if handler is None:
-                    continue
                 fired = self._fired_violations.setdefault(channel_id, set())
-                violator_keys = violation.violator_ids or [""]
-                for vid in violator_keys:
-                    key = (idx, expectation.name, vid)
+                for vid in violation.violator_ids or [""]:
+                    key = (idx, vid, violation.turn_key)
                     if key in fired:
                         continue
                     fired.add(key)
                     # Fan out before handler so listeners (including
                     # AuditLog) see every violation regardless of which
-                    # handler is configured.
+                    # handler is configured, or whether one is.
                     await self._fan_out(
                         "on_expectation_fired",
                         channel_id,
                         expectation,
                         violation,
                     )
+                    if handler is None:
+                        continue
                     # Sweeper must survive handler exceptions — they
                     # leave the violation marked as fired so we don't
                     # spin on a bad handler.
@@ -1113,6 +1131,23 @@ class Hub:
                         break
                 if terminal:
                     break
+
+    def _expected_turn(self, metadata: ChannelMetadata, adapter_state: AdapterState | None) -> ExpectedTurn | None:
+        """Ask the channel's adapter who should act next.
+
+        A failing adapter skips turn-scoped expectations on that channel
+        only; the sweep carries on for every other channel.
+        """
+        if adapter_state is None:
+            return None
+        adapter = self._adapters.get((metadata.manifest.type, metadata.manifest.version))
+        if adapter is None:
+            return None
+        try:
+            return adapter.expected_next(metadata, adapter_state)
+        except Exception:
+            logger.exception("adapter expected_next failed for channel %s", metadata.channel_id)
+            return None
 
     # ── Registration ────────────────────────────────────────────────────────
 
@@ -1575,7 +1610,7 @@ class Hub:
         participants: list[str],
         required_acks: int | None = None,
         ttl: str | int | None = None,
-        knobs: dict[str, object] | None = None,
+        knobs: Mapping[str, JsonValue] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> ChannelMetadata:
@@ -1704,13 +1739,13 @@ class Hub:
         self._channel_open_waiters[channel_id] = waiter
 
         # Post invites — each goes to one invitee via post_envelope.
-        invite_data: dict[str, object] = {
+        invite_data: dict[str, JsonValue] = {
             "channel_id": channel_id,
             "manifest_type": manifest_type,
             "manifest_version": manifest_version,
             "creator_id": creator_id,
             "knobs": metadata.knobs,
-            "labels": metadata.labels,
+            "labels": dict(metadata.labels),
         }
         try:
             for invitee_id in invitees:
@@ -1794,7 +1829,7 @@ class Hub:
         adapter = self._adapter_for(metadata.manifest.type, metadata.manifest.version)
         return adapter.default_view_policy(metadata, participant_id)
 
-    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+    def adapter_for(self, channel_id: str) -> ChannelAdapter[Any]:
         """Return the adapter resolved from ``channel_id``'s manifest.
 
         Public surface so callers (notably the default notify handler)
@@ -1806,14 +1841,26 @@ class Hub:
             raise NotFoundError(f"channel not found: {channel_id}")
         return self._adapter_for(metadata.manifest.type, metadata.manifest.version)
 
-    def adapter_state(self, channel_id: str) -> object | None:
+    @overload
+    def adapter_state(self, channel_id: str, state_type: None = None) -> AdapterState | None: ...
+
+    @overload
+    def adapter_state(self, channel_id: str, state_type: type[StateT]) -> StateT | None: ...
+
+    def adapter_state(self, channel_id: str, state_type: type[AdapterState] | None = None) -> AdapterState | None:
         """Return ``channel_id``'s current folded adapter state, or
         ``None`` if the channel has none cached.
 
         Public surface so callers don't need to reach into
         ``_adapter_states``.
+
+        Pass ``state_type`` (e.g. ``WorkflowState``) to get the state typed
+        as that class; a channel of another type raises ``TypeError``.
         """
-        return self._adapter_states.get(channel_id)
+        state = self._adapter_states.get(channel_id)
+        if state_type is None:
+            return state
+        return _narrow_state(channel_id, state, state_type)
 
     async def list_channels(
         self,
@@ -1986,7 +2033,10 @@ class Hub:
         raw = await self._store.read(task_checkpoint_path(task_id))
         if raw is None:
             return None
-        return json.loads(raw)
+        checkpoint = json.loads(raw)
+        if not isinstance(checkpoint, dict):
+            raise ValueError(f"task checkpoint for {task_id!r} is not a JSON object")
+        return checkpoint
 
     # ── Sweeper hook ────────────────────────────────────────────────────────
 
@@ -2007,10 +2057,10 @@ class Hub:
 
         # Expire standalone tasks (those not under an expiring channel).
         expired_tasks: list[str] = []
-        for task_id, metadata in list(self._tasks.items()):
-            if metadata.state in TERMINAL_TASK_STATES:
+        for task_id, task in list(self._tasks.items()):
+            if task.state in TERMINAL_TASK_STATES:
                 continue
-            if metadata.expires_at and metadata.expires_at <= now:
+            if task.expires_at and task.expires_at <= now:
                 expired_tasks.append(task_id)
         for task_id in expired_tasks:
             await self._transition_task(task_id, TaskState.EXPIRED, "ttl_expired")
@@ -2190,7 +2240,7 @@ class Hub:
         finally:
             # End the envelope span (and mirror it to disk). An escaped
             # exception or per-recipient delivery failures mark it ERROR.
-            if envelope_span is not None:
+            if envelope_span is not None and self._envelope_tracer is not None:
                 await self._envelope_tracer.finish_envelope_span(
                     envelope_span, dispatch_failures=dispatch_failures, error=dispatch_error
                 )
@@ -2590,7 +2640,7 @@ class Hub:
             return
         await endpoint.send_frame(ResponseFrame(request_id=frame.request_id, ok=True, result=result))
 
-    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict) -> object:
+    async def _dispatch_request_op(self, endpoint: LinkEndpoint, op: str, params: dict[str, Any]) -> object:
         """Map one control-plane ``op`` to its hub method + (de)serialisation.
 
         Long but flat by design: one place to see the entire wire
@@ -2614,8 +2664,8 @@ class Hub:
                 skill_md=params.get("skill_md"),
                 rule=rule,
             )
+            assert registered.agent_id is not None
             if owners:
-                assert registered.agent_id is not None
                 await self._store.write(remote_owners_path(registered.agent_id), json.dumps(owners))
                 self._remote_owners[registered.agent_id] = owners
             # Bind the calling connection to the freshly-stamped identity

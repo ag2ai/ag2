@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for Anthropic client usage normalization (input_tokens → prompt_tokens, cache keys)."""
+"""Tests for Anthropic client usage normalization.
+
+``prompt_tokens`` is the whole input: ``input_tokens`` plus both cache counts (ADR 0036).
+"""
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -82,9 +85,9 @@ async def test_process_response_includes_cache_creation_tokens():
     result = await client._process_response(response, _make_context())
 
     assert result.usage == Usage(
-        prompt_tokens=3,
+        prompt_tokens=5061,
         completion_tokens=10,
-        total_tokens=13,
+        total_tokens=5071,
         cache_creation_input_tokens=5058,
     )
     assert result.usage.cache_read_input_tokens is None
@@ -99,9 +102,9 @@ async def test_process_response_includes_cache_read_tokens():
     result = await client._process_response(response, _make_context())
 
     assert result.usage == Usage(
-        prompt_tokens=3,
+        prompt_tokens=5046,
         completion_tokens=14,
-        total_tokens=17,
+        total_tokens=5060,
         cache_read_input_tokens=5043,
     )
     assert result.usage.cache_creation_input_tokens is None
@@ -143,9 +146,9 @@ async def test_process_stream_normalizes_usage():
 
     assert isinstance(result, ModelResponse)
     assert result.usage == Usage(
-        prompt_tokens=50,
+        prompt_tokens=4050,
         completion_tokens=12,
-        total_tokens=62,
+        total_tokens=4062,
         cache_read_input_tokens=4000,
     )
     assert result.usage.cache_creation_input_tokens is None

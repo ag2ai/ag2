@@ -31,6 +31,7 @@ class TestPromptedSchemaFromType:
         schema = PromptedSchema(User)
 
         assert schema.name == "User"
+        assert schema.system_prompt is not None
         assert '"name"' in schema.system_prompt
         assert '"age"' in schema.system_prompt
 
@@ -42,6 +43,7 @@ class TestPromptedSchemaFromType:
         schema = PromptedSchema(Item)
 
         assert schema.name == "Item"
+        assert schema.system_prompt is not None
         assert '"title"' in schema.system_prompt
         assert '"price"' in schema.system_prompt
 
@@ -53,6 +55,7 @@ class TestPromptedSchemaFromResponseProto:
 
         assert schema.name == "MyInt"
         assert schema.description is inner.description
+        assert schema.system_prompt is not None
         assert '"type": "integer"' in schema.system_prompt
 
     def test_wraps_schema_with_description(self) -> None:
@@ -90,6 +93,7 @@ class TestSystemPrompt:
         schema = PromptedSchema(int)
         prompt = schema.system_prompt
 
+        assert prompt is not None
         assert "You must respond with valid JSON" in prompt
         assert "Do not include any text" in prompt
 
@@ -98,6 +102,7 @@ class TestSystemPrompt:
         schema = PromptedSchema(int, prompt_template=template)
         prompt = schema.system_prompt
 
+        assert prompt is not None
         assert prompt.startswith("Return JSON: ```")
 
     def test_no_prompt_when_no_inner_schema(self) -> None:

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -113,13 +114,6 @@ class ShellAdapter:
             head = [PurePosixPath(argv[0]).name, *argv[1:]]
             if any(matches_argv(p, argv) or matches_argv(p, head) for p in self._blocked):
                 return f"Command not allowed: {command!r}"
-        if self._ignore is not None:
-            # self.workdir gives a host Path for local backends and a
-            # PurePosixPath for remote/container ones — check_ignore handles
-            # both, so ignore applies on every backend (not just local).
-            denied = check_ignore(command, self.workdir, self._ignore)
-            if denied is not None:
-                return denied
         return None
 
     async def run(
@@ -133,6 +127,15 @@ class ShellAdapter:
         if argv is None:
             return f"Command not allowed (unbalanced quotes): {command!r}"
         denied = self._filter(command, argv)
+        if denied is None and self._ignore is not None:
+            # self.workdir gives a host Path for local backends and a
+            # PurePosixPath for remote/container ones — check_ignore handles
+            # both, so ignore applies on every backend (not just local). It is
+            # read here, on the event loop: LocalSandbox creates its workdir on
+            # first use and relies on the loop to do that once, while the check
+            # itself may walk directory trees and runs in a worker thread.
+            workdir = self.workdir
+            denied = await asyncio.to_thread(check_ignore, command, workdir, self._ignore)
         if denied is not None:
             return denied
 

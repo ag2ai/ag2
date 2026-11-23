@@ -12,7 +12,7 @@ routes the human's turn to the triage agent. Triage calls
 creator) → the test closes the channel deterministically. Workflow
 state survives ``Hub.hydrate()`` mid-flow.
 
-Uses ``claude-haiku-4-5`` for cost; loads ``.env`` from the repo
+Uses ``claude-haiku-5-5`` for cost; loads ``.env`` from the repo
 root; skips if ``ANTHROPIC_API_KEY`` is unset; marked
 ``@pytest.mark.anthropic`` so the default unit run skips it.
 """
@@ -61,7 +61,7 @@ def anthropic_config() -> AnthropicConfig:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
-    return AnthropicConfig(model="claude-haiku-4-5", api_key=api_key)
+    return AnthropicConfig(model="claude-haiku-5-5", api_key=api_key)
 
 
 async def _wait_for_state(

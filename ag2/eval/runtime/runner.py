@@ -25,7 +25,7 @@ import asyncio
 import logging
 import os
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 from uuid import uuid4
@@ -65,7 +65,7 @@ async def run_agent(
     agent: Agent,
     store_dir: str | os.PathLike[str] | None = None,
     scorers: Iterable[Scorer] = (),
-    model_config: ModelConfig | dict[str, ModelConfig] | None = None,
+    model_config: ModelConfig | Mapping[str, ModelConfig] | None = None,
     repeats: int = 1,
     budgets: BudgetThresholds | None = None,
     concurrency: int = 4,
@@ -200,7 +200,7 @@ async def run_pairwise(
     variant_b: Agent[Any],
     comparators: Iterable[PairwiseComparator],
     store_dir: str | os.PathLike[str] | None = None,
-    model_config: ModelConfig | dict[str, ModelConfig] | None = None,
+    model_config: ModelConfig | Mapping[str, ModelConfig] | None = None,
     variant_a_name: str = "A",
     variant_b_name: str = "B",
     concurrency: int = 4,
@@ -254,7 +254,7 @@ async def _produce(
     tasks: Iterable[Task],
     agent: Agent[Any],
     *,
-    model_config: ModelConfig | dict[str, ModelConfig] | None,
+    model_config: ModelConfig | Mapping[str, ModelConfig] | None,
     concurrency: int,
     span_attributes: dict[str, str] | None = None,
     span_processors: "Sequence[SpanProcessor] | None" = None,
@@ -298,7 +298,7 @@ async def _produce_one(
     semaphore: asyncio.Semaphore,
     task: Task,
     agent: Agent,
-    model_config: ModelConfig | dict[str, ModelConfig] | None,
+    model_config: ModelConfig | Mapping[str, ModelConfig] | None,
     *,
     span_attributes: dict[str, str] | None = None,
     span_processors: "Sequence[SpanProcessor] | None" = None,
@@ -370,11 +370,11 @@ def _expand_repeats(suite: Suite, repeats: int) -> list[Task]:
 
 def _resolve_task_config(
     task: Task,
-    model_config: ModelConfig | dict[str, ModelConfig] | None,
+    model_config: ModelConfig | Mapping[str, ModelConfig] | None,
 ) -> ModelConfig | None:
     """Pick the right ``ModelConfig`` for a task from the ``model_config`` argument."""
     if model_config is None:
         return None
-    if isinstance(model_config, dict):
+    if isinstance(model_config, Mapping):
         return model_config.get(task.task_id)
     return model_config

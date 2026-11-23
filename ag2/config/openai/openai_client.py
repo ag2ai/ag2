@@ -37,7 +37,7 @@ from ag2.exceptions import UnsupportedToolError
 from ag2.response import ResponseProto
 from ag2.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, normalize_usage, response_proto_to_schema, tool_to_api
+from .mappers import convert_messages, extract_reasoning, normalize_usage, response_proto_to_schema, tool_to_api
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 Modality = Literal["text", "audio"]
@@ -159,7 +159,7 @@ class OpenAIClient(LLMClient):
             msg = choice.message
             finish_reason = choice.finish_reason
 
-            if r := getattr(msg, "reasoning", None):
+            if r := extract_reasoning(msg):
                 await context.send(ModelReasoning(r))
 
             if c := msg.content:
@@ -217,7 +217,7 @@ class OpenAIClient(LLMClient):
                     finish_reason = choice.finish_reason
                 delta = choice.delta
 
-                if r := getattr(delta, "reasoning_content", None):
+                if r := extract_reasoning(delta):
                     await context.send(ModelReasoning(r))
 
                 if c := delta.content:

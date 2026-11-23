@@ -15,6 +15,9 @@ import pytest
 # exact-output assertions fail. Silence gRPC's INFO chatter before the core initialises.
 os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
 
+# ag2 imports gRPC, so it may only load once the verbosity above is set.
+from ag2 import Context, MemoryStream  # noqa: E402
+
 
 @pytest.fixture()
 def mock() -> MagicMock:
@@ -29,3 +32,8 @@ def async_mock() -> AsyncMock:
 @pytest.fixture()
 def signal() -> asyncio.Event:
     return asyncio.Event()
+
+
+@pytest.fixture()
+def context() -> Context:
+    return Context(stream=MemoryStream())

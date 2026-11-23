@@ -7,11 +7,11 @@ import time
 from collections.abc import Callable
 from copy import copy
 from types import EllipsisType
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias, get_args
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeAlias, get_args
 
 from typing_extensions import dataclass_transform
 
-from ._serialization import deserialize_payload, event_to_dict
+from ._serialization import deserialize_payload, event_field_names, event_to_dict
 from .conditions import Condition, NotCondition, OpCondition, OrCondition, TypeCondition, check_eq
 
 try:
@@ -330,19 +330,13 @@ class BaseEvent(metaclass=_ConditionMeta):
         return event_to_dict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BaseEvent":
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """Reconstruct an event from a serialized dictionary.
 
         Filters input to only fields known by this class (via MRO Field
         descriptors), then constructs via ``cls(**filtered)``.
         """
-        # Collect known field names across the MRO
-        known_fields: set[str] = set()
-        for klass in cls.__mro__:
-            for name in getattr(klass, "_event_fields_", {}):
-                known_fields.add(name)
-
-        # Deserialize nested events/special types, then filter to known fields
-        deserialized = deserialize_payload(data)
-        filtered = {k: v for k, v in deserialized.items() if k in known_fields}
-        return cls(**filtered)
+        # Filter to known fields first: unknown keys are never deserialized.
+        known_fields = event_field_names(cls)
+        filtered = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**deserialize_payload(filtered))

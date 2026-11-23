@@ -42,7 +42,7 @@ __all__ = (
 )
 
 
-class ParsedSkill(dict):
+class ParsedSkill(dict[str, Any]):
     """``{"frontmatter": dict, "body": str}`` with ``.frontmatter`` and ``.body`` attrs.
 
     Subclasses ``dict`` so it round-trips as JSON without conversion;
@@ -51,11 +51,17 @@ class ParsedSkill(dict):
 
     @property
     def frontmatter(self) -> dict[str, Any]:
-        return self["frontmatter"]
+        frontmatter = self["frontmatter"]
+        if not isinstance(frontmatter, dict):
+            raise TypeError(f"skill frontmatter must be a dict, got {type(frontmatter).__name__}")
+        return frontmatter
 
     @property
     def body(self) -> str:
-        return self["body"]
+        body = self["body"]
+        if not isinstance(body, str):
+            raise TypeError(f"skill body must be a str, got {type(body).__name__}")
+        return body
 
 
 _FENCE = "---"

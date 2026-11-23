@@ -24,19 +24,23 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, Context, tool
+from ag2 import Agent, Context, ToolResult, tool
 from ag2.events import (
     BaseEvent,
+    ClientToolCallEvent,
     MessageEnqueued,
     ModelMessage,
     ModelRequest,
     ModelResponse,
     TextInput,
     ToolCallEvent,
+    ToolCallsEvent,
     ToolResultEvent,
+    ToolResultsEvent,
 )
 from ag2.stream import MemoryStream
 from ag2.testing import TestConfig, TrackingConfig
+from ag2.tools.types import ClientTool
 
 
 def _texts(event: BaseEvent) -> list[str]:
@@ -223,6 +227,65 @@ class TestEnqueue:
 
         seen = [text for call in config.mock.call_args_list for text in _texts(call.args[0])]
         assert "injected message" in seen, "a message enqueued mid-turn must reach a model call in that turn"
+
+    async def test_during_a_final_tool_result_waits_for_the_next_turn(self) -> None:
+        @tool
+        def escalate() -> ToolResult:
+            """Hand the ticket to a person."""
+            return ToolResult("Ticket escalated.", final=True)
+
+        config = TrackingConfig(TestConfig(ToolCallEvent(name="escalate", arguments="{}"), "Your order shipped."))
+        agent = Agent("runner", config=config, tools=[escalate])
+
+        async with agent.run("I need a person.") as run:
+
+            @run.stream.where(ToolResultEvent).subscribe
+            async def inject(_event: BaseEvent) -> None:
+                run.enqueue("What about my order?")
+
+            reply = await run.result()
+
+        assert reply.body == "Ticket escalated."
+        assert config.mock.call_count == 1
+
+        await reply.ask("Thanks!")
+
+        assert _texts(config.mock.call_args.args[0]) == ["What about my order?", "Thanks!"]
+
+    async def test_during_a_client_handoff_waits_for_the_client_result(self) -> None:
+        pick_file = ClientTool(
+            schema={"function": {"name": "pick_file", "description": "Pick a file.", "parameters": {}}}
+        )
+        handed_off = ToolCallEvent(name="pick_file", arguments="{}")
+        config = TrackingConfig(TestConfig(handed_off))
+        agent = Agent("runner", config=config, tools=[pick_file])
+
+        async with agent.run("Attach my invoice.") as run:
+
+            @run.stream.where(ClientToolCallEvent).subscribe
+            async def inject(_event: BaseEvent) -> None:
+                run.enqueue("What about my order?")
+
+            reply = await run.result()
+
+        assert reply.response.tool_calls == ToolCallsEvent([handed_off])
+        assert len(config.calls) == 1
+
+        # The client runs the call and resumes the turn on the same stream. A
+        # fresh agent serves the resume, as A2A and AG-UI build one per request.
+        resumed_config = TrackingConfig(TestConfig("Your order shipped."))
+        resumed_agent = Agent("runner", config=resumed_config, tools=[pick_file])
+        picked = ToolResultsEvent([ToolResultEvent.from_call(handed_off, "invoice.pdf")])
+        history = await run.stream.history.get_events()
+
+        resumed = await resumed_agent.resume(*history, picked, stream=run.stream)
+
+        assert resumed.body == "Your order shipped."
+        # The queued message reaches the model after the client's result.
+        [call] = resumed_config.calls
+        *_, client_result, queued = call.messages
+        assert client_result == picked
+        assert _texts(queued) == ["What about my order?"]
 
     async def test_announces_the_message(self) -> None:
         agent = Agent("runner", config=TestConfig("ok"))

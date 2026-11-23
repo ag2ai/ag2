@@ -2,8 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
+from ag2 import FilesAPI
 from ag2.acp import ACPConfig, ClaudeCodeConfig, CodexConfig, KiloCodeConfig, OpenCodeConfig
 from ag2.config.client import LLMClient
+from ag2.exceptions import FilesAPIUnsupportedError
 
 
 class TestClaudeCodeConfig:
@@ -149,3 +153,18 @@ def test_expose_tools_defaults_on_and_survives_copy() -> None:
     off = cfg.copy(expose_tools=False)
     assert off.expose_tools is False
     assert cfg.expose_tools is True  # original untouched
+
+
+def test_model_is_none_until_set() -> None:
+    assert ACPConfig().model is None
+    assert ACPConfig(model="sonnet").model == "sonnet"
+
+
+def test_names_no_ag2_provider() -> None:
+    with pytest.raises(NotImplementedError, match="An ACP agent has no AG2 provider"):
+        _ = ClaudeCodeConfig().provider
+
+
+def test_files_api_is_unsupported() -> None:
+    with pytest.raises(FilesAPIUnsupportedError, match="ClaudeCodeConfig does not support Files API"):
+        FilesAPI(ClaudeCodeConfig())

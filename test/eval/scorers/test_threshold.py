@@ -7,7 +7,7 @@
 import pytest
 from dirty_equals import IsPartialDict
 
-from ag2.eval import Feedback, InMemoryTraceSource, Suite, TraceRef, evaluate_traces, scorer
+from ag2.eval import Feedback, InMemoryTraceSource, Scorer, Suite, TraceRef, evaluate_traces, scorer
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import agent_judge, threshold
 from ag2.eval.trace import Trace
@@ -19,7 +19,7 @@ def _empty_trace() -> Trace:
     return Trace(events=[], exception=None, duration_ms=0)
 
 
-async def _run(s, *, outputs, inputs=None, reference_outputs=None, trace=None) -> list:
+async def _run(s: Scorer, *, outputs, inputs=None, reference_outputs=None, trace=None) -> list[Feedback]:
     return await s(
         inputs=inputs or {},
         outputs=outputs,
@@ -30,23 +30,23 @@ async def _run(s, *, outputs, inputs=None, reference_outputs=None, trace=None) -
 
 
 @scorer
-def raw(outputs) -> float:
+def raw(outputs: dict[str, float]) -> float:
     """Toy numeric scorer that echoes a score from outputs."""
     return outputs["score"]
 
 
 @scorer
-def already_bool(outputs) -> bool:
+def already_bool(outputs: dict[str, bool]) -> bool:
     return outputs["ok"]
 
 
 @scorer
-def category(outputs) -> str:
+def category(outputs: dict[str, str]) -> str:
     return outputs["label"]
 
 
 @scorer
-def echo_feedback(outputs) -> Feedback:
+def echo_feedback(outputs: dict[str, Feedback]) -> Feedback:
     return outputs["feedback"]
 
 
@@ -56,7 +56,7 @@ def answer_is_present(outputs) -> bool:
 
 
 @scorer
-def answer_label(outputs) -> str:
+def answer_label(outputs: dict[str, str]) -> str:
     return outputs["body"]
 
 
@@ -221,4 +221,4 @@ async def test_gate_lands_in_pass_rate_and_records_number(tmp_path) -> None:
     result = await evaluate_traces(source, scorers=[judge], suite=suite, store_dir=tmp_path)
 
     assert result.pass_rate("quality") == 0.0  # 0.6 < 0.7 -> fail -> gates into pass_rate
-    assert result.tasks[0].feedback[0].detail["score"] == 0.6  # raw number recorded per task
+    assert result.tasks[0].feedback[0].detail == IsPartialDict({"score": 0.6})  # raw number recorded per task

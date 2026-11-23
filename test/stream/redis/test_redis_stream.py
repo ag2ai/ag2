@@ -12,10 +12,11 @@ import pytest
 import pytest_asyncio
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from ag2 import Context
-from ag2.events import ImageInput, ModelMessage, TextInput, ToolCallEvent
+from ag2 import Agent, Context, tool
+from ag2.events import DataInput, ImageInput, ModelMessage, TextInput, ToolCallEvent, ToolResultEvent
 from ag2.streams.redis import RedisStream
 from ag2.streams.redis.serializer import Serializer
+from ag2.testing import TestConfig
 
 pytestmark = [
     pytest.mark.redis,
@@ -620,3 +621,38 @@ class TestBinaryRoundTrip:
         assert isinstance(restored, OpenAIReasoningEvent)
         assert restored.item.id == "rs_1"
         assert restored.item.type == "reasoning"
+
+
+class _MustNotConstruct:
+    """Not a dataclass: a tool result must never make the history loader build one."""
+
+    def __init__(self, **kwargs: object) -> None:
+        raise AssertionError("history loader constructed a class named by tool data")
+
+
+class TestUntrustedToolData:
+    async def test_tool_result_with_marker_keys_is_not_reconstructed(self, redis_stream):
+        profile = {
+            "__dataclass__": f"{__name__}._MustNotConstruct",
+            "data": {"args": ["id"]},
+        }
+
+        @tool
+        def lookup() -> dict:
+            """Return structured data from an external service."""
+            return {"profile": profile}
+
+        agent = Agent(
+            "test",
+            config=TestConfig(ToolCallEvent(name="lookup", arguments="{}"), "done"),
+            tools=[lookup],
+        )
+        stream = redis_stream()
+
+        reply = await agent.ask("Look up profile", stream=stream)
+
+        assert reply.body == "done"
+        [result_event] = [e for e in await stream.history.get_events() if isinstance(e, ToolResultEvent)]
+        part = result_event.result.parts[0]
+        assert isinstance(part, DataInput)
+        assert part.data == {"profile": profile}

@@ -57,6 +57,8 @@ from .tool_events import (
     ToolResultsEvent,
 )
 from .types import (
+    ApprovalChoice,
+    ApprovalChoiceMessage,
     BinaryResult,
     HumanInputRequest,
     HumanMessage,
@@ -82,6 +84,8 @@ __all__ = (
     "AggregationCompleted",
     "AggregationFailed",
     "AggregationStarted",
+    "ApprovalChoice",
+    "ApprovalChoiceMessage",
     "AudioInput",
     "AudioInterruptedEvent",
     "AudioPlaybackCompletedEvent",

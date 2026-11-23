@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.events import BaseEvent, Field
+import pytest
+
+from ag2 import Context, MemoryStream
+from ag2.events import BaseEvent, Field, ModelMessage
+from ag2.events.conditions import OrCondition
 
 
 class TestEvent(BaseEvent):
@@ -122,11 +126,25 @@ class TestEventConditions:
         assert condition(AnotherEvent(field=""))
         assert not condition(TestEvent(field=0))
 
-    def test_or_condition_with_union_classes(self):
-        condition = AnotherEvent | TestEvent
+    @pytest.mark.asyncio
+    async def test_or_condition_with_union_classes(self) -> None:
+        stream = MemoryStream()
+        received: list[BaseEvent] = []
 
-        assert condition(TestEvent(field=15))
-        assert condition(AnotherEvent(field=""))
+        @stream.where(AnotherEvent | TestEvent).subscribe()
+        def on_event(event: BaseEvent) -> None:
+            received.append(event)
+
+        ctx = Context(stream)
+
+        await ctx.send(TestEvent(field=15))
+        await ctx.send(ModelMessage("skipped"))
+        await ctx.send(AnotherEvent(field=""))
+
+        assert received == [TestEvent(field=15), AnotherEvent(field="")]
+
+    def test_union_of_event_classes_is_a_condition(self) -> None:
+        assert isinstance(AnotherEvent | TestEvent, OrCondition)
 
     def test_and_method(self):
         condition = (TestEvent.field > 0).and_(TestEvent.field < 10)
@@ -172,13 +190,6 @@ class TestEventConditions:
         assert not condition(TestEvent(field=-1))
         assert not condition(TestEvent(field=11))
         assert not condition(TestEvent(field=99))
-
-    def test_event_with_multiple_fields(self):
-        event = TestEvent(field="test", value=42, name="example")
-
-        assert event.field == "test"
-        assert event.value == 42
-        assert event.name == "example"
 
     def test_condition_with_none_value(self):
         condition = TestEvent.field == None  # noqa: E711

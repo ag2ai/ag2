@@ -34,7 +34,7 @@ class DummyObserver(BaseObserver):
 class NullObserver(BaseObserver):
     """Observer that never signals."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("null-observer", watch=EventWatch(ToolCallEvent))
 
     async def process(self, events, ctx) -> ObserverAlert | None:
@@ -111,7 +111,7 @@ class TestBaseObserver:
 class InvertedObserver(BaseObserver):
     """Observer that watches everything except ToolCallEvent."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("inverted-observer", watch=EventWatch(~ToolCallEvent))
         self.process_count = 0
         self.seen_types: list[type] = []

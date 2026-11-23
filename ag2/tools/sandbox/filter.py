@@ -12,6 +12,7 @@ deadlock).
 """
 
 import fnmatch
+import os
 import posixpath
 import shlex
 from collections.abc import Sequence
@@ -105,13 +106,24 @@ def _unquoted(command: str) -> str:
     return "".join(kept)
 
 
-def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) -> str | None:
+def check_ignore(
+    command: str,
+    workdir: "Path | PurePath",
+    patterns: list[str],
+    *,
+    max_entries: int = 20_000,
+) -> str | None:
     """Return ``"Access denied: <path>"`` if any literal path in *command* leaves *workdir* or matches *patterns*.
 
     Tokens are extracted via :func:`shlex.split` to handle quoted paths. Each
     token is resolved relative to *workdir* and checked against each pattern;
     a glob token is checked against the files it matches on a host path.
     Returns ``None`` if no pattern matches.
+
+    For ``grep`` / ``diff`` every file under a directory operand is checked as
+    well. Anything the filter cannot inspect is refused: a path that does not
+    resolve, a directory that cannot be listed, a ``**`` wildcard, or more than
+    *max_entries* wildcard matches and walked entries in total.
 
     *workdir* may be a host :class:`~pathlib.Path` (local backend) or a
     :class:`~pathlib.PurePosixPath` (remote/container backend). For a host path
@@ -126,27 +138,211 @@ def check_ignore(command: str, workdir: "Path | PurePath", patterns: list[str]) 
 
     expanded_tokens = [candidate for token in tokens for candidate in _embedded_paths(token)]
 
-    if isinstance(workdir, Path):
-        resolved_workdir: PurePath = workdir.resolve()
-    else:
+    if not isinstance(workdir, Path):
         resolved_workdir = PurePosixPath(posixpath.normpath(str(workdir)))
-
-    for token in expanded_tokens:
-        if isinstance(workdir, Path):
-            try:
-                literal: PurePath = (workdir / token).resolve()
-            except Exception:
-                continue
-            candidates = [literal, *_glob_matches(workdir, token)]
-        else:
-            candidates = [PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))]
-
-        for resolved in candidates:
+        for token in expanded_tokens:
+            resolved = PurePosixPath(posixpath.normpath(posixpath.join(str(workdir), token)))
             denied = _denied(resolved, resolved_workdir, patterns)
             if denied is not None:
                 return denied
+        if tokens and PurePosixPath(tokens[0]).name in _DIRECTORY_READERS:
+            return (
+                f"Access denied: {tokens[0]} can read files inside a directory, which cannot be checked on this backend"
+            )
+        return None
 
+    try:
+        return _check_host_paths(tokens, expanded_tokens, workdir, patterns, _Budget(max_entries))
+    except _UncheckableError as exc:
+        return f"Access denied: {exc}"
+
+
+class _UncheckableError(Exception):
+    """A path the filter cannot inspect; the command is refused rather than let through."""
+
+
+class _Budget:
+    """Caps the filesystem entries one command may make the filter look at (wildcard matches and walked entries)."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.used = 0
+
+    def spend(self) -> None:
+        self.used += 1
+        if self.used > self.limit:
+            raise _UncheckableError(f"more than {self.limit} files to check against ignore; name a smaller directory")
+
+
+def _check_host_paths(
+    tokens: list[str],
+    expanded_tokens: list[str],
+    workdir: Path,
+    patterns: list[str],
+    budget: _Budget,
+) -> str | None:
+    resolved_workdir = _resolve(workdir)
+    # Each word with the paths its wildcard matches, relative to workdir; expanded once and reused below.
+    words = [
+        (token, [PurePath(token), *_glob_matches(workdir, resolved_workdir, token, budget)])
+        for token in expanded_tokens
+    ]
+
+    for _, paths in words:
+        for path in paths:
+            denied = _denied(_resolve(workdir / path), resolved_workdir, patterns)
+            if denied is not None:
+                return denied
+
+    if not tokens or PurePosixPath(tokens[0]).name not in _DIRECTORY_READERS:
+        return None
+    return _check_directory_operands(tokens, words[1:], workdir, resolved_workdir, patterns, budget)
+
+
+def _resolve(path: Path) -> Path:
+    try:
+        return path.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _UncheckableError(f"cannot resolve {path!r}") from exc
+
+
+# Programs in READONLY_COMMANDS that open files inside a directory operand on
+# their own: ``grep -r``, ``diff -r``, and ``diff -N dir1 dir2`` even without
+# recursion. Matching a directory word against the patterns is not enough, so
+# every file under such an operand is checked.
+_DIRECTORY_READERS = frozenset({"grep", "egrep", "fgrep", "diff"})
+_GREP_FAMILY = frozenset({"grep", "egrep", "fgrep"})
+
+# grep options whose value may be the next word. Treating an option as taking a
+# value when it does not only makes the check stricter, so long names match by
+# prefix (getopt accepts unambiguous abbreviations).
+_GREP_SHORT_WITH_VALUE = "efmABCdD"
+_GREP_LONG_WITH_VALUE = (
+    "regexp",
+    "file",
+    "max-count",
+    "after-context",
+    "before-context",
+    "context",
+    "directories",
+    "devices",
+    "label",
+    "include",
+    "exclude",
+    "exclude-from",
+    "exclude-dir",
+    "binary-files",
+    "group-separator",
+)
+
+
+def _check_directory_operands(
+    tokens: list[str],
+    words: list[tuple[str, list[PurePath]]],
+    workdir: Path,
+    resolved_workdir: Path,
+    patterns: list[str],
+    budget: _Budget,
+) -> str | None:
+    # Each directory is walked under the path it was named by (an alias such as
+    # a symlink may carry its own ignore rule) as well as its real location.
+    starts: list[tuple[PurePath, Path]] = [
+        (PurePath(os.path.normpath(resolved_workdir / path)), _resolve(workdir / path))
+        for _, paths in words
+        for path in paths
+        if _is_dir(workdir / path)
+    ]
+
+    if PurePosixPath(tokens[0]).name in _GREP_FAMILY and not any(
+        _exists(workdir / operand) for operand in _grep_file_operands(tokens[1:])
+    ):
+        # With no file operand a recursive grep searches the working directory.
+        starts.append((resolved_workdir, resolved_workdir))
+
+    return _ignored_inside(starts, resolved_workdir, patterns, budget)
+
+
+def _grep_file_operands(args: list[str]) -> list[str]:
+    """Return the words grep takes as files (best effort, erring towards none).
+
+    The first positional word is the pattern unless ``-e`` / ``-f`` gives one.
+    When this guesses wrong it returns fewer operands, which makes the caller
+    check the whole working directory.
+    """
+    positionals: list[str] = []
+    explicit_pattern = False
+    options_ended = False
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        i += 1
+        if options_ended or arg == "-" or not arg.startswith("-"):
+            positionals.append(arg)
+        elif arg == "--":
+            options_ended = True
+        elif arg.startswith("--"):
+            name, eq, _ = arg[2:].partition("=")
+            explicit_pattern = explicit_pattern or name in ("regexp", "file")
+            if not eq and any(option.startswith(name) for option in _GREP_LONG_WITH_VALUE):
+                i += 1
+        else:
+            for pos, letter in enumerate(arg[1:], start=1):
+                explicit_pattern = explicit_pattern or letter in "ef"
+                if letter in _GREP_SHORT_WITH_VALUE:
+                    if pos == len(arg) - 1:
+                        i += 1
+                    break
+    return positionals if explicit_pattern else positionals[1:]
+
+
+def _ignored_inside(
+    starts: list[tuple[PurePath, Path]],
+    resolved_workdir: Path,
+    patterns: list[str],
+    budget: _Budget,
+) -> str | None:
+    """Return ``"Access denied: <path>"`` for the first file under the *starts* directories that may not be read.
+
+    Every entry is checked both by the path it is reached under (keeping the
+    alias a directory was entered by) and by its real target, and symlinks are
+    followed as ``grep -R`` and ``diff -r`` follow them. Entries are read one at
+    a time and each is charged to *budget*, so a large tree is refused without
+    being listed in full. A directory that cannot be listed or resolved raises
+    :class:`_UncheckableError`. A symlink back into one of its own ancestors is not
+    entered again (``grep`` and ``diff`` skip such loops too).
+    """
+    pending = [(lexical, real, frozenset({real})) for lexical, real in starts]
+    while pending:
+        lexical, real, ancestors = pending.pop()
+        try:
+            with os.scandir(real) as entries:
+                for entry in entries:
+                    budget.spend()
+                    child = lexical / entry.name
+                    target = _resolve(real / entry.name)
+                    for candidate in (child, target):
+                        denied = _denied(candidate, resolved_workdir, patterns)
+                        if denied is not None:
+                            return denied
+                    if entry.is_dir() and target not in ancestors:
+                        pending.append((child, target, ancestors | {target}))
+        except OSError as exc:
+            raise _UncheckableError(f"cannot list {lexical}") from exc
     return None
+
+
+def _is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def _exists(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return False
 
 
 def _embedded_paths(token: str) -> list[str]:
@@ -165,15 +361,50 @@ def _embedded_paths(token: str) -> list[str]:
     return found
 
 
-def _glob_matches(workdir: Path, token: str) -> list[Path]:
-    # The command runs as argv, but a program may expand a glob itself (MSYS
-    # tools do on Windows), so a pattern naming an ignored file must be refused.
+def _glob_matches(workdir: Path, resolved_workdir: Path, token: str, budget: _Budget) -> list[PurePath]:
+    """Return the paths, relative to *workdir*, that a wildcard *token* matches.
+
+    The command runs as argv, but a program may expand a wildcard itself (MSYS
+    tools do on Windows), so a pattern naming an ignored file, or a directory
+    holding one, must be refused. The pattern is expanded one path segment at a
+    time and every directory entry read on the way, matching or not, is charged
+    to *budget*. A pattern that cannot be expanded here raises
+    :class:`_UncheckableError`: ``**``, whose scan the budget cannot bound, and a
+    pattern crossing a directory that cannot be listed.
+    """
     if not any(c in token for c in "*?["):
         return []
+    pattern = PurePath(token)
+    if pattern.is_absolute():
+        base = next((b for b in (workdir, resolved_workdir) if pattern.is_relative_to(b)), None)
+        if base is None:
+            return []  # outside the workdir: the word itself is refused
+        pattern = pattern.relative_to(base)
+    if "**" in token:
+        raise _UncheckableError(f"cannot check recursive wildcard {token!r}")
+    found = [PurePath()]
+    for part in pattern.parts:
+        if any(c in part for c in "*?["):
+            found = [match for prefix in found for match in _matching_entries(workdir, prefix, part, budget)]
+        else:
+            found = [prefix / part for prefix in found]
+    return found
+
+
+def _matching_entries(workdir: Path, prefix: PurePath, part: str, budget: _Budget) -> list[PurePath]:
+    """Return ``prefix / name`` for each entry of the *prefix* directory whose name matches the wildcard *part*."""
+    matched: list[PurePath] = []
     try:
-        return [m.resolve() for m in workdir.glob(token)]
-    except (ValueError, NotImplementedError, OSError):
-        return []
+        with os.scandir(workdir / prefix) as entries:
+            for entry in entries:
+                budget.spend()
+                if fnmatch.fnmatch(entry.name, part):
+                    matched.append(prefix / entry.name)
+    except (FileNotFoundError, NotADirectoryError):
+        return []  # nothing there for the wildcard to match
+    except (OSError, ValueError) as exc:
+        raise _UncheckableError(f"cannot list {workdir / prefix}") from exc
+    return matched
 
 
 def _denied(resolved: PurePath, resolved_workdir: PurePath, patterns: list[str]) -> str | None:

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from typing import overload
+from typing import TYPE_CHECKING, Any, overload
 
 from fast_depends import Provider
 from typing_extensions import TypeVar as TypeVar313
@@ -13,6 +13,10 @@ from ag2.types import ClassInfo
 
 from .proto import ResponseProto
 from .schema import ResponseSchema
+
+if TYPE_CHECKING:
+    # Runtime typing_extensions may predate TypeForm (4.13); only the checker needs it.
+    from typing_extensions import TypeForm
 
 T = TypeVar313("T", default=str)
 
@@ -56,7 +60,7 @@ class PromptedSchema(ResponseProto[T]):
     @overload
     def __init__(
         self,
-        inner: type[T],
+        inner: "TypeForm[T]",
         /,
         *,
         prompt_template: str | None = None,
@@ -64,7 +68,7 @@ class PromptedSchema(ResponseProto[T]):
 
     @overload
     def __init__(
-        self,
+        self: "PromptedSchema[Any]",
         inner: ClassInfo,
         /,
         *,
@@ -73,7 +77,7 @@ class PromptedSchema(ResponseProto[T]):
 
     def __init__(
         self,
-        inner: "ResponseProto[T] | type[T] | ClassInfo",
+        inner: "ResponseProto[T] | TypeForm[Any] | ClassInfo",
         /,
         *,
         prompt_template: str | None = None,

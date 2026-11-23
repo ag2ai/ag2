@@ -22,15 +22,7 @@ from ag2.config import OpenAICompletionsConfig
 from ag2.config.openai import OpenAIClient
 from ag2.events import ModelRequest, ModelResponse, TextInput, ToolCallEvent
 
-
-def _chunk(delta: dict[str, Any], finish_reason: str | None = None) -> dict[str, Any]:
-    return {
-        "id": "chatcmpl_1",
-        "object": "chat.completion.chunk",
-        "created": 0,
-        "model": "test-model",
-        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
-    }
+from ._helpers import completion_chunk, completion_sse
 
 
 def _tool_delta(
@@ -49,11 +41,7 @@ def _tool_delta(
     if call_id is not None:
         call["id"] = call_id
         call["type"] = "function"
-    return _chunk({"tool_calls": [call]})
-
-
-def _sse(chunks: list[dict[str, Any]]) -> bytes:
-    return "".join(f"data: {json.dumps(c)}\n\n" for c in chunks).encode() + b"data: [DONE]\n\n"
+    return completion_chunk({"tool_calls": [call]})
 
 
 def _streaming_http_client(*turns: list[dict[str, Any]], bodies: list[dict[str, Any]]) -> httpx2.AsyncClient:
@@ -62,7 +50,9 @@ def _streaming_http_client(*turns: list[dict[str, Any]], bodies: list[dict[str, 
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         bodies.append(json.loads(request.content))
-        return httpx2.Response(200, content=_sse(remaining.pop(0)), headers={"content-type": "text/event-stream"})
+        return httpx2.Response(
+            200, content=completion_sse(remaining.pop(0)), headers={"content-type": "text/event-stream"}
+        )
 
     return httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
 
@@ -92,7 +82,7 @@ async def test_indexed_argument_fragments_assemble_per_call() -> None:
         _tool_delta("", index=1, call_id="call_b", name="get_time"),
         _tool_delta('{"tz": ', index=1),
         _tool_delta('"UTC"}', index=1),
-        _chunk({}, "tool_calls"),
+        completion_chunk({}, "tool_calls"),
     ])
 
     assert result.tool_calls.calls == [
@@ -110,7 +100,7 @@ async def test_interleaved_indexed_fragments_go_to_their_own_call() -> None:
         _tool_delta('{"tz": ', index=1),
         _tool_delta('"Paris"}', index=0),
         _tool_delta('"UTC"}', index=1),
-        _chunk({}, "tool_calls"),
+        completion_chunk({}, "tool_calls"),
     ])
 
     assert result.tool_calls.calls == [
@@ -125,7 +115,7 @@ async def test_parallel_calls_without_index_stay_separate() -> None:
     result = await _complete([
         _tool_delta('{"city": "Paris"}', call_id="call_a", name="get_weather"),
         _tool_delta('{"tz": "UTC"}', call_id="call_b", name="get_time"),
-        _chunk({}, "tool_calls"),
+        completion_chunk({}, "tool_calls"),
     ])
 
     assert result.tool_calls.calls == [
@@ -139,7 +129,7 @@ async def test_argument_fragments_without_index_join_the_last_call() -> None:
     result = await _complete([
         _tool_delta('{"city": ', call_id="call_a", name="get_weather"),
         _tool_delta('"Paris"}'),
-        _chunk({}, "tool_calls"),
+        completion_chunk({}, "tool_calls"),
     ])
 
     assert result.tool_calls.calls == [
@@ -167,9 +157,9 @@ async def test_agent_runs_parallel_tools_streamed_without_index() -> None:
             [
                 _tool_delta('{"city": "Paris"}', call_id="call_a", name="get_weather"),
                 _tool_delta('{"tz": "UTC"}', call_id="call_b", name="get_time"),
-                _chunk({}, "tool_calls"),
+                completion_chunk({}, "tool_calls"),
             ],
-            [_chunk({"content": "Sunny, 12:00."}, "stop")],
+            [completion_chunk({"content": "Sunny, 12:00."}, "stop")],
             bodies=bodies,
         ),
     )

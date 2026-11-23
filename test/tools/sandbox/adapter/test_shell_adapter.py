@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import locale
+import os
+import sys
 from pathlib import Path, PurePosixPath
 from unittest.mock import MagicMock
 
@@ -11,6 +13,7 @@ import pytest
 from ag2 import Context
 from ag2.tools.sandbox import SandboxFactory, WorkdirAware
 from ag2.tools.sandbox.adapter import ShellAdapter
+from ag2.tools.sandbox.filter import check_ignore
 from ag2.tools.sandbox.local import LocalSandbox
 from test.tools.sandbox._helpers import RecordingFactory, RecordingSandbox, WorkdirDeclaringFactory
 
@@ -260,6 +263,213 @@ class TestShellAdapterFiltering:
         adapter = ShellAdapter(sandbox)
         await adapter.run("echo a | cat")
         assert sandbox.execs == [["sh", "-c", "echo a | cat"]]
+
+
+SECRETS = ["**/.env", "*.key", "secrets/**"]
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=SECRET-ENV\n")
+    (tmp_path / "deploy.key").write_text("SECRET-KEY\n")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "db.txt").write_text("DB_PASSWORD=SECRET-DB\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hello')\n")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "app.py").write_text("print('hello docs')\n")
+    return tmp_path
+
+
+@pytest.mark.asyncio
+class TestIgnoreWithDirectoryReaders:
+    """``grep`` and ``diff`` open files inside a directory operand on their own."""
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("grep -r SECRET", id="grep-recursive-no-path"),
+            pytest.param("grep -r SECRET .", id="grep-recursive-dot"),
+            pytest.param("grep -rn SECRET .", id="grep-bundled-options"),
+            pytest.param("grep -R SECRET .", id="grep-dereference-recursive"),
+            pytest.param("grep --recursive SECRET .", id="grep-long-option"),
+            pytest.param("grep -d recurse SECRET", id="grep-directories-recurse"),
+            pytest.param("grep --directories=recurse SECRET", id="grep-directories-recurse-long"),
+            pytest.param("grep -r -m 5 SECRET", id="grep-option-with-value"),
+            pytest.param("grep -r -e SECRET", id="grep-explicit-pattern"),
+            pytest.param("grep -r src", id="grep-pattern-names-a-directory"),
+            pytest.param("grep -r . secrets", id="grep-ignored-directory-contents"),
+            pytest.param("egrep -r SECRET .", id="egrep"),
+            pytest.param("fgrep -r SECRET .", id="fgrep"),
+            pytest.param("diff -rN src .", id="diff-recursive"),
+            pytest.param("diff -N . src", id="diff-directories-without-recursion"),
+            pytest.param("diff --new-file secrets src", id="diff-ignored-directory"),
+        ],
+    )
+    async def test_readonly_refuses_reading_ignored_files_through_a_directory(
+        self, project: Path, command: str
+    ) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command)
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    @pytest.mark.parametrize(
+        ("command", "expected"),
+        [
+            pytest.param("grep -r hello src", "hello", id="grep-recursive-clean-directory"),
+            pytest.param("grep -rn hello src docs", "hello docs", id="grep-several-clean-directories"),
+            pytest.param("grep hello src/app.py", "hello", id="grep-file"),
+            pytest.param("diff -r src docs", "hello docs", id="diff-clean-directories"),
+        ],
+    )
+    async def test_readonly_still_reads_directories_without_ignored_files(
+        self, project: Path, command: str, expected: str
+    ) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command)
+
+        assert expected in result
+        assert "Access denied" not in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    async def test_symlink_inside_a_directory_counts_as_its_target(self, project: Path) -> None:
+        (project / "src" / "settings").symlink_to(project / ".env")
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -R SECRET src")
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    async def test_symlink_out_of_the_workdir_inside_a_directory_is_refused(
+        self, project: Path, tmp_path_factory: pytest.TempPathFactory
+    ) -> None:
+        outside = tmp_path_factory.mktemp("outside")
+        (outside / "id_rsa").write_text("SECRET-OUTSIDE\n")
+        (project / "src" / "home").symlink_to(outside)
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -R SECRET src")
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    async def test_remote_backend_refuses_directory_readers(self) -> None:
+        # The contents of a remote directory cannot be checked from the host.
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True, ignore=SECRETS)
+
+        result = await adapter.run("grep -r SECRET .")
+
+        assert "Access denied" in result
+        assert sandbox.execs == []
+
+    async def test_remote_backend_without_ignore_runs_directory_readers(self) -> None:
+        sandbox = RecordingSandbox()
+        adapter = ShellAdapter(sandbox, readonly=True)
+
+        await adapter.run("grep -r hello .")
+
+        assert sandbox.execs == [["grep", "-r", "hello", "."]]
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    @pytest.mark.parametrize("operand", ["src", "src/conf"])
+    async def test_rule_scoped_to_a_symlinked_directory_applies_to_its_contents(
+        self, project: Path, operand: str
+    ) -> None:
+        (project / "config").mkdir()
+        (project / "config" / "prod.txt").write_text("SECRET-CONF\n")
+        (project / "src" / "conf").symlink_to(project / "config")
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=["src/conf/**"])
+
+        result = await adapter.run(f"grep -R SECRET-CONF {operand}")
+
+        assert "Access denied" in result
+        assert "SECRET" not in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="symlinks need extra privileges on Windows")
+    async def test_symlink_loop_in_a_clean_directory_is_allowed(self, project: Path) -> None:
+        (project / "src" / "loop").symlink_to(project / "src")
+
+        assert check_ignore("grep -R hello src", project, SECRETS) is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="directory permissions differ on Windows")
+    @pytest.mark.skipif(sys.platform != "win32" and os.geteuid() == 0, reason="root can list any directory")
+    async def test_directory_that_cannot_be_listed_is_refused(self, project: Path) -> None:
+        locked = project / "src" / "locked"
+        locked.mkdir()
+        locked.chmod(0)
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+        try:
+            result = await adapter.run("grep -r hello src")
+        finally:
+            locked.chmod(0o755)
+
+        assert "Access denied" in result
+
+    @pytest.mark.parametrize("command", ["grep -r SECRET secret*", "diff -N secret? docs"])
+    async def test_wildcard_naming_a_directory_with_ignored_files_is_refused(self, project: Path, command: str) -> None:
+        # Some programs expand wildcards themselves (MSYS tools on Windows).
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command)
+
+        assert "Access denied" in result
+
+    async def test_directory_larger_than_the_walk_budget_is_refused(self, project: Path) -> None:
+        for i in range(10):
+            (project / "src" / f"module_{i}.py").write_text("print('hello')\n")
+
+        assert check_ignore("grep -r hello src", project, SECRETS, max_entries=5) is not None
+        assert check_ignore("grep -r hello src", project, SECRETS, max_entries=100) is None
+
+    async def test_wildcard_with_more_matches_than_the_budget_is_refused(self, project: Path) -> None:
+        for i in range(10):
+            (project / "src" / f"module_{i}.py").write_text("print('hello')\n")
+
+        assert check_ignore("cat src/module_*", project, SECRETS, max_entries=5) is not None
+        assert check_ignore("cat src/module_*", project, SECRETS, max_entries=100) is None
+
+    async def test_wildcard_scan_counts_entries_that_do_not_match(self, project: Path) -> None:
+        for i in range(10):
+            (project / "src" / f"module_{i}.py").write_text("print('hello')\n")
+
+        assert check_ignore("cat src/nothing_*", project, SECRETS, max_entries=5) is not None
+        assert check_ignore("cat src/nothing_*", project, SECRETS, max_entries=100) is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="directory permissions differ on Windows")
+    @pytest.mark.skipif(sys.platform != "win32" and os.geteuid() == 0, reason="root can list any directory")
+    async def test_wildcard_inside_a_directory_that_cannot_be_listed_is_refused(self, project: Path) -> None:
+        locked = project / "src" / "locked"
+        locked.mkdir()
+        locked.chmod(0)
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+        try:
+            result = await adapter.run("cat src/locked/*.py")
+        finally:
+            locked.chmod(0o755)
+
+        assert "Access denied" in result
+
+    async def test_recursive_wildcard_is_refused(self, project: Path) -> None:
+        # Its scan is not bounded by the number of matches, so it cannot be checked within the budget.
+        assert check_ignore("cat src/**/app.py", project, SECRETS) is not None
+
+    @pytest.mark.parametrize("command", ["cat {project}/.en*", "diff -N {project}/secret? docs"])
+    async def test_absolute_wildcard_inside_the_workdir_is_checked(self, project: Path, command: str) -> None:
+        adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
+
+        result = await adapter.run(command.format(project=project))
+
+        assert "Access denied" in result
+
+    async def test_path_that_cannot_be_resolved_is_refused(self, project: Path) -> None:
+        assert check_ignore("cat app.py 'a\x00b'", project, SECRETS) is not None
 
 
 @pytest.mark.asyncio
