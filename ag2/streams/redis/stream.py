@@ -107,7 +107,7 @@ class RedisStream(MemoryStream):
             # try; this cleanup still runs on cancellation so the pub/sub
             # subscription is always released.
             await pubsub.unsubscribe(self._channel)
-            await pubsub.aclose()  # type: ignore[no-untyped-call]  # unannotated in redis-py
+            await pubsub.aclose()
 
     @staticmethod
     def _split_origin(raw: bytes) -> tuple[str | None, bytes]:
