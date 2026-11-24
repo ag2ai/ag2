@@ -200,6 +200,10 @@ def _check_host_paths(
 
 
 def _resolve(path: Path) -> Path:
+    # Non-strict resolve() on Windows returns a path with a NUL in it as-is
+    # instead of raising (CPython gh-106242), so refuse it on every platform.
+    if "\x00" in str(path):
+        raise _UncheckableError(f"cannot resolve {path!r}")
     try:
         return path.resolve()
     except (OSError, RuntimeError, ValueError) as exc:
