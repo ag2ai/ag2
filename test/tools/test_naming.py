@@ -196,3 +196,30 @@ def test_create_dynamic_options() -> None:
         "type": "function",
         "defer_loading": False,
     }
+
+
+def test_dynamic_options_under_any_name() -> None:
+    @tool
+    def my_tool(a: str, **extra: Any) -> str:
+        """Tool description."""
+        return ""
+
+    parameters = FunctionTool.ensure_tool(my_tool).schema.function.parameters
+
+    assert parameters == {
+        "properties": {"a": {"title": "A", "type": "string"}},
+        "required": ["a"],
+        "type": "object",
+        "additionalProperties": True,
+    }
+
+
+def test_explicit_schema_is_kept_for_dynamic_options() -> None:
+    explicit = {"type": "object", "properties": {"q": {"type": "string"}}}
+
+    @tool(schema=explicit)
+    def my_tool(**kwargs: Any) -> str:
+        """Tool description."""
+        return ""
+
+    assert FunctionTool.ensure_tool(my_tool).schema.function.parameters == explicit
