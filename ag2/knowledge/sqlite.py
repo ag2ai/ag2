@@ -18,6 +18,10 @@ from .polling import PollingChangeWatcher
 # this: it treats ``_`` and ``%`` as wildcards and folds ASCII case, while the
 # other stores compare prefixes literally and case-sensitively.
 _PREFIX_MATCH = "substr(path, 1, ?) = ?"
+_UPSERT = (
+    "INSERT OR REPLACE INTO entries (path, content, version) "
+    "VALUES (?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM entries))"
+)
 
 _T = TypeVar("_T")
 
@@ -55,7 +59,6 @@ class SqliteKnowledgeStore:
         self._poll_interval_s = poll_interval_s
         self._conn: sqlite3.Connection | None = None
         self._lock = asyncio.Lock()
-        self._version_counter = 0
 
     def _ensure_connected(self) -> sqlite3.Connection:
         if self._conn is not None:
@@ -73,14 +76,7 @@ class SqliteKnowledgeStore:
         )
         conn.commit()
         self._conn = conn
-        cur = conn.execute("SELECT COALESCE(MAX(version), 0) FROM entries")
-        row = cur.fetchone()
-        self._version_counter = int(row[0]) if row else 0
         return conn
-
-    def _next_version(self) -> int:
-        self._version_counter += 1
-        return self._version_counter
 
     async def _run(self, func: Callable[[], _T]) -> _T:
         loop = asyncio.get_running_loop()
@@ -95,12 +91,9 @@ class SqliteKnowledgeStore:
         content: bytes = row[0]
         return content.decode("utf-8")
 
-    def _sync_write(self, normalized: str, payload: bytes, version: int) -> None:
+    def _sync_write(self, normalized: str, payload: bytes) -> None:
         conn = self._ensure_connected()
-        conn.execute(
-            "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-            (normalized, payload, version),
-        )
+        conn.execute(_UPSERT, (normalized, payload))
         conn.commit()
 
     def _sync_list(self, prefix: str) -> list[str]:
@@ -138,7 +131,7 @@ class SqliteKnowledgeStore:
         )
         return cur.fetchone() is not None
 
-    def _sync_append(self, normalized: str, payload: bytes, version: int) -> int:
+    def _sync_append(self, normalized: str, payload: bytes) -> int:
         conn = self._ensure_connected()
         # Reserve the writer before reading: other store instances have their own
         # asyncio locks and must not append from the same stale content snapshot.
@@ -149,10 +142,7 @@ class SqliteKnowledgeStore:
             existing = row[0] if row else b""
             offset = len(existing)
             combined = existing + payload
-            conn.execute(
-                "INSERT OR REPLACE INTO entries (path, content, version) VALUES (?, ?, ?)",
-                (normalized, combined, version),
-            )
+            conn.execute(_UPSERT, (normalized, combined))
         return offset
 
     def _sync_read_range(self, normalized: str, start: int, end: int | None) -> str:
@@ -188,8 +178,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            await self._run(functools.partial(self._sync_write, normalized, payload, version))
+            await self._run(functools.partial(self._sync_write, normalized, payload))
 
     async def list(self, path: str = "/") -> list[str]:
         prefix = _normalize(path).rstrip("/") + "/"
@@ -212,8 +201,7 @@ class SqliteKnowledgeStore:
         normalized = _normalize(path)
         payload = content.encode("utf-8")
         async with self._lock:
-            version = self._next_version()
-            return await self._run(functools.partial(self._sync_append, normalized, payload, version))
+            return await self._run(functools.partial(self._sync_append, normalized, payload))
 
     async def read_range(self, path: str, start: int, end: int | None = None) -> str:
         normalized = _normalize(path)
