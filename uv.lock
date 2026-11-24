@@ -1,18 +1,18 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
-    "python_full_version < '3.12' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version < '3.12' and sys_platform == 'linux'",
     "python_full_version < '3.12' and sys_platform != 'linux'",
 ]
 
@@ -162,6 +162,7 @@ dev = [
     { name = "jinja2" },
     { name = "mcp" },
     { name = "mdx-include" },
+    { name = "membase-ai" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
     { name = "mkdocs-glightbox" },
     { name = "mkdocs-literate-nav" },
@@ -193,7 +194,6 @@ dev = [
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
-    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
     { name = "zizmor" },
@@ -207,6 +207,7 @@ docs = [
     { name = "jinja2" },
     { name = "mcp" },
     { name = "mdx-include" },
+    { name = "membase-ai" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
     { name = "mkdocs-glightbox" },
     { name = "mkdocs-literate-nav" },
@@ -224,7 +225,6 @@ docs = [
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
     { name = "transformers" },
     { name = "typer" },
-    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
 ]
@@ -241,6 +241,7 @@ optionals = [
     { name = "docker" },
     { name = "exa-py" },
     { name = "firecrawl-py" },
+    { name = "membase-ai" },
     { name = "mistralai", extra = ["realtime"] },
     { name = "safetensors" },
     { name = "tenki" },
@@ -248,7 +249,6 @@ optionals = [
     { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
     { name = "transformers" },
-    { name = "unibaseio-membase" },
     { name = "watchdog" },
     { name = "websockets" },
 ]
@@ -282,6 +282,7 @@ types = [
     { name = "exa-py" },
     { name = "freezegun" },
     { name = "httpx2" },
+    { name = "membase-ai" },
     { name = "mypy" },
     { name = "nlip-sdk" },
     { name = "nlip-server" },
@@ -297,7 +298,6 @@ types = [
     { name = "types-aiobotocore", extra = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
-    { name = "unibaseio-membase" },
 ]
 
 [package.metadata]
@@ -372,6 +372,7 @@ dev = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
     { name = "mkdocs-literate-nav", specifier = "==0.6.3" },
@@ -403,7 +404,6 @@ dev = [
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
-    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
     { name = "zizmor", specifier = "==1.30.1" },
@@ -429,6 +429,7 @@ docs = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
     { name = "mkdocs-literate-nav", specifier = "==0.6.3" },
@@ -446,7 +447,6 @@ docs = [
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", specifier = ">=4.57,<6" },
     { name = "typer", specifier = ">=0.22,<0.28" },
-    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
 ]
@@ -483,6 +483,7 @@ optionals = [
     { name = "docker", specifier = ">=6.0.0,<8" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mistralai", extras = ["realtime"], specifier = ">=3.6.0,<4" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
@@ -490,7 +491,6 @@ optionals = [
     { name = "torch", marker = "sys_platform != 'linux'", specifier = ">=2.5,<3" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.5,<3", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", specifier = ">=4.57,<6" },
-    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
     { name = "watchdog", specifier = ">=4.0,<7" },
     { name = "websockets", specifier = ">=14.0,<17" },
 ]
@@ -529,6 +529,7 @@ types = [
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "httpx2", specifier = ">=2.10.0,<3" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mypy", specifier = "==2.4.0" },
     { name = "nlip-sdk", specifier = ">=0.1.0,<1" },
     { name = "nlip-server", specifier = ">=0.1.3,<1" },
@@ -544,7 +545,6 @@ types = [
     { name = "types-aiobotocore", extras = ["bedrock-runtime"] },
     { name = "types-jsonschema" },
     { name = "types-pyyaml" },
-    { name = "unibaseio-membase", specifier = ">=0.4.0,<0.5" },
 ]
 
 [[package]]
@@ -3256,6 +3256,18 @@ wheels = [
 ]
 
 [[package]]
+name = "membase-ai"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/c4/b70203c1f1c01c002da11afe203ddc3e5739b939648221ad2b90e1f20ada/membase_ai-0.4.1.tar.gz", hash = "sha256:4a102289eca6f9392815b3df7763d14de56b1841355f20c77d2aafb5a5229588", size = 41102, upload-time = "2026-11-22T15:44:26.744Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/e2/71a3bdd93c684571feadf1dd09c9a0445d4522c71ed73a0db33d60f28e30/membase_ai-0.4.1-py3-none-any.whl", hash = "sha256:5cb22c0220b4c4e1718c0af7c30712b5ab4be2dd3b47e0428aa821769567b10d", size = 51372, upload-time = "2026-11-22T15:44:25.553Z" },
+]
+
+[[package]]
 name = "mergedeep"
 version = "1.3.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3711,14 +3723,14 @@ version = "3.7"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/76/3af777226b63a5e64a6b36b1ec5855c14e2b94a37096d4760e595fc43511/networkx-3.7.tar.gz", hash = "sha256:fd77a511bd90f39f3d016351345b52cf5319b813bdca01de3f755d3cca62e96a", size = 1866482, upload-time = "2026-09-21T16:45:16.974Z" }
@@ -3840,14 +3852,14 @@ version = "2.5.4"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'linux'",
-    "python_full_version == '3.14.*' and sys_platform == 'linux'",
-    "python_full_version == '3.13.*' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'linux'",
     "python_full_version >= '3.15' and sys_platform != 'linux'",
+    "python_full_version == '3.14.*' and sys_platform == 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
+    "python_full_version == '3.13.*' and sys_platform == 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/b0/c7453d0b6e2073c3264468b106ee1563750cecc910965e67357e3698c83e/numpy-2.5.4.tar.gz", hash = "sha256:9a94cf751c9ad8ebaa835bcd3d40dacf8534ad086b88c38029b65123c7999d2a", size = 20866315, upload-time = "2026-10-10T20:05:31.422Z" }
@@ -5952,8 +5964,8 @@ resolution-markers = [
     "python_full_version >= '3.15' and sys_platform != 'linux'",
     "python_full_version == '3.14.*' and sys_platform != 'linux'",
     "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten' and sys_platform != 'linux'",
     "python_full_version < '3.12' and sys_platform != 'linux'",
 ]
@@ -6178,18 +6190,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/92/ff/5a28bdfd8c3ebec42564ac7d0e54ca3db65044a9314a97f9564fa7a1e926/tzdata-2026.3.tar.gz", hash = "sha256:4a1518b8993086a7982523e071643f3c0e5f213e75b21318e78bcabfff9d1415", size = 198674, upload-time = "2026-07-10T08:50:37.887Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e5/6d/b53b99a9f2766d095985947a5782f1702cabb129a34f7a802d7197af832f/tzdata-2026.3-py2.py3-none-any.whl", hash = "sha256:dc096730c87af6cab1b171c9d532be840741ff5d459015e7f6947bd7d7e54931", size = 348168, upload-time = "2026-07-10T08:50:36.46Z" },
-]
-
-[[package]]
-name = "unibaseio-membase"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/92/4c/38134f7a30d4f1a4408da195fc246d1c2c3d7d18377a2dfb61ae17577d1d/unibaseio_membase-0.4.0.tar.gz", hash = "sha256:12ce4b9876e2f823cc97f45c46149e004fe12ce0de05729ae33e8a9d692f9cec", size = 41069, upload-time = "2026-11-04T01:58:31.628Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/63/20a52eb05206d2a4e9128dd0476b255e8120c78f0ad4f1a413aca5ff574e/unibaseio_membase-0.4.0-py3-none-any.whl", hash = "sha256:9960254a48791d976fb81693c8753b057859139300bc651a952508d6fe0b85a5", size = 51360, upload-time = "2026-11-04T01:58:30.308Z" },
 ]
 
 [[package]]

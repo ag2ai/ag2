@@ -6,14 +6,14 @@ sidebarTitle: Membase Memory
 `MembaseToolkit` gives an agent long-term memory backed by the user's [Membase](https://membase.com){.external-link target="_blank"} account: one memory the user keeps across the AI tools they use. The agent can search it, save a note to it when the user asks, and read the user's profile. Every search passage names the Memory it came from, so the agent can cite it.
 
 !!! note
-    Requires the `unibaseio-membase` package and a Membase developer key: `pip install "unibaseio-membase>=0.4.0,<0.5"`
+    Requires the `membase-ai` package and a Membase developer key: `pip install "membase-ai>=0.4.1,<0.5"`
 
 ## Installation
 
 Install AG2, your model provider, and the Membase Python SDK:
 
 ```bash
-pip install "ag2[anthropic]" "unibaseio-membase>=0.4.0,<0.5"
+pip install "ag2[anthropic]" "membase-ai>=0.4.1,<0.5"
 ```
 
 Create a developer key in the Membase app under **Connect › Developer keys** and export it:
@@ -103,7 +103,7 @@ reply = await agent.ask("What do you remember about me?", variables={"membase_ap
 Membase also runs on your machine with the open-source engine. Start it and point the toolkit at it:
 
 ```bash
-pip install "unibaseio-membase[local]>=0.4.0,<0.5"
+pip install "membase-ai[local]>=0.4.1,<0.5"
 membase --local serve
 ```
 
