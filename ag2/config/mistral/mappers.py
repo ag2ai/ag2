@@ -19,6 +19,7 @@ from mistralai.client.models import (
     ImageURL,
     ImageURLChunk,
     JSONSchema,
+    PromptTokensDetails,
     ResponseFormat,
     SystemMessage,
     TextChunk,
@@ -324,9 +325,8 @@ def json_arguments(arguments: Any) -> str:
 def normalize_usage(raw: UsageInfo | None) -> Usage:
     """Normalise Mistral's ``UsageInfo`` to AG2 ``Usage``.
 
-    The token counts are declared fields. ``prompt_tokens_details`` is not: it is a
-    pydantic extra, absent from the model unless the response carried it, so it alone
-    is read defensively — and it arrives as either a dict or an object.
+    ``prompt_tokens_details`` is a ``PromptTokensDetails`` when the response carried
+    it, and ``None`` or ``Unset`` otherwise.
     """
     if raw is None:
         return Usage()
@@ -340,11 +340,12 @@ def normalize_usage(raw: UsageInfo | None) -> Usage:
     else:
         total_value = None
 
-    cached: float | None = None
-    details = getattr(raw, "prompt_tokens_details", None)
-    raw_cached = details.get("cached_tokens") if isinstance(details, dict) else getattr(details, "cached_tokens", None)
-    if isinstance(raw_cached, (int, float)):
-        cached = float(raw_cached)
+    details = raw.prompt_tokens_details
+    cached = (
+        float(details.cached_tokens)
+        if isinstance(details, PromptTokensDetails) and details.cached_tokens is not None
+        else None
+    )
 
     return Usage(
         prompt_tokens=prompt_value,
