@@ -18,9 +18,8 @@ def make_usage(
 ) -> UsageInfo:
     """The SDK's own model, so a renamed field fails here rather than passing silently.
 
-    ``prompt_tokens_details`` is not a declared field but a pydantic extra, so it is
-    carried in the validated payload the way a real response body carries it — omitted
-    entirely when there is none, which is what leaves it absent from the model.
+    ``prompt_tokens_details`` is carried in the validated payload the way a real
+    response body carries it, and omitted entirely when there is none.
     """
     payload: dict[str, Any] = {
         "prompt_tokens": prompt_tokens,
