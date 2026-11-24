@@ -30,6 +30,18 @@ class AsyncMultiplier:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("name", [None, "renamed"])
+async def test_ordinary_function_keeps_dunder_name(name: str | None, context: Context) -> None:
+    def add(value: int) -> str:
+        """Return the value as text."""
+        return str(value)
+
+    add_tool = tool(add, name=name)
+    [schema] = await add_tool.schemas(context)
+    assert schema.function.name == (name or "add")
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("callable_type", [Multiplier, AsyncMultiplier])
 @pytest.mark.parametrize("sync_to_thread", [True, False])
 @pytest.mark.parametrize("name", [None, "multiply"])
