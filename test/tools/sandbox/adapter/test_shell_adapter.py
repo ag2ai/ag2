@@ -464,7 +464,8 @@ class TestIgnoreWithDirectoryReaders:
     async def test_absolute_wildcard_inside_the_workdir_is_checked(self, project: Path, command: str) -> None:
         adapter = ShellAdapter(LocalSandbox(project), readonly=True, ignore=SECRETS)
 
-        result = await adapter.run(command.format(project=project))
+        # Forward slashes: the shell would strip the unquoted backslashes of a Windows path.
+        result = await adapter.run(command.format(project=project.as_posix()))
 
         assert "Access denied" in result
 
