@@ -216,6 +216,9 @@ def tool(
     indefinitely. It covers the function and its dependencies, outside middleware.
     Expiry returns a ``ToolErrorEvent``; cancelling a synchronous tool's await
     does not stop the worker thread.
+
+    When ``name`` is omitted, use the callable's ``__name__`` or, for a
+    callable instance without one, its class name.
     """
 
     def make_tool(f: Callable[..., Any]) -> FunctionTool:
@@ -230,9 +233,13 @@ def tool(
             serialize_result=False,
         )
 
+        inferred_name = getattr(f, "__name__", None)
+        if not isinstance(inferred_name, str):
+            inferred_name = type(f).__name__
+
         return FunctionTool(
             call_model,
-            name=name or f.__name__,
+            name=name or inferred_name,
             description=description or f.__doc__ or "",
             schema=_normalize_parameters(schema, call_model),
             timeout=timeout,
