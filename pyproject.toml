@@ -105,7 +105,7 @@ elevenlabs = ["elevenlabs>=2.73.0,<3"]
 
 xai = ["xai-sdk>=1.21.0,<2"]
 zai = ["zai-sdk>=0.2.3,<1"]
-mistral = ["mistralai>=3.6.0,<4"]
+mistral = ["mistralai>=3.9.0,<4"]
 ollama = ["ollama>=0.5.2,<1"]
 bedrock = ["aiobotocore>=3.9.1,<4"]
 dashscope = ["dashscope>=1.25.13"]
@@ -187,7 +187,7 @@ optionals = [
     "agent-client-protocol[http]", # ag2.acp.remote transports — without them `test/acp/test_remote_*` importorskips itself out of the run
     "watchdog>=4.0,<7",  # DiskKnowledgeStore (ag2.knowledge)
     "websockets>=14.0,<17",  # WsLink (ag2.network)
-    "mistralai[realtime]>=3.6.0,<4",  # MistralRealtimeTranscriber, MistralRealtimeTTSConfig (ag2.live)
+    "mistralai[realtime]>=3.9.0,<4",  # MistralRealtimeTranscriber, MistralRealtimeTTSConfig (ag2.live)
     "docker>=6.0.0,<8",  # code execution (ag2.extensions.docker)
     "daytona>=0.171.0,<1",
     "tenki>=1.4.0,<2",

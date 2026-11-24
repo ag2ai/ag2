@@ -332,7 +332,7 @@ requires-dist = [
     { name = "mcp", marker = "extra == 'mcp-ui'", specifier = ">=2.3.0,<3" },
     { name = "mcp-types", marker = "extra == 'mcp'", specifier = ">=2.3.0,<3" },
     { name = "mcp-ui-server", marker = "extra == 'mcp-ui'", specifier = ">=1.0.0" },
-    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=3.6.0,<4" },
+    { name = "mistralai", marker = "extra == 'mistral'", specifier = ">=3.9.0,<4" },
     { name = "ollama", marker = "extra == 'ollama'", specifier = ">=0.5.2,<1" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=3.45.0,<4" },
     { name = "opentelemetry-sdk", marker = "extra == 'tracing'", specifier = ">=1.20" },
@@ -499,7 +499,7 @@ optionals = [
     { name = "e2b", specifier = ">=2.0.0,<3" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
-    { name = "mistralai", extras = ["realtime"], specifier = ">=3.6.0,<4" },
+    { name = "mistralai", extras = ["realtime"], specifier = ">=3.9.0,<4" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
     { name = "tinyfish", specifier = ">=0.5,<0.6" },
@@ -3356,7 +3356,7 @@ wheels = [
 
 [[package]]
 name = "mistralai"
-version = "3.7.0"
+version = "3.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "eval-type-backport" },
@@ -3368,9 +3368,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/ca/10a0515ded34170e1ea451a6d1c7124361e4fab8ba5d5024db34db1fb9d3/mistralai-3.7.0.tar.gz", hash = "sha256:97cc525b8ddc96fb8b5bb08f466dd3d22f904f21ddfe45103da76c25fe601bf2", size = 773897, upload-time = "2026-11-01T20:07:28.894Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/92/73c2a539997287ad5266a1f181e139aefbf03a3dc7dc659dd61772215004/mistralai-3.9.0.tar.gz", hash = "sha256:7937d8c1422b1219d59943670960319508c471ab4cb0787d56cf8ec477b930f7", size = 785477, upload-time = "2026-11-24T15:01:59.773Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/c3/428b852ffffcf6b35d046124121e75824827d222d8ada3cb19c32a47f92e/mistralai-3.7.0-py3-none-any.whl", hash = "sha256:23ceda7ae52557578427af5a9caffb2222cd11dd7d43eb1792ded35b2a84d939", size = 1818807, upload-time = "2026-11-01T20:07:26.562Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/a6/7cb3eee4d7b15f333aedb0f421ef49f8adaef6294fded3f09ce881e81e80/mistralai-3.9.0-py3-none-any.whl", hash = "sha256:75146f75695980f0c68eca0dea09b8b264b7fdee823c80fe732b04915a74480d", size = 1921951, upload-time = "2026-11-24T15:01:57.851Z" },
 ]
 
 [package.optional-dependencies]
