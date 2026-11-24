@@ -2,11 +2,23 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Generator
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
+from zai.core import (
+    APIAuthenticationError,
+    APIInternalError,
+    APIReachLimitError,
+    APIServerFlowExceedError,
+    APIStatusError,
+    APITimeoutError,
+)
 
+from ag2 import FilesAPI
+from ag2.config import ZAIConfig
 from ag2.config.zai.files import ZAIFilesClient
 from ag2.files.types import FileContent, FileProvider, UploadedFile
 
@@ -170,3 +182,94 @@ class TestZAIFilesClient:
 
         with pytest.raises(ValueError, match="no id"):
             await ZAIFilesClient(zai_config).upload(b"hello", "hello.jsonl")
+
+
+@pytest.fixture
+def file_list_transport() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def files_api(file_list_transport: MagicMock) -> Generator[FilesAPI]:
+    with httpx.Client(transport=httpx.MockTransport(file_list_transport)) as http_client:
+        yield FilesAPI(ZAIConfig(model="test", api_key="test-key", max_retries=0, http_client=http_client))
+
+
+@pytest.mark.asyncio
+class TestZAIFileListingErrors:
+    @pytest.mark.parametrize(
+        ("status_code", "error_type"),
+        [
+            (401, APIAuthenticationError),
+            (429, APIReachLimitError),
+            (500, APIInternalError),
+            (503, APIServerFlowExceedError),
+        ],
+    )
+    async def test_all_failed_requests_raise_sdk_error(
+        self, files_api: FilesAPI, file_list_transport: MagicMock, status_code: int, error_type: type[APIStatusError]
+    ) -> None:
+        file_list_transport.side_effect = lambda request: httpx.Response(
+            status_code,
+            json={"error": {"code": str(status_code), "message": f"Cannot list {request.url.params['purpose']}"}},
+        )
+
+        with pytest.raises(error_type, match="Cannot list batch") as exc:
+            await files_api.list()
+
+        assert exc.value.status_code == status_code
+        assert exc.value.response.json() == {"error": {"code": str(status_code), "message": "Cannot list batch"}}
+        assert file_list_transport.call_count == 3
+
+    async def test_all_timed_out_requests_raise_sdk_error(
+        self, files_api: FilesAPI, file_list_transport: MagicMock
+    ) -> None:
+        timeout = httpx.ReadTimeout("Timed out listing files")
+        file_list_transport.side_effect = timeout
+
+        with pytest.raises(APITimeoutError) as exc:
+            await files_api.list()
+
+        assert exc.value.__cause__ is timeout
+        assert file_list_transport.call_count == 3
+
+    @pytest.mark.parametrize(
+        "successful_purposes",
+        [("batch",), ("fine-tune",), ("voice-clone-input",), ("batch", "fine-tune", "voice-clone-input")],
+    )
+    @pytest.mark.parametrize("has_files", [False, True])
+    async def test_successful_requests_still_return_files_or_empty_list(
+        self, files_api: FilesAPI, file_list_transport: MagicMock, successful_purposes: tuple[str, ...], has_files: bool
+    ) -> None:
+        file_list_transport.side_effect = lambda request: httpx.Response(
+            200 if request.url.params["purpose"] in successful_purposes else 503,
+            json={
+                "data": [
+                    {
+                        "id": f"file-{request.url.params['purpose']}",
+                        "filename": "jobs.jsonl",
+                        "bytes": 12,
+                        "purpose": request.url.params["purpose"],
+                        "created_at": 123,
+                    }
+                ]
+                if has_files
+                else [],
+            },
+        )
+
+        result = await files_api.list()
+
+        assert result == [
+            UploadedFile(
+                file_id=f"file-{purpose}",
+                filename="jobs.jsonl",
+                provider=FileProvider.ZAI,
+                bytes_count=12,
+                purpose=purpose,
+                created_at=123.0,
+            )
+            for purpose in successful_purposes
+            if has_files
+        ]
+        assert file_list_transport.call_count == 3
