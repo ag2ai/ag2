@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from ag2.exceptions import missing_additional_dependency
+from ag2.exceptions import missing_additional_dependency, missing_optional_dependency
 
 try:
     from .exa import ExaToolkit
@@ -22,6 +22,12 @@ except ImportError as e:
 from .glasser import GlasserResult, GlasserToolkit
 from .keenable import KeenableSearchToolkit
 from .serply import SerplySearchToolkit
+
+try:
+    from .webzio import WebzioNewsSearchToolkit
+except ImportError as e:
+    WebzioNewsSearchToolkit = missing_optional_dependency("WebzioNewsSearchToolkit", "mcp", e)  # type: ignore[misc]
+
 from .xquik import XquikSearchToolkit
 
 __all__ = (
@@ -32,5 +38,6 @@ __all__ = (
     "KeenableSearchToolkit",
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
+    "WebzioNewsSearchToolkit",
     "XquikSearchToolkit",
 )
