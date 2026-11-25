@@ -113,7 +113,7 @@ class SkillLoader:
         *paths: str | os.PathLike[str],
         strict: bool = True,
     ) -> None:
-        self._paths = [Path(p) for p in (paths or self.DEFAULT_PATHS)]
+        self._paths = [Path(p).expanduser() for p in (paths or self.DEFAULT_PATHS)]
         self._strict = strict
         # name -> (descriptor, skill directory). The directory is kept here, not
         # on the Skill, so the descriptor stays a pure (path-free) value object.
