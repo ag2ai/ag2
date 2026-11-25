@@ -15,6 +15,8 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
+from pydantic import JsonValue
+
 __all__ = (
     "EV_CHANNEL_CLOSED",
     "EV_CHANNEL_EXPIRED",
@@ -117,7 +119,7 @@ class Envelope:
     sender_id: str
     audience: list[str] | None
     event_type: str
-    event_data: dict[str, Any]
+    event_data: dict[str, JsonValue]
 
     envelope_id: str = ""  # hub-stamped on accept
     task_id: str | None = None

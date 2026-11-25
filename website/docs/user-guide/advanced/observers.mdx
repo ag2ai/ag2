@@ -220,7 +220,7 @@ agent = Agent(
 
 #### TokenMonitor
 
-Tracks cumulative token usage across `UsageEvent` — the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](/docs/user-guide/advanced/stream#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed.
+Tracks cumulative token usage across `UsageEvent` — the framework's accounting record, emitted wherever tokens are spent: the agent's own model calls, source events forwarded from descendants (including sub-tasks that fail), history compaction, memory aggregation and live sessions. Descendant usage arrives while the sub-task runs, without a generated rollup; see [Account for Descendant Usage](/docs/user-guide/advanced/stream#account-for-descendant-usage). Emits `WARNING` / `CRITICAL` alerts as thresholds are crossed. Input counts every prompt token, including tokens read from and written to the prompt cache, so a threshold bounds tokens processed, not cost.
 
 ```python linenums="1"
 from ag2 import Agent

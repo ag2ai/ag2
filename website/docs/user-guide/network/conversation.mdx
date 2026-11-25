@@ -117,7 +117,7 @@ class ConversationState:
     last_speaker_id: str | None = None
 ```
 
-Minimal — just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `#!python hub._adapter_states[channel_id]` (the underscore is intentional — operator API).
+Minimal — just a count and a last-speaker hint that custom orchestrators or observers can read. Read it via `#!python hub.adapter_state(channel_id, ConversationState)`.
 
 ## Closing
 

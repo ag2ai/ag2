@@ -5,6 +5,8 @@
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Protocol, Self
 
+from ag2.exceptions import FilesAPIUnsupportedError
+
 from .client import LLMClient
 
 if TYPE_CHECKING:
@@ -31,7 +33,13 @@ class ModelConfig(Protocol):
         raise NotImplementedError
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
+        """The model this config asks for, or ``None`` when the backend picks its own.
+
+        An ACP agent with no ``model`` set runs on the agent's default, which the
+        config cannot name. A config that has no notion of a model at all raises
+        ``NotImplementedError`` instead.
+        """
         raise NotImplementedError
 
     def copy(self) -> Self: ...
@@ -39,5 +47,7 @@ class ModelConfig(Protocol):
     def create(self) -> LLMClient: ...
 
     # `Any` because the purpose type is the provider's own; `FilesAPI` hands over a plain `str`.
+    # A bare `raise NotImplementedError` body would make mypy treat this default as abstract,
+    # so every config that inherits it (e.g. `OllamaConfig`) could not be instantiated.
     def create_files_client(self) -> "FilesClient[Any]":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)

@@ -11,6 +11,7 @@ unchanged.
 """
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 from ag2.eval import (
@@ -22,12 +23,12 @@ from ag2.eval import (
     TraceRef,
 )
 from ag2.eval.results.store import load_run, to_dict
-from ag2.events import HumanMessage, ModelResponse, ToolCallEvent, Usage
+from ag2.events import BaseEvent, HumanMessage, ModelResponse, ToolCallEvent, Usage
 
 
 def _make_result(
     *,
-    events: list = (),
+    events: Sequence[BaseEvent] = (),
     feedback: tuple[Feedback, ...] = (Feedback(key="ok", score=True),),
     exception: BaseException | None = None,
     budget_violation: bool = False,

@@ -19,6 +19,7 @@ from ag2.events import (
     DataInput,
     ModelMessage,
     ModelMessageChunk,
+    ModelReasoning,
     ModelResponse,
     RecordedAudioEvent,
     SynthesizedAudioEvent,
@@ -261,12 +262,22 @@ async def _send_tool_result(
 def normalize_realtime_usage(metadata: "gtypes.UsageMetadata | None") -> Usage:
     if metadata is None:
         return Usage()
+    thinking = metadata.thoughts_token_count
+    completion = metadata.response_token_count
+    total = metadata.total_token_count
+    if thinking:
+        # The Live API reports thoughts beside the response, as the batch API
+        # reports them beside the candidates; completion includes both, with
+        # thinking_tokens retained as the reasoning breakdown. A reported total
+        # that leaves the thoughts out is raised to prompt plus completion (ADR 0036).
+        completion = (completion or 0) + thinking
+        total = max(total or 0, (metadata.prompt_token_count or 0) + completion)
     return Usage(
         prompt_tokens=metadata.prompt_token_count,
-        completion_tokens=metadata.response_token_count,
-        total_tokens=metadata.total_token_count,
+        completion_tokens=completion,
+        total_tokens=total,
         cache_read_input_tokens=metadata.cached_content_token_count,
-        thinking_tokens=metadata.thoughts_token_count,
+        thinking_tokens=thinking,
     )
 
 
@@ -280,11 +291,14 @@ async def _pump_events(
     # alive across turns. An empty receive() means the connection closed.
     text = ""
     usage = Usage()
+    user_speech = _InputTranscription(joins_fragments=not _sends_final_input_transcription(model))
     while True:
         had_message = False
         async for message in session.receive():
             had_message = True
 
+            if message.server_content is not None:
+                await user_speech.receive(message.server_content, context)
             emitted = await _handle_server_content(message.server_content, context)
             text += emitted
 
@@ -332,11 +346,6 @@ async def _handle_server_content(
         return ""
 
     emitted_text = ""
-    if content.input_transcription is not None and content.input_transcription.text:
-        await context.send(TranscriptionChunkEvent(content.input_transcription.text))
-        if content.input_transcription.finished:
-            await context.send(TranscriptionCompletedEvent(content.input_transcription.text))
-
     if content.output_transcription is not None and content.output_transcription.text:
         chunk = content.output_transcription.text
         emitted_text += chunk
@@ -346,6 +355,9 @@ async def _handle_server_content(
         for part in content.model_turn.parts or ():
             if part.inline_data is not None and part.inline_data.data:
                 await context.send(SynthesizedAudioEvent(part.inline_data.data))
+            elif part.thought and part.text:
+                # Thought summaries are reasoning, not reply text.
+                await context.send(ModelReasoning(part.text))
             elif part.text:
                 # Non-native-audio models stream text directly here rather
                 # than via output_audio_transcription.
@@ -353,6 +365,51 @@ async def _handle_server_content(
                 await context.send(ModelMessageChunk(part.text))
 
     return emitted_text
+
+
+@dataclass(slots=True)
+class _InputTranscription:
+    """The user's speech in the current utterance, sent as chunks and then as one completed transcript.
+
+    Gemini 3.x Live, the live translate model included, sends one final
+    transcription per utterance, so each one is complete as it arrives. Earlier
+    models send fragments, which the Gemini API never marks `finished` (Vertex
+    AI may): they are joined until one is `finished`, or the generation
+    completes, is interrupted, or the turn completes. This is the split Google's
+    ADK makes in `GeminiLlmConnection`, except that ADK joins the translate
+    model's transcriptions, which never reach a generation or turn boundary.
+
+    The Live API does not order the input transcription against the other
+    server messages, so a fragment that arrives after one of those boundaries
+    completes with the next utterance.
+    """
+
+    joins_fragments: bool
+    heard: str = ""
+
+    async def receive(self, content: gtypes.LiveServerContent, context: ConversationContext) -> None:
+        transcription = content.input_transcription
+        if transcription is not None and transcription.text:
+            await context.send(TranscriptionChunkEvent(transcription.text))
+            self.heard += transcription.text
+
+        if not self.joins_fragments or (
+            (transcription is not None and transcription.finished)
+            or content.interrupted
+            or content.generation_complete
+            or content.turn_complete
+        ):
+            await self.complete(context)
+
+    async def complete(self, context: ConversationContext) -> None:
+        heard, self.heard = self.heard.strip(), ""
+        if heard:
+            await context.send(TranscriptionCompletedEvent(heard))
+
+
+def _sends_final_input_transcription(model: str) -> bool:
+    name = model.rsplit("/", 1)[-1]
+    return name.startswith("gemini-3.") and "-live" in name
 
 
 def _encode_args(args: dict[str, Any] | None) -> str:

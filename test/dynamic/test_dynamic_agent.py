@@ -11,6 +11,7 @@ from ag2.events import (
     TaskCompleted,
     TaskFailed,
     TaskStarted,
+    TextInput,
     ToolCallEvent,
     ToolResultEvent,
 )
@@ -44,7 +45,9 @@ def _spec(name: str, *, prompt: list[str] | None = None, tool_names: list[str] |
 
 def _text(event: ToolResultEvent) -> str:
     """Pull the text body out of a ToolResultEvent."""
-    return event.result.parts[0].content
+    [part] = event.result.parts
+    assert isinstance(part, TextInput)
+    return part.content
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ from ag2.config.client import LLMClient
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.context import ConversationContext
 from ag2.events import BaseEvent, ModelResponse, ToolResultsEvent
+from ag2.exceptions import FilesAPIUnsupportedError
 from ag2.observers import Observer
 from ag2.testing import TestConfig, Turn
 
@@ -79,7 +80,7 @@ class ToolRoundsConfig(ModelConfig):
         return _ToolRoundsClient(self.rounds)
 
     def create_files_client(self) -> "FilesClient":
-        raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
+        raise FilesAPIUnsupportedError(type(self).__name__)
 
 
 class _ToolRoundsClient(LLMClient):

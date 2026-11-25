@@ -85,7 +85,7 @@ class AssemblerMiddleware(BaseMiddleware):
             context.prompt = original_prompt
 
     @staticmethod
-    def validate_order(policies: list[AssemblyPolicy]) -> list[str]:
+    def validate_order(policies: Sequence[AssemblyPolicy]) -> list[str]:
         """Check for known-problematic policy orderings. Returns warnings."""
         warnings: list[str] = []
         names = [p.name for p in policies]

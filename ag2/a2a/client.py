@@ -262,7 +262,7 @@ class A2AClient(LLMClient):
     stateless on AG2 history (see ``mappers/history.py``).
     """
 
-    def __init__(  # type: ignore[no-any-unimported]
+    def __init__(
         self,
         *,
         card_url: str,

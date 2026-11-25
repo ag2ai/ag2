@@ -5,7 +5,7 @@ sidebarTitle: Decision Models
 
 # Decision Models
 
-A decision model answers **one typed question** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports two of them, [OpenAI's Decisions API](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe's Jev](/docs/user-guide/model_configuration#typesafe-jev-configuration). This page collects recipes for the everyday jobs they are built for.
+A decision model answers **typed questions** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports two of them, [OpenAI's Decisions API](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe's Jev](/docs/user-guide/model_configuration#typesafe-jev-configuration). This page collects recipes for the everyday jobs they are built for.
 
 On a decision model the agent's `response_schema` is not a format hint, it **is** the question. The prompt and the schema's description become the question text, and the answer comes back as a value of that schema together with the probabilities behind it.
 
@@ -21,8 +21,9 @@ On a decision model the agent's `response_schema` is not a format hint, it **is*
 | [Verification](#verification): check an artifact against a source | `bool`, one per failure mode | `True` / `False` per check |
 | [Feature extraction](#feature-extraction): signals for a downstream model | `bool`, one per signal | the probabilities as features |
 | [Image inspection](#image-inspection): a question about a photo | `bool` (OpenAI), `BoundingBox` (TypeSafe) | `True` / `False` plus the raw probability, or the box |
+| [Several questions at once](#several-questions-at-once): independent questions over the same input | a flat class whose fields are each one of the types above | an instance of the class, plus each field's answer |
 
-Anything else (`str`, a dataclass, another Pydantic model) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
+Anything else (`str`, a nested or optional field, a list) is rejected with `UnsupportedResponseSchemaError` before a request is sent. Decision models do not call tools or stream; keep those on the generative agent a decision hands off to.
 
 ## Set up
 
@@ -554,6 +555,105 @@ features = {d.name: r.response.metadata["noul"] for d, r in zip(detectors, repli
 ```
   </Tab>
 </Tabs>
+
+## Several questions at once
+
+Triage, intake forms, multi-signal checks. When several **independent** questions are asked about the same input, make the `response_schema` a flat class instead of running one agent per question. Each field is one question named after the field, and all of them go out in a single request, so the shared input is sent and billed once.
+
+A dataclass, a `TypedDict` or a Pydantic `BaseModel` all work. Every field must be required and must be a decision type (`bool`, a `0..1` float, an `Enum` of strings, an `IntEnum` numbered from `0`); the agent `prompt` is the shared context and is joined in front of each field's question.
+
+<Tabs>
+  <Tab title="OpenAI Decisions">
+```python linenums="1" hl_lines="20-23 29"
+from dataclasses import dataclass
+from enum import Enum, IntEnum
+from typing import Annotated
+
+from ag2 import Agent
+from ag2.config import OpenAIDecisionsConfig
+from ag2.response import Question
+
+class Department(Enum):
+    BILLING = "billing"
+    """Payments, invoicing, refunds."""
+    TECHNICAL = "technical"
+    """Bugs, outages, integrations."""
+
+class Urgency(IntEnum):
+    LOW = 0
+    HIGH = 1
+
+@dataclass
+class TicketTriage:
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+    department: Annotated[Department, Question("Which team should handle this ticket?")]
+    urgency: Annotated[Urgency, Question("How urgent is this ticket?")]
+
+triage = Agent(
+    "triage",
+    prompt="You triage support tickets.",
+    config=OpenAIDecisionsConfig(),
+    response_schema=TicketTriage,
+)
+
+reply = await triage.ask("I was charged twice this month.")
+await reply.content()  # TicketTriage(is_spam=False, department=Department.BILLING, urgency=Urgency.HIGH)
+reply.response.metadata["department"]["confidence"]  # 0.74
+```
+  </Tab>
+
+  <Tab title="TypeSafe">
+```python linenums="1" hl_lines="22-25 31"
+from dataclasses import dataclass
+from enum import Enum, IntEnum
+from typing import Annotated
+
+from ag2 import Agent
+from ag2.config import TypeSafeConfig
+from ag2.response import Question
+
+class Department(Enum):
+    BILLING = "billing"
+    """Payments, invoicing, refunds."""
+    TECHNICAL = "technical"
+    """Bugs, outages, integrations."""
+
+class Urgency(IntEnum):
+    LOW = 0
+    """Can wait a week."""
+    HIGH = 1
+    """Needs an answer today."""
+
+@dataclass
+class TicketTriage:
+    is_spam: Annotated[bool, Question("Is this message spam?")]
+    department: Annotated[Department, Question("Which team should handle this ticket?")]
+    urgency: Annotated[Urgency, Question("How urgent is this ticket?")]
+
+triage = Agent(
+    "triage",
+    prompt="You triage support tickets.",
+    config=TypeSafeConfig(),
+    response_schema=TicketTriage,
+)
+
+reply = await triage.ask("I was charged twice this month.")
+await reply.content()  # TicketTriage(is_spam=False, department=Department.BILLING, urgency=Urgency.HIGH)
+reply.response.metadata["department"]["confidence"]  # 0.74
+```
+  </Tab>
+</Tabs>
+
+- **Question per field.** A field's question comes from `Annotated[..., Question("...")]`, then `Field(description=...)`, then the `Enum` class docstring. A field with none of them raises `ValueError` before any request.
+- **The class takes no question of its own.** `ResponseSchema(TicketTriage, description=...)` or `Annotated[TicketTriage, Question(...)]` raises `ValueError`: put what the fields share in the agent `prompt`.
+- **Questions are named after the fields.** A Pydantic alias (`Field(alias="isSpam")`) changes only the JSON the class is validated from; the question and its metadata keep the field name.
+- **Mutually exclusive options belong in one `Enum` field.** Each field is answered independently, so three `bool` fields `is_billing`, `is_technical`, `is_sales` can all come back `True`. Ask "which one" as a single `Enum` field.
+- **Metadata is keyed by field.** `reply.response.metadata` is `{field: answer}`, each answer in the same per-provider shape as a single question's metadata (see [Set up](#set-up)).
+- **Options are described per field**, with `Question(options={...})` or member docstrings. Two fields may share option values, so `descriptions=` (OpenAI) and `criteria=` (TypeSafe) on the config apply to single-question schemas only and raise `ValueError` with a class.
+- **`boolean_threshold`** applies to every `bool` field.
+- **A refusal fails the whole reply.** If OpenAI declines any one question, `DecisionRefusedError` names that field; no partial result is returned.
+- **OpenAI takes at most 400 questions** per request; a class with more fields raises `UnsupportedResponseSchemaError`.
+- **Dependent questions** (where one question only makes sense after another's answer) still need separate `ask()` calls.
 
 ## Image inspection
 

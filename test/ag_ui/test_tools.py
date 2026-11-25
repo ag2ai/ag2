@@ -26,7 +26,7 @@ from ag_ui.core import (
     ToolMessage,
     UserMessage,
 )
-from dirty_equals import IsStr
+from dirty_equals import IsList, IsStr
 
 from ag2 import Agent, ToolResult
 from ag2.ag_ui import AGUIStream
@@ -204,10 +204,11 @@ class TestClientTools:
         events = await dispatch_events(AGUIStream(agent), incoming)
 
         # Parallel calls carry no order the client can rely on.
-        assert sorted(event.delta for event in each(events, ToolCallChunkEvent)) == [
+        assert [event.delta for event in each(events, ToolCallChunkEvent)] == IsList(
             '{"location":"London"}',
             '{"location":"Paris"}',
-        ]
+            check_order=False,
+        )
 
     async def test_server_and_client_tools_in_one_turn(self) -> None:
         agent = Agent(
@@ -243,7 +244,9 @@ async def _result_content(
     events = await dispatch_events(
         AGUIStream(agent), run_input(UserMessage(id="m1", content="go"), protocol_version=protocol_version)
     )
-    return wire(sole(events, ToolCallResultEvent))["content"]
+    content = wire(sole(events, ToolCallResultEvent))["content"]
+    assert isinstance(content, str | list)
+    return content
 
 
 class TestAResultForAOneZeroClient:

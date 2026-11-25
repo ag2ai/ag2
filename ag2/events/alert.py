@@ -31,7 +31,7 @@ class ObserverAlert(BaseEvent):
     """
 
     source: str  # Observer name that produced this alert
-    severity: Severity  # Severity level (uses Severity enum values, but accepts any string)
+    severity: Severity | str  # Severity level (uses Severity enum values, but accepts any string)
     message: str  # Human/LLM-readable description
     data: dict[str, Any] = Field(default_factory=dict)  # Optional structured payload
 

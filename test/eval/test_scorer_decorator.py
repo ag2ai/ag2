@@ -68,7 +68,13 @@ class TestSignatureInjection:
         captured: dict[str, Any] = {}
 
         @scorer
-        def full(inputs, outputs, reference_outputs, trace, task) -> bool:  # type: ignore[no-untyped-def]
+        def full(
+            inputs: dict[str, Any],
+            outputs: dict[str, Any],
+            reference_outputs: dict[str, Any] | None,
+            trace: Trace,
+            task: Task,
+        ) -> bool:
             captured["inputs"] = inputs
             captured["outputs"] = outputs
             captured["reference_outputs"] = reference_outputs
@@ -99,7 +105,7 @@ class TestSignatureInjection:
         with pytest.raises(TypeError, match="not injectable"):
 
             @scorer
-            def bad(trace, surprise) -> bool:  # type: ignore[no-untyped-def]
+            def bad(trace: Trace, surprise: str) -> bool:
                 return True
 
     def test_var_args_rejected(self) -> None:

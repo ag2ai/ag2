@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import acp
 import pytest
+from acp import schema
 from acp.exceptions import RequestError
 
 from ag2 import Agent
@@ -172,7 +173,7 @@ class TestConnectionScope:
 
         async with connect(server) as (conn, _):
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=leaked, prompt=[acp.text_block("hi")])
+                await conn.prompt(session_id=leaked, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
     async def test_re_initializing_one_connection_keeps_its_sessions(self) -> None:
         """A Client may call initialize again; that must not wipe its own work."""
@@ -182,7 +183,9 @@ class TestConnectionScope:
             session = await conn.new_session(cwd="/tmp")
             await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-            response = await conn.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            response = await conn.prompt(
+                session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")]
+            )
 
         assert response.stop_reason == "end_turn"
 
@@ -247,7 +250,7 @@ class TestInitializeIsRequired:
             with pytest.raises(RequestError):
                 await conn.new_session(cwd="/tmp")
             with pytest.raises(RequestError):
-                await conn.prompt(session_id=leaked, prompt=[acp.text_block("hi")])
+                await conn.prompt(session_id=leaked, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
     async def test_initializing_then_authenticating_works(self) -> None:
         server = ACPAgent(_agent(), auth=StaticTokenAuth("s3cret"))
@@ -287,14 +290,14 @@ class TestConcurrentConnectionsAreIsolated:
 
             await first.authenticate(method_id="token", token="s3cret")
             with pytest.raises(RequestError):
-                await first.prompt(session_id=theirs, prompt=[acp.text_block("hi")])
+                await first.prompt(session_id=theirs, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
     async def test_updates_go_only_to_the_connection_that_prompted(self) -> None:
         server = ACPAgent(_agent("ok", "ok"))
 
         async with connect(server) as (first, watcher), connect(server) as (second, owner):
             session = await second.new_session(cwd="/tmp")
-            await second.prompt(session_id=session.session_id, prompt=[acp.text_block("hi")])
+            await second.prompt(session_id=session.session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
             assert owner.updates
             assert watcher.updates == []
@@ -309,6 +312,6 @@ class TestConcurrentConnectionsAreIsolated:
 
                 assert mine != theirs
                 # The older connection still owns its own session.
-                response = await first.prompt(session_id=mine, prompt=[acp.text_block("hi")])
+                response = await first.prompt(session_id=mine, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
         assert response.stop_reason == "end_turn"

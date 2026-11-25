@@ -117,7 +117,8 @@ class ProbeAttributor:
         """Where probes are trained and applied."""
         if self._device is not None:
             return self._device
-        return next(self.extractor.model.parameters()).device  # type: ignore[no-any-return]
+        device: torch.device = next(self.extractor.model.parameters()).device
+        return device
 
     @property
     def site(self) -> ActivationSite:

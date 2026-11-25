@@ -18,12 +18,10 @@ from ag2.tools.schemas import ToolSchema
 
 from .decisions_mappers import (
     PROVIDER,
-    answer_metadata,
-    answer_to_content,
+    answers_to_reply,
     convert_input,
-    find_answer,
     normalize_usage,
-    response_proto_to_question,
+    response_proto_to_questions,
     tool_to_api,
     with_prompt,
 )
@@ -81,7 +79,7 @@ class OpenAIDecisionsClient(LLMClient):
         for t in tools:
             tool_to_api(t)
 
-        question = response_proto_to_question(
+        questions = response_proto_to_questions(
             response_schema,
             instructions=with_prompt(self._question_instructions, "\n".join(s for s in context.prompt if s)),
             serializer=serializer,
@@ -91,16 +89,13 @@ class OpenAIDecisionsClient(LLMClient):
         decision = await self._client.decisions.create(
             model=self._model,
             input=convert_input(messages, serializer),
-            questions=[question],
+            questions=questions,
             safety_identifier=self._safety_identifier,
             extra_body=self._extra_body,
         )
 
-        answer = find_answer(decision)
-        model_msg = ModelMessage(
-            answer_to_content(response_schema, answer, boolean_threshold=self._boolean_threshold),
-            metadata=answer_metadata(answer),
-        )
+        content, metadata = answers_to_reply(response_schema, decision, boolean_threshold=self._boolean_threshold)
+        model_msg = ModelMessage(content, metadata=metadata)
         await context.send(model_msg)
 
         return ModelResponse(

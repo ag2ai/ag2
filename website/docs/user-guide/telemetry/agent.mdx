@@ -101,11 +101,11 @@ Spans carry standard [OpenTelemetry GenAI attributes](https://opentelemetry.io/d
 | `gen_ai.request.model` | agent, llm | Model name (e.g. `gpt-4o-mini`) -- auto-detected |
 | `gen_ai.response.model` | llm | Resolved model name from response |
 | `gen_ai.response.finish_reasons` | llm | Finish reasons (e.g. `["stop"]`, `["tool_calls"]`) |
-| `gen_ai.usage.input_tokens` | llm | Prompt token count |
+| `gen_ai.usage.input_tokens` | llm | Prompt token count, including tokens read from and written to the prompt cache |
 | `gen_ai.usage.output_tokens` | llm | Completion token count |
-| `gen_ai.usage.cache_creation_input_tokens` | llm | Tokens used to create prompt cache (Anthropic) |
+| `gen_ai.usage.cache_creation_input_tokens` | llm | Part of `input_tokens` written to the prompt cache (Anthropic, Bedrock, OpenAI) |
 | `gen_ai.usage.cache_creation_extended_input_tokens` | llm | Part of `cache_creation_input_tokens` written with extended [prompt cache retention](/docs/user-guide/model_configuration#openai-prompt-cache-retention) (OpenAI 12h, Anthropic 1h); absent when the provider reports no per-retention breakdown |
-| `gen_ai.usage.cache_read_input_tokens` | llm | Tokens read from prompt cache (Anthropic, OpenAI, Gemini) |
+| `gen_ai.usage.cache_read_input_tokens` | llm | Part of `input_tokens` read from the prompt cache (Anthropic, Bedrock, OpenAI, Gemini, Mistral, xAI, Z.ai) |
 | `gen_ai.tool.name` | tool | Tool function name |
 | `gen_ai.tool.call.id` | tool | Tool call ID |
 | `gen_ai.tool.type` | tool | Tool type (always `function`) |
@@ -237,4 +237,4 @@ agent = Agent(
 
 Since `#!python TelemetryMiddleware` emits standard OpenTelemetry spans, any OTLP-compatible backend works — Grafana Tempo, Jaeger, Datadog, Honeycomb, Langfuse, Arize AX, Arize Phoenix, and others. Swap the `#!python ConsoleSpanExporter` from the Quick Start above for an `#!python OTLPSpanExporter` pointed at your backend (or a local OpenTelemetry Collector); nothing else about the instrumentation changes.
 
-For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/guides/ai-agent-handbook/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.
+For Arize users, [Arize AX](https://arize.com/docs/ax/integrations/python-agent-frameworks/ag2/ag2-tracing){.external-link target="_blank"} provides a managed production path for tracing, evaluating, and monitoring AG2 agents, while [Arize Phoenix](https://arize.com/docs/phoenix){.external-link target="_blank"} is the open-source path for local development or self-hosted inspection. The same traces can support follow-on workflows such as [agent evaluation](https://arize.com/ai-agents/agent-evaluation/){.external-link target="_blank"} and [LLM evaluation](https://arize.com/resources/llm-evaluation/){.external-link target="_blank"}.

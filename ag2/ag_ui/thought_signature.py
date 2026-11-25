@@ -45,7 +45,9 @@ def restore_tool_call(
 ) -> events.ToolCallEvent:
     """A replayed tool call, carrying its signature back where the provider needs one."""
     if provider in GEMINI_FAMILY and encrypted_value is not None and GeminiToolCallEvent is not None:
-        return GeminiToolCallEvent(id=id, name=name, arguments=arguments, thought_signature=b64decode(encrypted_value))
+        return GeminiToolCallEvent(
+            id=id, name=name, arguments=arguments, thought_signature=b64decode(encrypted_value, validate=True)
+        )
     return events.ToolCallEvent(id=id, name=name, arguments=arguments)
 
 

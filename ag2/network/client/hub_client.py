@@ -37,12 +37,15 @@ participant names without a round-trip per render.
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, overload
+
+from pydantic import JsonValue
 
 from ag2.agent import Agent
 from ag2.task import TaskMetadata, TaskState
 
-from ..adapters.base import ChannelAdapter
+from ..adapters.base import AdapterState, ChannelAdapter, StateT, _narrow_state
 from ..channel import ChannelMetadata, ChannelState
 from ..envelope import Envelope
 from ..errors import AccessDeniedError, AuthError, NetworkError, NotFoundError, ProtocolError
@@ -91,7 +94,7 @@ def _error_from_code(code: str, message: str) -> NetworkError:
     return _ERROR_CLASSES.get(code, NetworkError)(message)
 
 
-def _default_adapters() -> list[ChannelAdapter]:
+def _default_adapters() -> list[ChannelAdapter[Any]]:
     """Construct the built-in adapters for the client-side registry.
 
     Stateless instances — every routing decision derives from channel
@@ -155,7 +158,7 @@ class HubClient:
         # notify handler can resolve adapters and fold state locally.
         # Harmless in-process (adapter resolution still delegates to the
         # hub there for authoritative behaviour).
-        self._adapters: dict[tuple[str, int], ChannelAdapter] = {}
+        self._adapters: dict[tuple[str, int], ChannelAdapter[Any]] = {}
         for adapter in _default_adapters():
             self._adapters[(adapter.manifest.type, adapter.manifest.version)] = adapter
 
@@ -272,9 +275,9 @@ class HubClient:
             if not fut.done():
                 fut.set_exception(exc)
         self._pending.clear()
-        for fut in self._handshake_waiters:
-            if not fut.done():
-                fut.set_exception(exc)
+        for waiter in self._handshake_waiters:
+            if not waiter.done():
+                waiter.set_exception(exc)
         self._handshake_waiters.clear()
 
     async def _dispatch_notify(self, frame: NotifyFrame) -> None:
@@ -697,7 +700,10 @@ class HubClient:
     async def get_skill(self, agent_id: str) -> str | None:
         if self._hub is not None:
             return await self._hub.get_skill(agent_id)
-        return await self._rpc("get_skill", {"agent_id": agent_id})
+        skill_md = await self._rpc("get_skill", {"agent_id": agent_id})
+        if skill_md is None or isinstance(skill_md, str):
+            return skill_md
+        raise NetworkError(f"get_skill returned {type(skill_md).__name__}, expected a string or null")
 
     def find_agent_id(self, name: str) -> str | None:
         """Non-raising name → agent_id lookup.
@@ -782,7 +788,7 @@ class HubClient:
         participants: list[str],
         required_acks: int | None = None,
         ttl: str | int | None = None,
-        knobs: dict[str, object] | None = None,
+        knobs: Mapping[str, JsonValue] | None = None,
         intent: str | None = None,
         labels: dict[str, str] | None = None,
     ) -> ChannelMetadata:
@@ -808,7 +814,7 @@ class HubClient:
                     "participants": participants,
                     "required_acks": required_acks,
                     "ttl": ttl,
-                    "knobs": knobs,
+                    "knobs": dict(knobs) if knobs is not None else None,
                     "intent": intent,
                     "labels": labels,
                 },
@@ -853,7 +859,10 @@ class HubClient:
     async def post_envelope(self, envelope: Envelope) -> str:
         if self._hub is not None:
             return await self._hub.post_envelope(envelope)
-        return await self._rpc("post_envelope", {"envelope": envelope.to_dict()})
+        envelope_id = await self._rpc("post_envelope", {"envelope": envelope.to_dict()})
+        if isinstance(envelope_id, str):
+            return envelope_id
+        raise NetworkError(f"post_envelope returned {type(envelope_id).__name__}, expected a string")
 
     async def report_turn_failure(
         self,
@@ -881,7 +890,7 @@ class HubClient:
                 {"channel_id": channel_id, "agent_id": agent_id, "envelope_id": envelope_id, "error": str(exc)},
             )
 
-    async def fire_task_event(self, task_id: str, kind: str, payload: dict) -> None:
+    async def fire_task_event(self, task_id: str, kind: str, payload: dict[str, Any]) -> None:
         """Fan out an ``on_task_event`` through the hub's listener chain."""
         if self._hub is not None:
             await self._hub.fire_task_event(task_id, kind, payload)
@@ -952,7 +961,7 @@ class HubClient:
 
     # — Adapter / view / name resolution (client-side) —
 
-    def register_adapter(self, adapter: ChannelAdapter) -> None:
+    def register_adapter(self, adapter: ChannelAdapter[Any]) -> None:
         """Register a custom ``ChannelAdapter`` in the client-side registry.
 
         Required cross-process for any non-built-in channel type, so the
@@ -962,7 +971,7 @@ class HubClient:
         """
         self._adapters[(adapter.manifest.type, adapter.manifest.version)] = adapter
 
-    def adapter_for_metadata(self, metadata: ChannelMetadata) -> ChannelAdapter:
+    def adapter_for_metadata(self, metadata: ChannelMetadata) -> ChannelAdapter[Any]:
         """Resolve the adapter for an already-fetched ``ChannelMetadata``.
 
         Synchronous — no I/O. In-process it delegates to the hub's
@@ -977,7 +986,7 @@ class HubClient:
             raise NotFoundError(f"no adapter registered for {key[0]!r}@v{key[1]}")
         return adapter
 
-    def adapter_for(self, channel_id: str) -> ChannelAdapter:
+    def adapter_for(self, channel_id: str) -> ChannelAdapter[Any]:
         """Resolve the adapter for ``channel_id``.
 
         In-process delegates to the hub. Cross-process resolves from the
@@ -992,7 +1001,13 @@ class HubClient:
             raise NotFoundError(f"channel metadata not cached: {channel_id} (fetch via get_channel first)")
         return self.adapter_for_metadata(metadata)
 
-    async def adapter_state(self, channel_id: str) -> object | None:
+    @overload
+    async def adapter_state(self, channel_id: str, state_type: None = None) -> AdapterState | None: ...
+
+    @overload
+    async def adapter_state(self, channel_id: str, state_type: type[StateT]) -> StateT | None: ...
+
+    async def adapter_state(self, channel_id: str, state_type: type[AdapterState] | None = None) -> AdapterState | None:
         """Return ``channel_id``'s folded adapter state, or ``None``.
 
         In-process this reads the hub's cached state. Cross-process it
@@ -1001,17 +1016,23 @@ class HubClient:
         ``hydrate()`` — so the notify handler sees consistent state
         without shipping the (non-serialisable) state object over the
         wire.
+
+        Pass ``state_type`` (e.g. ``WorkflowState``) to get the state typed
+        as that class; a channel of another type raises ``TypeError``.
         """
         if self._hub is not None:
-            return self._hub.adapter_state(channel_id)
+            return self._hub.adapter_state(channel_id, state_type)
         metadata = self._channel_meta.get(channel_id)
         if metadata is None:
             metadata = await self.get_channel(channel_id)
         adapter = self.adapter_for_metadata(metadata)
-        state = adapter.initial_state(metadata)
+        # The registry holds ``ChannelAdapter[Any]``; every fold state is an ``AdapterState``.
+        state: AdapterState = adapter.initial_state(metadata)
         for envelope in await self.read_wal(channel_id):
             state = adapter.fold(envelope, state)
-        return state
+        if state_type is None:
+            return state
+        return _narrow_state(channel_id, state, state_type)
 
     def default_view_policy(self, channel_id: str, participant_id: str) -> ViewPolicy:
         """Return the adapter-declared default view policy for a participant.
@@ -1148,7 +1169,10 @@ class HubClient:
         """Read back a task checkpoint, or ``None`` if none is stored."""
         if self._hub is not None:
             return await self._hub.read_task_checkpoint(task_id)
-        return await self._rpc("read_task_checkpoint", {"task_id": task_id})
+        checkpoint = await self._rpc("read_task_checkpoint", {"task_id": task_id})
+        if checkpoint is None or isinstance(checkpoint, dict):
+            return checkpoint
+        raise NetworkError(f"read_task_checkpoint returned {type(checkpoint).__name__}, expected an object or null")
 
     # ── Cache helpers ──────────────────────────────────────────────────────────
 

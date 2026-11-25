@@ -42,8 +42,10 @@ from .expectations import (
     MaxSilenceEvaluator,
     NotifyChannelHandler,
     ReplyWithinEvaluator,
+    TurnWithinEvaluator,
     Violation,
     ViolationHandler,
+    WarnHandler,
     default_evaluators,
     default_handlers,
 )
@@ -75,7 +77,7 @@ from .listener import BaseHubListener, HubListener
 try:
     from .telemetry import HubTelemetryListener
 except ImportError as e:
-    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)
+    HubTelemetryListener = missing_optional_dependency("HubTelemetryListener", "tracing", e)  # type: ignore[misc]
 
 __all__ = (
     "AUDIT_KIND_AGENT_REGISTERED",
@@ -112,8 +114,10 @@ __all__ = (
     "PendingTurn",
     "ReplyWithinEvaluator",
     "RuleBasedArbiter",
+    "TurnWithinEvaluator",
     "Violation",
     "ViolationHandler",
+    "WarnHandler",
     "agents_root",
     "audit_path",
     "by_capability_path",

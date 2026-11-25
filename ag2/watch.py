@@ -379,7 +379,7 @@ class Sequence(_BaseWatch):
         if not self._armed or self._stream is None:
             return
         if self._current_index < len(self._watches):
-            self._watches[self._current_index].arm(self._stream, self._step_handler)  # type: ignore[arg-type]
+            self._watches[self._current_index].arm(self._stream, self._step_handler)
 
     async def _step_handler(self, events: list[BaseEvent], ctx: Context) -> None:
         if not self._armed:

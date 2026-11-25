@@ -40,13 +40,12 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
-from ag2.response import DecisionSpec, NotADecisionError, ResponseProto, ResponseSchema
+from ag2.response import DecisionSet, DecisionSpec, NotADecisionError, ResponseProto, ResponseSchema
+from ag2.response.decision import ANSWER_KEY, DecisionValue
 from ag2.response.schema import strip_annotated
 from ag2.tools.schemas import ToolSchema
 
 PROVIDER = "typesafe"
-
-ANSWER_KEY = "answer"  # Name of the single question sent per request
 
 
 class BoundingBox(BaseModel):
@@ -68,7 +67,8 @@ class UnsupportedResponseSchemaError(NotADecisionError):
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"{reason} TypeSafe Jev is decision-only: use `bool`, an `Enum` of strings, a documented `IntEnum`, "
-            "a `0..1` number schema from `ResponseSchema.from_schema`, or `BoundingBox` as `response_schema`."
+            "a `0..1` number schema from `ResponseSchema.from_schema`, `BoundingBox`, or a flat class whose "
+            "required fields are each one of the decision types as `response_schema`."
         )
 
 
@@ -115,19 +115,48 @@ def _part_value(part: Input, serializer: SerializerProto) -> ContentValue | None
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
 
 
+def response_proto_to_questions(
+    response: ResponseProto[Any] | None,
+    *,
+    instructions: str | None,
+    criteria: Mapping[str, str] | None = None,
+) -> dict[str, Question]:
+    """Convert a ``response_schema`` to the named Jev questions of one request.
+
+    A scalar schema or ``BoundingBox`` is one question named ``"answer"``; a flat class is one
+    question per field, each led by the shared ``instructions``.
+    """
+    if _is_box(response):
+        return {ANSWER_KEY: response_proto_to_question(response, instructions=instructions, criteria=criteria)}
+
+    decisions = DecisionSet.from_response(response, error=UnsupportedResponseSchemaError)
+    if not decisions.is_scalar and criteria:
+        raise ValueError(
+            "`TypeSafeConfig(criteria=...)` is keyed by option value, so it only applies to a single-question "
+            "`response_schema`: describe each field's options with `Annotated[..., Question(options=...)]`."
+        )
+    return {
+        name: _spec_to_question(spec, instructions=instructions, criteria=criteria) for name, spec in decisions.items()
+    }
+
+
 def response_proto_to_question(
     response: ResponseProto[Any] | None,
     *,
     instructions: str | None,
     criteria: Mapping[str, str] | None = None,
 ) -> Question:
-    """Convert a ``response_schema`` to the single Jev question: noul, choice, score or box."""
+    """Convert a scalar ``response_schema`` to the single Jev question: noul, choice, score or box."""
     if _is_box(response):
         # The prompt says what to find; a description is only the caller's own (a docstring is not a question).
         explicit = response.explicit_description if isinstance(response, ResponseSchema) else None
         return Box(instructions="\n\n".join(s for s in (instructions, explicit) if s) or None)
 
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
+    return _spec_to_question(spec, instructions=instructions, criteria=criteria)
+
+
+def _spec_to_question(spec: DecisionSpec, *, instructions: str | None, criteria: Mapping[str, str] | None) -> Question:
     instructions = "\n\n".join(s for s in (instructions, spec.question) if s) or None
     criteria = criteria or {}
 
@@ -192,19 +221,50 @@ def answer_to_content(response: ResponseProto[Any] | None, answer: Answer, *, bo
         return BoundingBox(**edges).model_dump_json()
 
     spec = DecisionSpec.from_response(response, error=UnsupportedResponseSchemaError)
+    return spec.render(_answer_value(spec, answer, boolean_threshold=boolean_threshold))
 
-    value: bool | int | float | str
+
+def answers_to_reply(
+    response: ResponseProto[Any] | None, answers: Mapping[str, Answer], *, boolean_threshold: float = 0.5
+) -> tuple[str, dict[str, Any]]:
+    """Render the answers to every question as the schema's JSON, with the metadata for ``ModelMessage``.
+
+    The metadata is the answer itself for a single question, and ``{field: answer}`` for a class.
+    """
+    if _is_box(response):
+        answer = _named_answer(answers, ANSWER_KEY)
+        return answer_to_content(response, answer), answer_metadata(answer)
+
+    decisions = DecisionSet.from_response(response, error=UnsupportedResponseSchemaError)
+    values: dict[str, DecisionValue] = {}
+    metadata: dict[str, Any] = {}
+    for name, spec in decisions.items():
+        answer = _named_answer(answers, name)
+        values[name] = _answer_value(spec, answer, boolean_threshold=boolean_threshold)
+        metadata[name] = answer_metadata(answer)
+
+    return decisions.render(values), metadata[ANSWER_KEY] if decisions.is_scalar else metadata
+
+
+def _named_answer(answers: Mapping[str, Answer], name: str) -> Answer:
+    answer = answers.get(name)
+    if answer is None:
+        raise ValueError(f"TypeSafe returned no answer for question {name!r}.")
+    return answer
+
+
+def _answer_value(spec: DecisionSpec, answer: Answer, *, boolean_threshold: float) -> DecisionValue:
     if isinstance(answer, NoulAnswer):
-        value = spec.predicate_value(answer.noul, threshold=boolean_threshold)
-    elif isinstance(answer, ChoiceAnswer):
-        value = answer.choice
-    elif isinstance(answer, ScoreAnswer):
+        return spec.predicate_value(answer.noul, threshold=boolean_threshold)
+    if isinstance(answer, ChoiceAnswer):
+        return answer.choice
+    if isinstance(answer, ScoreAnswer):
         # `score` is the expected value on the 0..n-1 rubric; snap to the nearest level.
-        value = spec.snap_score(answer.score)
-    else:  # pragma: no cover - a box answer only answers a box question
-        raise UnsupportedResponseSchemaError(f"TypeSafe answered a decision with a {answer.type!r} answer.")
-
-    return spec.render(value)
+        return spec.snap_score(answer.score)
+    # A box answer only answers a box question.
+    raise UnsupportedResponseSchemaError(  # pragma: no cover
+        f"TypeSafe answered a decision with a {answer.type!r} answer."
+    )
 
 
 def normalize_usage(raw: TypeSafeUsage) -> Usage:

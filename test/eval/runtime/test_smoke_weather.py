@@ -49,14 +49,13 @@ async def get_weather(city: str) -> str:
     return f"Sunny, 72F in {city}"
 
 
-def _build_weather_agent(*, config: object = None) -> Agent:
+def _build_weather_agent() -> Agent:
     return Agent(
         "weather",
         prompt=(
             "You are a weather assistant. Use the get_weather tool to "
             "answer questions, and report the result back to the user."
         ),
-        config=config,
         tools=[get_weather],
     )
 

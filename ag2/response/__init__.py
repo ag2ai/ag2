@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .callable import response_schema
-from .decision import DecisionKind, DecisionOption, DecisionSpec, NotADecisionError, Question
+from .decision import DecisionKind, DecisionOption, DecisionSet, DecisionSpec, NotADecisionError, Question
 from .prompted import PromptedSchema
 from .proto import ResponseProto
 from .schema import ResponseSchema
@@ -11,6 +11,7 @@ from .schema import ResponseSchema
 __all__ = (
     "DecisionKind",
     "DecisionOption",
+    "DecisionSet",
     "DecisionSpec",
     "NotADecisionError",
     "PromptedSchema",

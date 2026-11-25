@@ -11,7 +11,9 @@ import textwrap
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
+import respx
 
 from ag2 import Context
 from ag2.events import ToolCallEvent, ToolErrorEvent
@@ -19,6 +21,7 @@ from ag2.exceptions import InvalidSkillError, SkillInstallError
 from ag2.stream import MemoryStream
 from ag2.tools.skills import LocalRuntime, SkillSearchToolkit
 from ag2.tools.skills.skill_search.client import SkillsClient
+from ag2.tools.skills.skill_search.config import SkillsClientConfig
 from ag2.tools.skills.skill_search.extractor import extract_skill
 from ag2.tools.skills.skill_search.lock import SkillsLock
 from ag2.tools.skills.skill_types import SkillMetadata
@@ -540,3 +543,63 @@ async def test_toolkit_individual_tools_accessible(tmp_path: Path, context: Cont
     for attr in tools:
         [schema] = await getattr(toolkit, attr)().schemas(context)
         assert schema.function.name == attr  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+class TestGithubTokenScope:
+    async def test_search_does_not_send_configured_token(self) -> None:
+        client = SkillsClient(SkillsClientConfig(github_token="config-token"))
+
+        with respx.mock(assert_all_called=True) as router:
+            route = router.get("https://skills.sh/api/search").mock(
+                return_value=httpx.Response(200, json={"skills": []}),
+            )
+            await client.search("react")
+
+        assert "authorization" not in route.calls.last.request.headers
+
+    async def test_search_does_not_send_env_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+        client = SkillsClient()
+
+        with respx.mock(assert_all_called=True) as router:
+            route = router.get("https://skills.sh/api/search").mock(
+                return_value=httpx.Response(200, json={"skills": []}),
+            )
+            await client.search("react")
+
+        assert "authorization" not in route.calls.last.request.headers
+
+    async def test_download_sends_token_to_github(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+        client = SkillsClient(SkillsClientConfig(github_token="config-token"))
+
+        with respx.mock(assert_all_called=True) as router:
+            route = router.get("https://api.github.com/repos/vercel-labs/agent-skills/tarball").mock(
+                return_value=httpx.Response(200, content=_monorepo_tarball()),
+            )
+            meta, _ = await client.download_skill(
+                "vercel-labs/agent-skills",
+                "react-best-practices",
+                LocalRuntime(dir=tmp_path / "skills"),
+            )
+
+        assert meta.name == "vercel-react-best-practices"
+        assert route.calls.last.request.headers["authorization"] == "Bearer config-token"
+
+    async def test_explicit_authorization_header_wins_on_download(self, tmp_path: Path) -> None:
+        client = SkillsClient(
+            SkillsClientConfig(github_token="config-token", headers={"Authorization": "token custom"}),
+        )
+
+        with respx.mock(assert_all_called=True) as router:
+            route = router.get("https://api.github.com/repos/vercel-labs/agent-skills/tarball").mock(
+                return_value=httpx.Response(200, content=_monorepo_tarball()),
+            )
+            await client.download_skill(
+                "vercel-labs/agent-skills",
+                "react-best-practices",
+                LocalRuntime(dir=tmp_path / "skills"),
+            )
+
+        assert route.calls.last.request.headers["authorization"] == "token custom"

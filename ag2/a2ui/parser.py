@@ -26,7 +26,10 @@ from .schema_manager import _registry_for_surface_catalog
 
 logger = logging.getLogger(__name__)
 
-_SINGLE_LINE_FENCE_INFO_STRING_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*(?=\s|[{[])")
+# The info string runs to the end of the line or to the start of a JSON payload
+# written on the fence's own line, whichever comes first.
+_OPENING_FENCE_RE = re.compile(r"\A`{3,}[^\n{[]*\n?")
+_CLOSING_FENCE_RE = re.compile(r"\s*`{3,}\Z")
 
 
 @dataclass
@@ -60,15 +63,12 @@ class A2UIParseResult:
 def strip_markdown_fences(text: str) -> str:
     """Remove markdown code fences (`````json ... `````) wrapping JSON content.
 
-    Handles multi-line fences (info string on the opening line) and single-line
-    fences with an optional info string (e.g. ```json {"a": 1}```).
+    The payload may start on the opening fence's line (e.g. ```json {"a": 1}```)
+    or on the next one, and the closing fence may share its last line or stand
+    on its own.
     """
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1] if "\n" in text else _SINGLE_LINE_FENCE_INFO_STRING_RE.sub("", text[3:], count=1)
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+    text = _OPENING_FENCE_RE.sub("", text.strip(), count=1)
+    return _CLOSING_FENCE_RE.sub("", text, count=1).strip()
 
 
 def _parse_json_block(json_part: str) -> "tuple[list[ServerToClientMessage], str | None]":

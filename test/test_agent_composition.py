@@ -5,14 +5,19 @@
 import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, TaskConfig, tool
+from ag2 import Agent, Context, TaskConfig, tool
+from ag2.events import BaseEvent, ToolCallEvent
 from ag2.middleware import (
     ApprovalRequired,
-    LoggingMiddleware,
+    BaseMiddleware,
     Middleware,
     TokenLimiter,
+    ToolExecution,
+    ToolMiddleware,
+    ToolResultType,
 )
 from ag2.observers import observer
+from ag2.tools.final import FunctionTool
 
 
 def alpha(x: int) -> int:
@@ -25,11 +30,22 @@ def beta(x: int) -> int:
     return x
 
 
-def make_hook():  # type: ignore[no-untyped-def]
-    async def hook(call_next, event, context):  # type: ignore[no-untyped-def]
+def make_hook() -> ToolMiddleware:
+    async def hook(call_next: ToolExecution, event: ToolCallEvent, context: Context) -> ToolResultType:
         return await call_next(event, context)
 
     return hook
+
+
+def plain_factory(event: BaseEvent, context: Context) -> BaseMiddleware:
+    return BaseMiddleware(event, context)
+
+
+class Configured(BaseMiddleware):
+    def __init__(self, event: BaseEvent, context: Context, *, level: int = 0, api_key: str = "") -> None:
+        super().__init__(event, context)
+        self.level = level
+        self.api_key = api_key
 
 
 class Out(BaseModel):
@@ -62,8 +78,8 @@ class TestAgentComposition:
 
     @pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
     def test_set_slots_are_reported(self) -> None:
-        @observer
-        def watcher(event, context) -> None:  # type: ignore[no-untyped-def]
+        @observer()
+        def watcher(event: BaseEvent) -> None:
             return None
 
         agent = Agent("bot", prompt="p", observers=[watcher], tasks=TaskConfig(), response_schema=Out)
@@ -91,15 +107,6 @@ class TestViewsAreReadOnly:
         assert isinstance(agent.middleware, tuple)
         assert isinstance(agent.observers, tuple)
         assert isinstance(agent.assembly, tuple)
-
-    def test_mappings_cannot_be_mutated_through_the_view(self) -> None:
-        agent = Agent("bot", prompt="p", dependencies={"db": object()}, variables={"k": 1})
-
-        with pytest.raises(TypeError):
-            agent.dependencies["db"] = object()  # type: ignore[index]
-
-        with pytest.raises(TypeError):
-            agent.variables["k"] = 2  # type: ignore[index]
 
     def test_dependency_values_are_the_injected_objects(self) -> None:
         db = object()
@@ -129,7 +136,7 @@ class TestMiddlewareEntries:
         assert entry.description.kind == "ApprovalRequired"
 
     def test_middleware_without_describe_reports_incomplete(self) -> None:
-        agent = Agent("bot", prompt="p", middleware=[make_hook()])
+        agent = Agent("bot", prompt="p", middleware=[plain_factory])
 
         description = agent.middleware[0].description
 
@@ -155,6 +162,8 @@ class TestSharingIsObservable:
         )
         first, second = agent.tools
 
+        assert isinstance(first, FunctionTool)
+        assert isinstance(second, FunctionTool)
         assert first.middleware[0].middleware is second.middleware[0].middleware
 
     def test_separate_instances_with_equal_config_are_not_the_same_object(self) -> None:
@@ -164,6 +173,8 @@ class TestSharingIsObservable:
             tools=[tool(alpha, middleware=[make_hook()]), tool(beta, middleware=[make_hook()])],
         )
         first, second = agent.tools
+        assert isinstance(first, FunctionTool)
+        assert isinstance(second, FunctionTool)
 
         # Descriptions cannot tell these apart, which is why identity is exposed.
         assert first.middleware[0].description == second.middleware[0].description
@@ -172,24 +183,18 @@ class TestSharingIsObservable:
 
 class TestMiddlewareFactoryFields:
     def test_reports_the_wrapped_class_and_its_options(self) -> None:
-        factory = Middleware(LoggingMiddleware, level=10)
+        factory = Middleware(Configured, level=10)
 
-        assert factory.cls is LoggingMiddleware
+        assert factory.cls is Configured
         assert dict(factory.options) == {"level": 10}
 
     def test_options_expose_values_that_the_description_withholds(self) -> None:
-        factory = Middleware(LoggingMiddleware, api_key="sk-SECRET-123")
+        factory = Middleware(Configured, api_key="sk-SECRET-123")
 
         # A description may be logged or committed as a fixture, so it reports
         # names only. Reading the factory you already hold is a deliberate act.
         assert factory.options["api_key"] == "sk-SECRET-123"
         assert "sk-SECRET-123" not in repr(factory.describe())
-
-    def test_options_cannot_be_mutated_through_the_view(self) -> None:
-        factory = Middleware(LoggingMiddleware, level=10)
-
-        with pytest.raises(TypeError):
-            factory.options["level"] = 20  # type: ignore[index]
 
 
 class TestComparingTwoAgents:

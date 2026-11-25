@@ -17,6 +17,8 @@ from .interrupts import (
     PAYLOAD_REFUSED,
     TOOL_CALL_REASON,
     UNSUPPORTED_PROTOCOL_VERSION,
+    ChoicePayload,
+    ResumePayload,
     Retention,
 )
 from .run_input import read_run_input
@@ -32,6 +34,8 @@ __all__ = (
     "UNSUPPORTED_PROTOCOL_VERSION",
     "AGUIEvent",
     "AGUIStream",
+    "ChoicePayload",
+    "ResumePayload",
     "Retention",
     "RunAgentInput",
     "read_run_input",

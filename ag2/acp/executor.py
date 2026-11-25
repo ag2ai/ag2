@@ -18,6 +18,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 import acp
+from acp import schema
 
 from ag2.agent import Agent
 from ag2.context import ConversationContext
@@ -33,7 +34,7 @@ from ag2.exceptions import HumanInputError
 from ag2.history import CANCELLED_TOOL_RESULT, close_unanswered_tool_calls
 from ag2.utils import AGENT_CONTEXT_DEPENDENCY_KEY
 
-from .mappers import event_to_session_update, prompt_to_inputs
+from .mappers import event_to_session_update, prompt_to_inputs, text_block
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -236,7 +237,11 @@ class AgentExecutor:
         final = getattr(message, "content", "") or ""
         if not final or final == "".join(delivered):
             return
-        await self._deliver(acp.update_agent_message_text(final), client=client, session_id=session_id)
+        await self._deliver(
+            schema.AgentMessageChunk(content=text_block(final)),
+            client=client,
+            session_id=session_id,
+        )
 
     async def deliver(self, updates: "Iterable[SessionUpdate]", *, client: acp.Client, session_id: str) -> None:
         """Push ``updates`` to the Client in order, stopping at the first that fails.

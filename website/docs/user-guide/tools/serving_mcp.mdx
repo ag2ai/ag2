@@ -665,8 +665,8 @@ Error classes live in `ag2.mcp.errors`, all under `MCPServerError` except the la
 
 ## Beyond the conversational tool
 
-- **MCP-UI** — see [MCP-UI Resources](/docs/user-guide/tools/mcp_ui) for returning renderable UI from a `@mcp_tool`.
 - **MCP Apps** — pass `apps=[MCPApp(...)]` to serve an interactive document and its bound tools together; see [MCP Apps](/docs/user-guide/tools/mcp_apps).
+- **MCP-UI (legacy)** — see [MCP-UI (legacy embedded resources)](/docs/user-guide/tools/mcp_ui) for clients that render only MCP-UI resources; use [MCP Apps](/docs/user-guide/tools/mcp_apps) for new work.
 - **Structured custom tools** — a pydantic model or dataclass return annotation supplies `outputSchema`; its value is returned as `structuredContent`, while `__str__` supplies readable text. `output_schema=` can override derivation and `meta=` adds extension metadata.
 - **Resources and prompts** are exposed by passing `resources=[Resource(...)]`, `resource_templates=[ResourceTemplate(...)]` and `prompts=[Prompt(...)]` from `ag2.mcp`.
 - **Protocol extensions** are advertised with `extensions=` and inspected per request with `client_extension()`.

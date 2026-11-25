@@ -47,7 +47,10 @@ class _EchoAgent:
         return schema.NewSessionResponse(session_id="remote-session-1")
 
     async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
-        await self.conn.session_update(session_id=session_id, update=acp.update_agent_message_text(REPLY))
+        await self.conn.session_update(
+            session_id=session_id,
+            update=schema.AgentMessageChunk(content=schema.TextContentBlock(type="text", text=REPLY)),
+        )
         return schema.PromptResponse(stop_reason="end_turn")
 
 

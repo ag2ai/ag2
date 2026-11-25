@@ -2,13 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import MagicMock
-
 import pytest
 
-from ag2 import Context
-
-
-@pytest.fixture
-def context() -> Context:
-    return Context(stream=MagicMock())
+e2b = pytest.importorskip("e2b")

@@ -28,8 +28,11 @@ them through the expectation sweeper.
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from pydantic import JsonValue
 
 from ag2.events import BaseEvent, DataInput, Input, TextInput, ToolCallEvent, ToolResultEvent
 
@@ -74,8 +77,10 @@ from .base import (
 
 if TYPE_CHECKING:
     from ag2.agent import AgentReply
+    from ag2.tools.tool import Tool
 
-    from ..hub.core import Hub
+    from ..client.agent_client import AgentClient
+    from ..client.hub_client import HubClient
 
 __all__ = ("WORKFLOW_TYPE", "WorkflowAdapter", "WorkflowState")
 
@@ -108,6 +113,57 @@ def _is_substantive(envelope: Envelope) -> bool:
     return envelope.event_type in (EV_TEXT, EV_PACKET)
 
 
+def _context_updates(data: JsonValue) -> tuple[dict[str, JsonValue], list[str]] | None:
+    """Read a ``{"set": {...}, "delete": [...]}`` context mutation.
+
+    An absent or ``null`` field means no change. Returns ``None`` when the
+    shape is wrong (including falsy values of the wrong type, such as
+    ``{"set": []}``): ``validate_send`` rejects such an envelope, and
+    ``fold`` ignores it so a WAL that already holds one still replays.
+    """
+    if data is None:
+        return {}, []
+    if not isinstance(data, dict):
+        return None
+    to_set = data.get("set")
+    to_delete = data.get("delete")
+    if to_set is None:
+        to_set = {}
+    if to_delete is None:
+        to_delete = []
+    if not isinstance(to_set, dict) or not isinstance(to_delete, list):
+        return None
+    keys: list[str] = []
+    for key in to_delete:
+        if not isinstance(key, str):
+            return None
+        keys.append(key)
+    return to_set, keys
+
+
+def _malformed_context_updates(metadata: ChannelMetadata, field: str) -> str:
+    return f"workflow {metadata.channel_id!r} {field} needs 'set' as an object and 'delete' as a list of strings"
+
+
+def _routing(envelope: Envelope) -> dict[str, JsonValue]:
+    """The packet's ``routing`` object, or ``{}`` when absent or malformed."""
+    routing = envelope.event_data.get("routing")
+    return routing if isinstance(routing, dict) else {}
+
+
+def _apply_context_updates(context: dict[str, JsonValue], data: JsonValue) -> dict[str, JsonValue]:
+    """Return ``context`` with a well-formed mutation applied; a malformed one changes nothing."""
+    updates = _context_updates(data)
+    if updates is None:
+        return context
+    to_set, to_delete = updates
+    new_context = dict(context)
+    for key in to_delete:
+        new_context.pop(key, None)
+    new_context.update(to_set)
+    return new_context
+
+
 @dataclass(slots=True)
 class WorkflowState:
     """Folded state for a workflow channel.
@@ -129,7 +185,7 @@ class WorkflowState:
     pending_close_reason: str = ""
     creator_id: str = ""
     graph_data: dict[str, Any] = field(default_factory=dict)
-    context_vars: dict[str, Any] = field(default_factory=dict)
+    context_vars: dict[str, JsonValue] = field(default_factory=dict)
 
 
 class WorkflowAdapter:
@@ -197,10 +253,7 @@ class WorkflowAdapter:
         # they're auxiliary metadata, applied before the substantive
         # gate so the new value is visible to the next fold.
         if envelope.event_type == EV_CONTEXT_SET:
-            new_vars = dict(state.context_vars)
-            for key in envelope.event_data.get("delete", []) or []:
-                new_vars.pop(key, None)
-            new_vars.update(envelope.event_data.get("set", {}) or {})
+            new_vars = _apply_context_updates(state.context_vars, envelope.event_data)
             return WorkflowState(
                 participant_order=state.participant_order,
                 expected_next_speaker=state.expected_next_speaker,
@@ -224,10 +277,7 @@ class WorkflowAdapter:
         # advance).
         new_context = dict(state.context_vars)
         if envelope.event_type == EV_PACKET:
-            updates = envelope.event_data.get("context_updates", {}) or {}
-            for key in updates.get("delete", []) or []:
-                new_context.pop(key, None)
-            new_context.update(updates.get("set", {}) or {})
+            new_context = _apply_context_updates(new_context, envelope.event_data.get("context_updates"))
 
         # Build the post-fold state with bookkeeping advanced; speaker
         # selection happens against this state so transitions see the
@@ -253,13 +303,15 @@ class WorkflowAdapter:
         # static rules (``ToolCalled``, ``ContextEquals``,
         # ``FromSpeaker``) decide.
         finish_reason: str | None = None
-        pre_resolved = None
+        pre_resolved: str | None = None
         if envelope.event_type == EV_PACKET:
-            routing = envelope.event_data.get("routing", {}) or {}
+            routing = _routing(envelope)
             if routing.get("kind") == "finish":
-                finish_reason = routing.get("reason") or "finished"
+                reason = routing.get("reason")
+                finish_reason = reason if isinstance(reason, str) and reason else "finished"
             elif routing.get("kind") == "handoff":
-                pre_resolved = routing.get("target")
+                target = routing.get("target")
+                pre_resolved = target if isinstance(target, str) else None
 
         if finish_reason is not None:
             new_state.expected_next_speaker = None
@@ -305,9 +357,17 @@ class WorkflowAdapter:
                     f"workflow {metadata.channel_id!r} only accepts EV_CONTEXT_SET "
                     f"from participants, got {envelope.sender_id!r}"
                 )
+            if _context_updates(envelope.event_data) is None:
+                raise ProtocolError(_malformed_context_updates(metadata, "EV_CONTEXT_SET"))
             return
         if not _is_substantive(envelope):
             return
+        if envelope.event_type == EV_PACKET:
+            routing = envelope.event_data.get("routing")
+            if routing is not None and not isinstance(routing, dict):
+                raise ProtocolError(f"workflow {metadata.channel_id!r} EV_PACKET 'routing' must be an object")
+            if _context_updates(envelope.event_data.get("context_updates")) is None:
+                raise ProtocolError(_malformed_context_updates(metadata, "EV_PACKET 'context_updates'"))
         if state.expected_next_speaker and envelope.sender_id != state.expected_next_speaker:
             raise ProtocolError(
                 f"workflow {metadata.channel_id!r} expects "
@@ -376,7 +436,7 @@ class WorkflowAdapter:
         reply: "AgentReply",
         events: list[BaseEvent],
         state: "WorkflowState | None",
-        hub: "Hub",
+        hub: "HubClient",
     ) -> Envelope | None:
         """Build the ``EV_PACKET`` envelope capturing this round.
 
@@ -414,7 +474,7 @@ class WorkflowAdapter:
             },
         )
 
-    def render_envelope(self, envelope):
+    def render_envelope(self, envelope: Envelope) -> list[TextInput] | None:
         """Project ``EV_PACKET`` via :func:`_packet_parts`; defer to
         :func:`default_render_envelope` for everything else (notably
         ``EV_TEXT`` for participant text emitted outside the
@@ -423,7 +483,13 @@ class WorkflowAdapter:
             return _packet_parts(envelope) or None
         return default_render_envelope(envelope)
 
-    def tools_for(self, client, metadata, state, participant_id):
+    def tools_for(
+        self,
+        client: "AgentClient",
+        metadata: ChannelMetadata,
+        state: WorkflowState,
+        participant_id: str,
+    ) -> "list[Tool]":
         """Workflow offers no adapter-level tools.
 
         Handoff routing is encoded by user-authored ``@tool`` functions
@@ -434,7 +500,15 @@ class WorkflowAdapter:
         """
         return default_tools_for(client, metadata, state, participant_id)
 
-    def build_text_envelope(self, channel_id, sender_id, text, *, audience=None, causation_id=None):
+    def build_text_envelope(
+        self,
+        channel_id: str,
+        sender_id: str,
+        text: str,
+        *,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         """Workflow accepts text seeds (e.g. for an initiator's first
         turn) as plain ``EV_TEXT`` — the adapter folds them into the
         round-end packet downstream."""
@@ -442,17 +516,17 @@ class WorkflowAdapter:
 
     def build_packet_envelope(
         self,
-        channel_id,
-        sender_id,
-        body,
+        channel_id: str,
+        sender_id: str,
+        body: str,
         *,
-        handoff=None,
-        context_set=None,
-        audience=None,
-        causation_id=None,
-    ):
+        handoff: Handoff | None = None,
+        context_set: Mapping[str, JsonValue] | None = None,
+        audience: list[str] | None = None,
+        causation_id: str | None = None,
+    ) -> Envelope:
         """Workflow's native round-end shape — handoff + context_set
-        live in ``routing`` / ``context`` fields."""
+        live in ``routing`` / ``context_updates`` fields."""
         return default_build_packet_envelope(
             channel_id,
             sender_id,
@@ -488,7 +562,7 @@ def _packet_parts(envelope: Envelope) -> list[TextInput]:
     serves the first turn after a handoff and the view projection, so the
     next speaker sees it identically on both. Empty when both are absent.
     """
-    routing = envelope.event_data.get("routing", {}) or {}
+    routing = _routing(envelope)
     body = envelope.event_data.get("body", "")
     if not isinstance(body, str):
         body = ""
@@ -508,7 +582,7 @@ def _resolve_routing(
     events: list[BaseEvent],
     graph: TransitionGraph | None,
     name_to_id: dict[str, str],
-) -> dict[str, Any]:
+) -> dict[str, JsonValue]:
     """Determine the packet's ``routing`` field from agent local-stream events.
 
     First-emitted-wins: walk ``ToolCallEvent``s in stream emission

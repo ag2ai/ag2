@@ -27,6 +27,9 @@ SessionUpdate: TypeAlias = (
     | schema.ConfigOptionUpdate
     | schema.SessionInfoUpdate
     | schema.UsageUpdate
+    | schema.SessionUpdateNotice
+    | schema.SessionUpdateCompactionUpdate
+    | schema.SessionUpdateCompactionSummaryChunk
 )
 
 # A single content block carried by message/thought chunks and tool-call content.
