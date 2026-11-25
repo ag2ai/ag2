@@ -35,7 +35,8 @@ from .lifecycle import (
     ObserverStarted,
     UnknownEvent,
 )
-from .sizing import estimated_tokens, render_for_prompt
+from .memory import MemoryInjected, MemoryItem
+from .sizing import estimated_text_tokens, estimated_tokens, render_for_prompt
 from .task_events import (
     TaskCancelled,
     TaskCompleted,
@@ -116,6 +117,8 @@ __all__ = (
     "ImageInput",
     "InertEvent",
     "Input",
+    "MemoryInjected",
+    "MemoryItem",
     "MessageEnqueued",
     "ModelMessage",
     "ModelMessageChunk",
@@ -154,6 +157,7 @@ __all__ = (
     "Usage",
     "UsageEvent",
     "VideoInput",
+    "estimated_text_tokens",
     "estimated_tokens",
     "is_conversational",
     "render_for_prompt",

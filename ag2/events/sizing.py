@@ -110,6 +110,15 @@ def estimated_tokens(event: BaseEvent, chars_per_token: int = 4) -> int:
     return total
 
 
+def estimated_text_tokens(text: str, chars_per_token: int = 4) -> int:
+    """Rough token size of a plain string, by the same ``chars_per_token`` rule
+    :func:`estimated_tokens` applies to event text.
+
+    For sizing injected prompt blocks, which are strings rather than events.
+    """
+    return len(text) // chars_per_token
+
+
 def render_for_prompt(event: BaseEvent) -> str:
     """Full, untruncated text of an event for a summarizer/memory prompt.
 

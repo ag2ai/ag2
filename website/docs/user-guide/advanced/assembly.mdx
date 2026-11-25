@@ -40,7 +40,7 @@ class AssemblyPolicy(Protocol):
         ...
 ```
 
-A policy receives the current `prompts` and `events`, returns modified copies. Policies compose left-to-right: each one sees the output of the previous. They must be pure — side-effect-free, idempotent where possible, and they must not emit events onto the stream (with one exception: `AlertPolicy` emits `HaltEvent` on FATAL, documented below).
+A policy receives the current `prompts` and `events`, returns modified copies. Policies compose left-to-right: each one sees the output of the previous. They must be pure — side-effect-free, idempotent where possible, and they must not emit events onto the stream (with two exceptions: `AlertPolicy` emits `HaltEvent` on FATAL, documented below, and `RetrievalMemoryPolicy` publishes the `MemoryInjected` record of what it injected, which evaluation reads).
 
 ## Wiring policies onto an Agent
 
@@ -93,7 +93,7 @@ Assembly policies split into two kinds:
 
 | Kind | Purpose | Examples |
 |---|---|---|
-| **Injection** | Add context to `prompts` | `AlertPolicy`, `WorkingMemoryPolicy`, `EpisodicMemoryPolicy` |
+| **Injection** | Add context to `prompts` | `AlertPolicy`, `WorkingMemoryPolicy`, `EpisodicMemoryPolicy`, `RetrievalMemoryPolicy` |
 | **Reduction** | Trim `events` | `SlidingWindowPolicy`, `TokenBudgetPolicy`, `ConversationPolicy` |
 
 The rule: **injection before reduction**. If a reducer runs first, the injections it should have included in its budget don't exist yet.
