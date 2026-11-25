@@ -314,7 +314,7 @@ print(usage.cache_creation_input_tokens)  # every token written to the cache
 print(usage.cache_creation_extended_input_tokens)  # the part written with the 1-hour lifetime
 ```
 
-1-hour writes are priced differently from 5-minute writes, so `usage.cache_creation_extended_input_tokens` lets cost accounting tell them apart. See the [Anthropic prompt caching guide](https://platform.claude.com/docs/en/build-with-claude/prompt-caching){.external-link target="_blank"} for pricing and minimum cacheable lengths.
+1-hour writes are priced differently from 5-minute writes, so `usage.cache_creation_extended_input_tokens` lets cost accounting tell them apart. With the `pricing` extra installed (`#!bash pip install "ag2[pricing]"`), `#!python (await reply.usage()).cost().total_usd` prices each call that way. See the [Anthropic prompt caching guide](https://platform.claude.com/docs/en/build-with-claude/prompt-caching){.external-link target="_blank"} for pricing and minimum cacheable lengths.
 
 #### Inference Speed
 
