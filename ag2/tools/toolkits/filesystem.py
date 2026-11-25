@@ -23,6 +23,7 @@ class FilesystemToolkit(Toolkit):
 
     All paths are resolved relative to *base_path*.  A path-traversal guard
     rejects any resolved path that escapes the base directory.
+    Text operations use UTF-8 and preserve line endings without translation.
 
     Individual tools are available as attributes and can be passed to an agent
     separately::
@@ -102,7 +103,8 @@ class FilesystemToolkit(Toolkit):
             # Windows installs and raises `UnicodeDecodeError` on any file
             # written with non-cp1252 content (most modern source files,
             # config files, JSON with non-ASCII strings, etc.).
-            return target.read_text(encoding="utf-8")
+            with target.open("r", encoding="utf-8", newline="") as file:
+                return file.read()
 
         return _read_file
 
@@ -164,7 +166,8 @@ class FilesystemToolkit(Toolkit):
             # code with non-ASCII docstrings). The platform-default
             # encoding is `cp1252` on most Windows machines and silently
             # raises `UnicodeEncodeError` mid-write.
-            target.write_text(content, encoding="utf-8")
+            with target.open("w", encoding="utf-8", newline="") as file:
+                file.write(content)
             return f"Successfully wrote {len(content)} characters to {path}"
 
         return _write_file
@@ -200,7 +203,10 @@ class FilesystemToolkit(Toolkit):
             # and writes the modified payload back in the same encoding.
             # Without this, the read/write pair on Windows would silently
             # transcode the file into cp1252 every time the model edits it.
-            text = target.read_text(encoding="utf-8")
+            # Disable universal-newline translation so matching and unrelated
+            # contents keep their original LF, CRLF, or CR line endings.
+            with target.open("r", encoding="utf-8", newline="") as file:
+                text = file.read()
             # "" matches at index 0 of any text, so on a non-empty file it would
             # silently prepend new_content. On an empty file it is the valid way
             # to fill a freshly created file.
@@ -208,7 +214,8 @@ class FilesystemToolkit(Toolkit):
                 raise ValueError("old_content must not be empty unless the file is empty")
             if old_content not in text:
                 raise ValueError(f"old_content not found in {path}")
-            target.write_text(text.replace(old_content, new_content, 1), encoding="utf-8")
+            with target.open("w", encoding="utf-8", newline="") as file:
+                file.write(text.replace(old_content, new_content, 1))
             return f"Successfully updated {path}"
 
         return _update_file
