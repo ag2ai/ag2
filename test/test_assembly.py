@@ -312,3 +312,16 @@ class TestWorkingMemoryPolicy:
 
 # NOTE: TestTopicInboxPolicy removed — TopicInboxPolicy was V2-network-specific.
 # Equivalent SessionInboxPolicy coverage lives with the V3 network tests.
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("max_episodes", [0, -1])
+async def test_nonpositive_episode_limit_leaves_prompt_and_history_untouched(max_episodes: int) -> None:
+    store = MemoryKnowledgeStore()
+    await store.write("/memory/conversations/20260101T120000_session.md", "An earlier conversation")
+    await store.write("/memory/conversations/20260102T120000_session.md", "A later conversation")
+    context = Context(stream=MemoryStream(), dependencies={KnowledgeStore: store})
+    prompts = ["Current instructions"]
+    events = [ModelRequest([TextInput("Current question")])]
+
+    assert await EpisodicMemoryPolicy(max_episodes=max_episodes).apply(prompts, events, context) == (prompts, events)
