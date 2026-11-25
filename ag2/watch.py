@@ -90,6 +90,7 @@ class EventWatch(_BaseWatch):
         self._callback: WatchCallback | None = None
 
     def arm(self, stream: Stream, callback: WatchCallback) -> None:
+        self.disarm()
         self._callback = callback
         self._stream = stream
         self._sub_id = stream.subscribe(self._handle_event, condition=self._condition)

@@ -8,7 +8,7 @@ import datetime
 import pytest
 
 from ag2 import Context
-from ag2.events import ModelMessage, ToolCallEvent
+from ag2.events import BaseEvent, ModelMessage, ToolCallEvent
 from ag2.stream import MemoryStream
 from ag2.watch import (
     AllOf,
@@ -622,3 +622,26 @@ class TestCronWatchExpressions:
         watch_zero = CronWatch("0 9 * * 0")
         now = datetime.datetime(2026, 3, 21, 10, 0, 0)
         assert watch_seven._next_fire_time(now) == watch_zero._next_fire_time(now)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("move_to_new_stream", [False, True])
+async def test_event_watch_rearm_replaces_previous_subscription(move_to_new_stream: bool) -> None:
+    first = MemoryStream()
+    second = MemoryStream() if move_to_new_stream else first
+    received: list[BaseEvent] = []
+
+    async def record(events: list[BaseEvent], _ctx: Context) -> None:
+        received.extend(events)
+
+    watch = EventWatch(ModelMessage)
+    watch.arm(first, record)
+    watch.arm(second, record)
+    if move_to_new_stream:
+        await Context(stream=first).send(ModelMessage("old stream"))
+    expected = ModelMessage("active stream")
+    await Context(stream=second).send(expected)
+    watch.disarm()
+    await Context(stream=first).send(ModelMessage("after disarm"))
+
+    assert received == [expected]
