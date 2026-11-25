@@ -16,6 +16,7 @@ from ag2.events import (
     CompactionCompleted,
     CompactionFailed,
     CompactionStarted,
+    DrainedModelRequest,
     ModelRequest,
     ModelResponse,
     ToolCallsEvent,
@@ -209,6 +210,10 @@ class _CompactionMiddlewareFactory:
         )
 
 
+def _starts_user_turn(event: BaseEvent) -> bool:
+    return isinstance(event, ModelRequest) and not isinstance(event, DrainedModelRequest) and event.origin == "user"
+
+
 class _AggregationMiddleware(BaseMiddleware):
     """Triggers aggregation after agent turns when thresholds are exceeded.
 
@@ -218,8 +223,8 @@ class _AggregationMiddleware(BaseMiddleware):
     would reset between turns and make ``every_n_turns=N`` for ``N>1``
     effectively dead.
 
-    ``every_n_turns`` counts :class:`ModelRequest` events in history
-    (one per user ask). ``every_n_events`` fires when the total history
+    ``every_n_turns`` counts user requests that start turns. Inbox drains
+    within a turn do not advance the count. ``every_n_events`` fires when the total history
     count crosses a multiple of the threshold during the current turn,
     which handles non-uniform growth (e.g. tool-heavy turns). ``on_end``
     fires unconditionally once the turn completes.
@@ -261,8 +266,10 @@ class _AggregationMiddleware(BaseMiddleware):
                 should_aggregate = True
 
             if self._trigger.every_n_turns > 0:
-                turn_count = sum(1 for e in events_after if isinstance(e, ModelRequest))
-                if turn_count > 0 and turn_count % self._trigger.every_n_turns == 0:
+                threshold = self._trigger.every_n_turns
+                before_turns = sum(map(_starts_user_turn, events_before))
+                after_turns = sum(map(_starts_user_turn, events_after))
+                if after_turns // threshold > before_turns // threshold:
                     should_aggregate = True
 
             if self._trigger.every_n_events > 0:
