@@ -23,6 +23,7 @@ from .glasser import GlasserResult, GlasserToolkit
 from .keenable import KeenableSearchToolkit
 from .serply import SerplySearchToolkit
 from .xquik import XquikSearchToolkit
+from .zenrows import ZenRowsToolkit
 
 __all__ = (
     "ExaToolkit",
@@ -33,4 +34,5 @@ __all__ = (
     "SerplySearchToolkit",
     "TinyFishSearchToolkit",
     "XquikSearchToolkit",
+    "ZenRowsToolkit",
 )
