@@ -94,9 +94,22 @@ class EventLogWriter:
         for line in content.strip().split("\n"):
             if not line:
                 continue
-            record = json.loads(line)
-            event_type = record["type"]
-            event_data = record["data"]
+
+            try:
+                record = json.loads(line)
+                event_type = record["type"]
+                event_data = record["data"]
+                # `import_event_class` splits the name, so a non-string type (JSON `null`,
+                # a number, a list) has to degrade with the malformed lines instead of
+                # raising AttributeError outside this guard.
+                if not isinstance(event_type, str):
+                    raise TypeError("event type must be a string")
+            except (json.JSONDecodeError, KeyError, TypeError):
+                # A line cut off mid-write (crash, full disk) or a foreign line
+                # degrades to a placeholder instead of failing the whole load —
+                # the same contract as the unknown-type fallback below.
+                events.append(UnknownEvent(type_name="", data={"raw": line}))
+                continue
 
             cls: type[BaseEvent] | None = import_event_class(event_type)
 
