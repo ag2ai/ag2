@@ -77,18 +77,14 @@ class MemoryRuntime(SkillRuntime):
         name: str,
         script: str,
         context: "ConversationContext",
-        args: dict[str, Any] | Sequence[str] | None = None,
+        args: dict[str, Any] | Sequence[str] | str | None = None,
     ) -> str:
         skill = self._get(name)
         entry = skill.get_script(script)
         if entry is None:
             raise FileNotFoundError(f"script {script!r} not found in memory skill {name!r}")
-        if args is not None and not isinstance(args, dict):
-            raise TypeError(
-                f"in-process script {script!r} requires named arguments (an object); "
-                "positional arguments (an array) are only supported for file-based scripts"
-            )
-        return _to_text(await _run_tool(entry.tool, args or {}, context, skill=name, part=f"script {script!r}"))
+        normalized_args = _normalize_script_args(script, args)
+        return _to_text(await _run_tool(entry.tool, normalized_args, context, skill=name, part=f"script {script!r}"))
 
     def invalidate(self) -> None:
         # Nothing is cached — discovery reads the in-memory dict directly.
@@ -109,6 +105,35 @@ class MemoryRuntime(SkillRuntime):
         if skill is None:
             raise SkillNotFoundError(f"Skill {name!r} not found in memory runtime")
         return skill
+
+
+def _normalize_script_args(script: str, args: dict[str, Any] | Sequence[Any] | str | None) -> dict[str, Any]:
+    if args is None:
+        return {}
+    if isinstance(args, dict):
+        return args
+    if isinstance(args, str):
+        try:
+            parsed = json.loads(args)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+    elif isinstance(args, Sequence) and len(args) == 1:
+        first = args[0]
+        if isinstance(first, dict):
+            return first
+        if isinstance(first, str):
+            try:
+                parsed = json.loads(first)
+                if isinstance(parsed, dict):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+    raise TypeError(
+        f"in-process script {script!r} requires named arguments (an object); "
+        "positional arguments (an array) are only supported for file-based scripts"
+    )
 
 
 async def _run_tool(

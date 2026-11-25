@@ -196,6 +196,31 @@ async def test_local_script_rejects_named_args_without_falling_through(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("script_args", [["a", 3], [{"k": 1}]])
+async def test_local_script_rejects_non_string_args(
+    tmp_path: Path, context: Context, script_args: list[object]
+) -> None:
+    local = _write_script_skill(tmp_path, "dup", "echo LOCAL\n")
+    skill = MemorySkill(name="dup", description="Fallback must not run")
+    calls: list[int] = []
+
+    @skill.script(name="go.sh")
+    def fallback(value: int = 0) -> str:
+        calls.append(value)
+        return "MEMORY"
+
+    run_tool = SkillsToolkit(MemoryRuntime(skill), LocalRuntime(dir=local)).run_skill_script()
+    args = json.dumps({"name": "dup", "script": "go.sh", "args": script_args})
+
+    result = await run_tool(ToolCallEvent(name="run_skill_script", arguments=args), context)
+
+    assert isinstance(result, ToolErrorEvent)
+    assert isinstance(result.error, TypeError)
+    assert "requires string arguments" in str(result.error)
+    assert calls == []
+
+
+@pytest.mark.asyncio
 async def test_missing_script_in_owning_runtime_does_not_fall_through(tmp_path: Path, context: Context) -> None:
     # The last runtime OWNS the skill but lacks the script: that is a genuine
     # error, not SkillNotFoundError, so the chain must NOT fall through and run

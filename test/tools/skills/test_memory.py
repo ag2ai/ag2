@@ -530,3 +530,87 @@ class TestMemoryRuntimeReadOnly:
     def test_lock_dir_raises(self) -> None:
         with pytest.raises(NotImplementedError):
             _ = MemoryRuntime(MemorySkill(name="a", description="d")).lock_dir
+
+
+@pytest.mark.asyncio
+class TestMemoryScriptArgumentShapes:
+    async def test_object_arguments(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.script
+        def format_card(city: str) -> str:
+            return f"card:{city}"
+
+        tracking = TrackingConfig(
+            TestConfig(_call("run_skill_script", name="s", script="format_card", args={"city": "Berlin"}), "done")
+        )
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+        await agent.ask("hi")
+        assert _tool_result(tracking) == "card:Berlin"
+
+    async def test_single_element_list_with_json_string(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.script
+        def format_card(city: str) -> str:
+            return f"card:{city}"
+
+        tracking = TrackingConfig(
+            TestConfig(
+                _call("run_skill_script", name="s", script="format_card", args=['{"city": "Berlin"}']),
+                "done",
+            )
+        )
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+        await agent.ask("hi")
+        assert _tool_result(tracking) == "card:Berlin"
+
+    async def test_single_element_list_with_dict(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.script
+        def format_card(city: str) -> str:
+            return f"card:{city}"
+
+        tracking = TrackingConfig(
+            TestConfig(
+                _call("run_skill_script", name="s", script="format_card", args=[{"city": "Berlin"}]),
+                "done",
+            )
+        )
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+        await agent.ask("hi")
+        assert _tool_result(tracking) == "card:Berlin"
+
+    async def test_json_string_arguments(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.script
+        def format_card(city: str) -> str:
+            return f"card:{city}"
+
+        tracking = TrackingConfig(
+            TestConfig(
+                _call("run_skill_script", name="s", script="format_card", args='{"city": "Berlin"}'),
+                "done",
+            )
+        )
+        agent = Agent("a", config=tracking, plugins=[SkillPlugin(skill)])
+        await agent.ask("hi")
+        assert _tool_result(tracking) == "card:Berlin"
+
+    async def test_non_dict_json_or_multi_args_raises_type_error(self) -> None:
+        skill = MemorySkill(name="s", description="d")
+
+        @skill.script
+        def format_card(city: str) -> str:
+            return f"card:{city}"
+
+        runtime = MemoryRuntime(skill)
+        ctx = ConversationContext(stream=MemoryStream())
+
+        with pytest.raises(TypeError, match="requires named arguments"):
+            await runtime.execute("s", "format_card", ctx, args=["one", "two"])
+
+        with pytest.raises(TypeError, match="requires named arguments"):
+            await runtime.execute("s", "format_card", ctx, args='["not", "dict"]')
