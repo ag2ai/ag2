@@ -1,0 +1,95 @@
+---
+title: kosa8 Integration
+sidebarTitle: kosa8
+---
+
+The `ag2.extensions.kosa8` module runs AG2 shell and code tools in [kosa8](https://kosa8.com/){.external-link target="_blank"} sandboxes. A kosa8 sandbox is a microVM with its own kernel; it can sleep and wake with its memory intact, be forked, and carry its own egress policy. The extension implements AG2's native sandbox factory, so one environment keeps its files across tool calls and deletes its sandbox when you close it.
+
+## Installation
+
+The extension talks to the kosa8 REST API with `httpx`, which AG2 already depends on, so there is no extra package to install:
+
+```bash
+pip install "ag2[anthropic]"
+```
+
+Create an API key in the [kosa8 dashboard](https://app.kosa8.com/){.external-link target="_blank"} and export it:
+
+```bash
+export KOSA8_API_KEY="k8c_live_..."
+```
+
+Set `KOSA8_API_URL` to use a kosa8 deployment other than `https://api.kosa8.com`, such as one on your own hosts.
+
+## Use kosa8 with an agent
+
+Use the environment as an async context manager. The sandbox is reused for every shell or code call inside the scope and deleted when the scope exits.
+
+```python linenums="1"
+import asyncio
+
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.kosa8 import Kosa8Environment
+from ag2.tools import SandboxCodeTool, SandboxShellTool
+
+async def main() -> None:
+    env = Kosa8Environment()
+    async with env:
+        agent = Agent(
+            "developer",
+            config=AnthropicConfig(model="claude-sonnet-5"),
+            tools=[SandboxShellTool(env), SandboxCodeTool(env.code_environment())],
+        )
+        reply = await agent.ask("Write hello.txt, then read it with Python.")
+        print(await reply.content())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Configure the sandbox
+
+The default `python` template is Python 3.12 on Alpine Linux, with `python` and busybox `sh` but no `bash`. `node` and `base` (Alpine with `sh` only) are the other small templates. `code_environment()` returns a `CodeAdapter` that runs `bash` snippets with `sh`; pass `languages=("python",)` to offer Python alone.
+
+Commands run in `/workspace`. Unless `persistent=True`, each command starts in a fresh container of the template image, and `/workspace` is the disk they share: files written there last for the life of the sandbox, while packages installed elsewhere (for example with `pip install --user`) are gone by the next command. Install into the workspace (`pip install --target /workspace/lib`) or create the sandbox `persistent`. `Kosa8Environment` satisfies [`WorkdirAware`](https://github.com/ag2ai/ag2/blob/main/ag2/tools/sandbox/factory.py){.external-link target="_blank"}, so `SandboxShellTool(env)` reports the working directory to the model on its own.
+
+```python linenums="1"
+from ag2.extensions.kosa8 import Kosa8Environment
+
+env = Kosa8Environment(
+    template="python",
+    name="my-agent-sandbox",
+    env_vars={"APP_ENV": "sandbox"},
+    labels={"team": "data"},
+    egress={"internet": False, "allow": ["pypi.org", "files.pythonhosted.org"]},
+    timeout=60,
+    ttl_s=900,
+)
+```
+
+| Parameter | Default | Purpose |
+| :--- | :--- | :--- |
+| `api_key` | `KOSA8_API_KEY` | API authentication |
+| `base_url` | `KOSA8_API_URL` or `https://api.kosa8.com` | API endpoint |
+| `template` | `"python"` | Template key (`python`, `node`, `base`, ...) |
+| `region` | Picked by kosa8 | Region to create sandboxes in |
+| `name` | None | Sandbox name shown in the dashboard |
+| `env_vars` | `{}` | Environment variables set on every command the sandbox runs |
+| `labels` | `{}` | Labels added to the sandbox; `created-by=ag2` is always set on top |
+| `egress` | Organization default | Network policy: `internet`, `allow`, `deny`, `presets` |
+| `persistent` | `False` | Run every command in one long-lived container (plan-limited) |
+| `timeout` | `60` seconds | Per-command timeout; above 90 s commands are streamed |
+| `start_timeout` | `300` seconds | How long to wait for a sandbox that boots cold |
+| `ttl_s` | `3600` seconds | Server-enforced lifetime backstop, 60 s to 90 days; `None` disables it |
+| `workdir` | `/workspace` | Working directory for commands and files |
+
+`api_key`, `base_url`, `template`, `region`, `name`, `env_vars` and `labels` accept [`Variable`](/docs/user-guide/context/variables) values for per-request resolution. Always close the environment with `async with` or `await env.aclose()`; a sandbox whose delete failed is retried by the next `aclose()`, and `ttl_s` is a fail-safe, not the normal cleanup path.
+
+A command that runs past its timeout is stopped in the sandbox and returns exit code `124`, with the output it printed before it was stopped.
+
+## Testing
+
+The bundled unit tests run against an in-memory fake of the kosa8 API (`httpx.MockTransport`), so no kosa8 account is needed for the AG2 test suite. Exercising the integration against real sandboxes requires a kosa8 account and a `KOSA8_API_KEY`.
+
+Maintainer: [kosa8](https://kosa8.com/){.external-link target="_blank"}.
