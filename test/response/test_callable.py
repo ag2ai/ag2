@@ -9,9 +9,10 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import Field
 
-from ag2 import Context, Depends, Variable
+from ag2 import Agent, Context, Depends, Variable
 from ag2.response import response_schema
 from ag2.stream import MemoryStream
+from ag2.testing import TestConfig
 
 
 class TestNameDescription:
@@ -447,3 +448,28 @@ class TestDependencyInjection:
         )
 
         assert result == "Alice(30) [fr]"
+
+
+@pytest.mark.asyncio
+async def test_reply_content_supports_positional_only_callback_with_keyword_fields() -> None:
+    @response_schema
+    def parse(value: int, /, *, unit: str) -> str:
+        return f"{value} {unit}"
+
+    agent = Agent("formatter", config=TestConfig('{"value": 3, "unit": "kg"}'), response_schema=parse)
+    reply = await agent.ask("Return the weight")
+
+    assert await reply.content() == "3 kg"
+
+
+@pytest.mark.asyncio
+async def test_async_callback_keeps_positional_only_dependency_injection() -> None:
+    @response_schema
+    async def parse(value: int, context: Context, /, *, unit: str) -> str:
+        return f"{value} {unit}" if context.stream is stream else "incorrect context"
+
+    stream = MemoryStream()
+    agent = Agent("formatter", config=TestConfig('{"value": 3, "unit": "kg"}'), response_schema=parse)
+    reply = await agent.ask("Return the weight", stream=stream)
+
+    assert await reply.content() == "3 kg"
