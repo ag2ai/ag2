@@ -36,7 +36,7 @@ from ag_ui.core import Context as ContextEntry
 
 from ag2 import Agent, Context, ToolResult
 from ag2.ag_ui import AGUIStream, read_run_input
-from ag2.config import ModelProvider, OpenAIConfig
+from ag2.config import ModelProvider, OpenAICompletionsConfig
 from ag2.config.gemini.events import GeminiToolCallEvent
 from ag2.events import (
     AudioInput,
@@ -339,7 +339,7 @@ class TestPartsTheProviderCannotTake:
         )
 
         with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
-            model = await _model_input(incoming, config=OpenAIConfig(model="gpt-4o", api_key="test"))
+            model = await _model_input(incoming, config=OpenAICompletionsConfig(model="gpt-4o", api_key="test"))
 
         assert model.turn == [TextInput("hello")]
         [record] = caplog.records
@@ -362,7 +362,7 @@ class TestPartsTheProviderCannotTake:
         )
 
         with caplog.at_level(logging.WARNING, logger="ag2.ag_ui"):
-            model = await _model_input(incoming, config=OpenAIConfig(model="gpt-4o", api_key="test"))
+            model = await _model_input(incoming, config=OpenAICompletionsConfig(model="gpt-4o", api_key="test"))
 
         [results] = [event for event in model.history if isinstance(event, ToolResultsEvent)]
         assert [r.result.parts for r in results.results] == [[TextInput("")]]

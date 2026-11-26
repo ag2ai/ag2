@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from ag2.config import AnthropicConfig, GeminiConfig, MistralConfig, OpenAIConfig, ZAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, MistralConfig, OpenAICompletionsConfig, ZAIConfig
 
 
 def _require(env: str) -> str:
@@ -36,8 +36,8 @@ def _require_gemini_key() -> str:
 
 
 @pytest.fixture()
-def openai_config() -> OpenAIConfig:
-    return OpenAIConfig(
+def openai_config() -> OpenAICompletionsConfig:
+    return OpenAICompletionsConfig(
         model="gpt-5.4-nano",
         api_key=_require("OPENAI_API_KEY"),
         temperature=0,
@@ -96,7 +96,7 @@ def streaming_config(request):
     Tests using this run once per provider with ``streaming=True``.
     """
     if request.param == "openai":
-        return OpenAIConfig(
+        return OpenAICompletionsConfig(
             model="gpt-5.4-nano",
             api_key=_require("OPENAI_API_KEY"),
             temperature=0,

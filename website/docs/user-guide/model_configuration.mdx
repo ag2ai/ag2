@@ -29,15 +29,13 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 
 Use `OpenAIResponsesConfig` for new OpenAI integrations. Use `OpenAICompletionsConfig` for the Chat Completions API and compatible endpoints.
 
-!!! warning "OpenAIConfig changes in 1.4.0"
+!!! warning "OpenAIConfig is the Responses API since 1.4.0"
 
-    `OpenAIConfig` still uses Chat Completions, but this compatibility name is deprecated.
-    Its `create()` method emits a `DeprecationWarning`; constructing or copying the config does not.
-    Use `OpenAICompletionsConfig` explicitly to preserve Chat Completions behavior, or migrate to
-    `OpenAIResponsesConfig` for the Responses API. In **1.4.0**, the deprecated Chat Completions
-    binding will be removed and `OpenAIConfig` will become an alias for `OpenAIResponsesConfig`.
-    Chat Completions parameters such as `max_completion_tokens` and `reasoning_effort` must be
-    translated to Responses parameters such as `max_output_tokens` and `reasoning` when migrating.
+    `OpenAIConfig` is an alias for `OpenAIResponsesConfig`. Before 1.4.0 it selected Chat Completions.
+    Code that relied on that, including OpenAI-compatible endpoints that serve only
+    `/chat/completions`, must use `OpenAICompletionsConfig`. Chat Completions parameters such as
+    `max_completion_tokens` and `reasoning_effort` are not accepted by `OpenAIConfig`; translate them to
+    Responses parameters such as `max_output_tokens` and `reasoning`.
 
 ---
 

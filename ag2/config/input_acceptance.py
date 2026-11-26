@@ -17,7 +17,6 @@ from ag2.config import (
     ModelConfig,
     OllamaConfig,
     OpenAICompletionsConfig,
-    OpenAIConfig,
     OpenAIResponsesConfig,
     TypeSafeConfig,
     VertexAIConfig,
@@ -111,8 +110,6 @@ def _described(config: ModelConfig | None) -> type[object] | None:
         return None
     # Compared by identity, never `isinstance`: a provider whose extra is not
     # installed is a stand-in here, not a class.
-    if type(config) is OpenAIConfig:
-        return OpenAICompletionsConfig
     return type(config) if type(config) in _MEDIA else None
 
 

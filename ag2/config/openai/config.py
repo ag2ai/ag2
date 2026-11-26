@@ -17,7 +17,7 @@ from openai.types.chat.completion_create_params import PromptCacheOptions, WebSe
 from openai.types.responses import ServiceTier as ResponseServiceTier
 from openai.types.responses.response_create_params import PromptCacheOptions as ResponsePromptCacheOptions
 from openai.types.shared_params import DecisionQuestionInputPart, Reasoning
-from typing_extensions import Unpack, deprecated
+from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 from ag2.events import Input
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from ag2.files.protocol import FilesClient
 
 
-class OpenAIConfigOverrides(TypedDict, total=False):
+class OpenAICompletionsConfigOverrides(TypedDict, total=False):
     model: ChatModel | str
     api_key: str | None
     base_url: str | None
@@ -130,7 +130,7 @@ class OpenAICompletionsConfig(ModelConfig):
     def provider(self) -> ModelProvider:
         return ModelProvider.OPENAI
 
-    def copy(self, /, **overrides: Unpack[OpenAIConfigOverrides]) -> Self:
+    def copy(self, /, **overrides: Unpack[OpenAICompletionsConfigOverrides]) -> Self:
         return replace(self, **overrides)
 
     def create(self) -> OpenAIClient:
@@ -184,24 +184,6 @@ class OpenAICompletionsConfig(ModelConfig):
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
-
-
-OPENAI_CONFIG_DEPRECATION = (
-    "OpenAIConfig as a Chat Completions config is deprecated and will be removed in 1.4.0. "
-    "Use OpenAICompletionsConfig explicitly to keep Chat Completions, or OpenAIResponsesConfig for the Responses API. "
-    "In 1.4.0, OpenAIConfig will become an alias for OpenAIResponsesConfig."
-)
-
-
-@deprecated(OPENAI_CONFIG_DEPRECATION, category=None)
-class OpenAIConfig(OpenAICompletionsConfig):
-    """Compatibility name for Chat Completions until the Responses alias switch in 1.4.0."""
-
-    __slots__ = ()
-
-    @deprecated(OPENAI_CONFIG_DEPRECATION)
-    def create(self) -> OpenAIClient:
-        return super().create()
 
 
 class OpenAIResponsesConfigOverrides(TypedDict, total=False):
@@ -324,6 +306,10 @@ class OpenAIResponsesConfig(ModelConfig):
 
     def create_files_client(self) -> OpenAIFilesClient:
         return OpenAIFilesClient(self)
+
+
+OpenAIConfig = OpenAIResponsesConfig
+"""The default OpenAI config: the Responses API. Use `OpenAICompletionsConfig` for Chat Completions."""
 
 
 class OpenAIDecisionsConfigOverrides(TypedDict, total=False):
