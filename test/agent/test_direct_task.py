@@ -2,8 +2,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -14,8 +12,6 @@ from ag2.events import BaseEvent, TaskCompleted, TaskFailed, TaskStarted, ToolCa
 from ag2.stream import MemoryStream
 from ag2.task import Task, TaskSpec, TaskState
 from ag2.testing import TestConfig
-
-DEPRECATION = r"Agent\.task\(\) is deprecated and will be removed in 1\.4\.0"
 
 
 class Checkpoints:
@@ -40,24 +36,6 @@ def task_events(events: list[BaseEvent]) -> list[BaseEvent]:
     return [event for event in events if isinstance(event, (TaskStarted, TaskCompleted, TaskFailed))]
 
 
-def legacy_task(agent: Agent, payload: dict[str, Any], context: Context, store: Checkpoints) -> Task:
-    with pytest.warns(DeprecationWarning, match=DEPRECATION) as records:
-        task = agent.task(
-            "index documents",
-            description="resume indexing",
-            payload=payload,
-            capability="indexing",
-            context=context,
-            ttl_seconds=60,
-            checkpoint_store=store,
-            resume_from="prior",
-        )
-    [record] = records
-    # The warning points at the user's call site, not at the framework.
-    assert Path(record.filename) == Path(__file__)
-    return task
-
-
 def direct_task(agent: Agent, payload: dict[str, Any], context: Context, store: Checkpoints) -> Task:
     return Task(
         owner_id=agent.name,
@@ -75,17 +53,14 @@ def direct_task(agent: Agent, payload: dict[str, Any], context: Context, store: 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("build", [direct_task, legacy_task], ids=["direct-task", "deprecated-factory"])
-async def test_migrating_to_direct_task_keeps_the_same_behaviour(build: Any) -> None:
+async def test_direct_task_owns_the_agent_run_lifecycle() -> None:
     agent = Agent("indexer", config=TestConfig(ToolCallEvent(name="report_progress"), "done"), tools=[report_progress])
     stream = MemoryStream()
     context = Context(stream=stream)
     store = Checkpoints()
     payload = {"region": "eu"}
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        task = build(agent, payload, context, store)
+    task = direct_task(agent, payload, context, store)
     payload["region"] = "us"
 
     async with task:
@@ -109,16 +84,3 @@ async def test_migrating_to_direct_task_keeps_the_same_behaviour(build: Any) -> 
         & HasAttributes(task_id=task.task_id, agent_name="indexer", spec=spec, expires_at=IsStr()),
         IsInstance(TaskCompleted) & HasAttributes(task_id=task.task_id, result={"indexed": 24}),
     ]
-
-
-@pytest.mark.asyncio
-async def test_deprecated_factory_still_fails_the_task_on_error() -> None:
-    with pytest.warns(DeprecationWarning, match=DEPRECATION):
-        task = Agent("worker").task("flaky")
-
-    with pytest.raises(ValueError, match="boom"):
-        async with task:
-            raise ValueError("boom")
-
-    assert task.state == TaskState.FAILED
-    assert [type(event) for event in await task.context.stream.history.get_events()] == [TaskStarted, TaskFailed]
