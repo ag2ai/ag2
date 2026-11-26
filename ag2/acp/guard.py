@@ -21,23 +21,20 @@ metadata collides with a field of that request, before the merge takes place.
 
 import asyncio
 import logging
-from functools import cache
 from typing import Any
 
 from acp import schema
 from acp.exceptions import RequestError
 from acp.meta import AGENT_METHODS
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
 # ``_meta`` as it appears on the wire; the request models call it ``field_meta``.
 META_KEY = "_meta"
 
-
 # The requests ACPAgent serves, by method: the SDK's own models, so a field a
 # newer protocol adds is covered without a list maintained by hand.
-_REQUESTS: dict[str, type[BaseModel]] = {
+_REQUESTS: dict[str, Any] = {
     AGENT_METHODS["initialize"]: schema.InitializeRequest,
     AGENT_METHODS["authenticate"]: schema.AuthenticateRequest,
     AGENT_METHODS["session_new"]: schema.NewSessionRequest,
@@ -47,32 +44,29 @@ _REQUESTS: dict[str, type[BaseModel]] = {
 }
 
 
-@cache
 def request_fields(method: str) -> frozenset[str]:
     """The names ``method``'s fields reach its handler under: their Python names.
 
-    The SDK never passes a field by its JSON alias (``acp/utils.py``:
-    ``model_to_kwargs``), so a camelCase key in a handler's ``**kwargs`` can only
-    have come from ``_meta``.
+    The SDK never passes a field by its JSON alias, so a camelCase key in a
+    handler's ``**kwargs`` can only have come from ``_meta``.
     """
     return frozenset(_REQUESTS[method].model_fields) - {"field_meta"}
 
 
-@cache
-def _reserved_names(method: str) -> frozenset[str]:
-    """Every name ``method``'s fields answer to: Python name and JSON alias."""
-    aliases = {field.alias for field in _REQUESTS[method].model_fields.values() if field.alias}
-    return request_fields(method) | aliases
-
-
 def colliding_meta_keys(method: str, params: Any) -> frozenset[str]:
-    """Metadata keys in ``params`` that would displace one of ``method``'s fields."""
-    if method not in _REQUESTS or not isinstance(params, dict):
+    """Metadata keys in ``params`` that would displace one of ``method``'s fields.
+
+    Both spellings count: the Python name, which the merge would overwrite, and
+    the JSON alias, which names the same field on the wire.
+    """
+    model = _REQUESTS.get(method)
+    if model is None or not isinstance(params, dict):
         return frozenset()
     meta = params.get(META_KEY)
     if not isinstance(meta, dict):
         return frozenset()
-    return _reserved_names(method).intersection(meta)
+    aliases = {field.alias for field in model.model_fields.values() if field.alias}
+    return (request_fields(method) | aliases).intersection(meta)
 
 
 def guard_router(handler: Any) -> Any:
