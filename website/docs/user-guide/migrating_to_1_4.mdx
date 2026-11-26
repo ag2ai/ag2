@@ -22,8 +22,7 @@ AG2 1.4.0 removes the APIs that 1.3 deprecated. Each of them emitted a `Deprecat
 ```python linenums="1"
 from ag2.config import OpenAICompletionsConfig, OpenAIConfig
 
-# 1.3: Chat Completions
-config = OpenAIConfig(model="gpt-5", max_completion_tokens=1024)
+# 1.3 (Chat Completions): OpenAIConfig(model="gpt-5", max_completion_tokens=1024)
 
 # 1.4: keep Chat Completions
 config = OpenAICompletionsConfig(model="gpt-5", max_completion_tokens=1024)
@@ -59,8 +58,7 @@ from ag2.policies import AlertPolicy, SlidingWindowPolicy
 
 config = OpenAIResponsesConfig(model="gpt-5")
 
-# 1.3
-agent = Agent("assistant", config=config, assembly=[AlertPolicy(), SlidingWindowPolicy(max_events=50)])
+# 1.3: Agent("assistant", config=config, assembly=[AlertPolicy(), SlidingWindowPolicy(max_events=50)])
 
 # 1.4
 agent = Agent(
@@ -78,14 +76,13 @@ agent = Agent(
 ## Knowledge: `knowledge=`
 
 ```python linenums="1"
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.config import OpenAIResponsesConfig
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
 
 config = OpenAIResponsesConfig(model="gpt-5")
 
-# 1.3
-agent = Agent("assistant", config=config, knowledge=KnowledgeConfig(store=MemoryKnowledgeStore()))
+# 1.3: Agent("assistant", config=config, knowledge=KnowledgeConfig(store=MemoryKnowledgeStore()))
 
 # 1.4
 agent = Agent("assistant", config=config, plugins=[KnowledgePlugin(store=MemoryKnowledgeStore())])
@@ -108,8 +105,7 @@ def search(query: str) -> str:
     """Search the knowledge base."""
     return f"results for {query}"
 
-# 1.3
-coordinator = Agent("coordinator", config=config, tools=[search], tasks=TaskConfig())
+# 1.3: Agent("coordinator", config=config, tools=[search], tasks=TaskConfig())
 
 # 1.4
 worker = Agent(
@@ -136,8 +132,7 @@ from ag2.task import Task, TaskSpec
 
 agent = Agent("indexer")
 
-# 1.3
-task = agent.task("index documents", payload={"region": "eu"}, ttl_seconds=60)
+# 1.3: agent.task("index documents", payload={"region": "eu"}, ttl_seconds=60)
 
 # 1.4
 task = Task(
