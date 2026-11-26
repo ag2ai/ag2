@@ -66,8 +66,6 @@ from .events.lifecycle import (
 from .exceptions import ConfigNotProvidedError, HumanInputError
 from .history import CANCELLED_TOOL_RESULT, HUMAN_INPUT_ABANDONED_TOOL_RESULT, History, close_unanswered_tool_calls
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .knowledge._legacy import LegacyKnowledgeAdapter
-from .knowledge.config import KnowledgeConfig
 from .knowledge.plugin import validate_knowledge_middleware
 from .middleware.base import (
     AgentTurn,
@@ -112,11 +110,6 @@ T2 = TypeVar("T2")
 TASK_CONFIG_DEPRECATION = (
     "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
     "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
-)
-
-KNOWLEDGE_DEPRECATION = (
-    "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
-    "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
 )
 
 
@@ -797,7 +790,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
-        knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
@@ -816,7 +808,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
-        knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
@@ -835,7 +826,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
-        knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
@@ -854,7 +844,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
-        knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
@@ -875,7 +864,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[Any] | type | types.UnionType | None = ...,
         plugins: Iterable["Plugin"] = ...,
-        knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
@@ -893,7 +881,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = None,
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
-        knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
     ) -> None:
         self._init_target(
@@ -910,12 +897,11 @@ class Agent(PluginTarget, Generic[TResult]):
         self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
 
-        # Auto-injected tools (subtask toolkit, knowledge tool) live here,
-        # NOT in the public ``self.tools`` (which holds only user-supplied
-        # tools). They are chained into the tool set at execution time but
-        # kept out of ``self.tools`` so they are never inherited by spawned
-        # subtasks — that would re-enable recursion (run_subtask) or leak the
-        # parent's knowledge tool.
+        # Auto-injected tools (the subtask toolkit) live here, NOT in the
+        # public ``self.tools`` (which holds only user-supplied tools). They
+        # are chained into the tool set at execution time but kept out of
+        # ``self.tools`` so they are never inherited by spawned subtasks —
+        # that would re-enable recursion (run_subtask).
         self._additional_tools: list[Tool] = []
 
         # Task spawning. ``tasks=False`` (the default) means no auto-injected
@@ -936,13 +922,6 @@ class Agent(PluginTarget, Generic[TResult]):
         )
         self._task_slots_lock = threading.Lock()
 
-        # Temporary compatibility adapter; remove with knowledge= in 1.4.0.
-        legacy_knowledge = LegacyKnowledgeAdapter(knowledge) if knowledge is not None else None
-        if legacy_knowledge is not None:
-            warnings.warn(KNOWLEDGE_DEPRECATION, DeprecationWarning, stacklevel=2)
-            self._apply_plugin(legacy_knowledge.plugin)
-            self._agent_dependencies.update(legacy_knowledge.dependencies)
-            self._additional_tools.extend(legacy_knowledge.tools)
         validate_knowledge_middleware(self._middleware)
 
         # Assembly policies from constructor plugins (empty by default; bare Agent has no harness).
@@ -1871,7 +1850,7 @@ class Agent(PluginTarget, Generic[TResult]):
 
     async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
         # Inherit only the parent's user-supplied tools — never the
-        # auto-injected subtask toolkit or knowledge tool (excluded by
+        # auto-injected subtask toolkit (excluded by
         # identity), so the child can't recurse or see parent-only tooling.
         inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
 

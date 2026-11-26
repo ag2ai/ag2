@@ -218,13 +218,6 @@ Do not use `TaskConfig`, `Agent(tasks=...)` or `run_subtask` / `run_subtasks` in
 - Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
 - Removal in 1.4.0 covers: `TaskConfig` and its re-export from `ag2`, the `tasks=` parameter and `Agent.tasks`, `_build_subtask_toolkit` / `_spawn_subtask` / `_run_subtask` / `_task_slots_for`, the `agent.tasks` check in `ag2/ag_ui/capabilities.py`, those tests, and the deprecation notes in `website/docs/`.
 
-### Deprecated: `Agent(knowledge=...)` (removed in 1.4.0)
-
-Use `plugins=[KnowledgePlugin(store, ...)]` (`ag2.knowledge`) instead. At most one `KnowledgePlugin` applies to an invocation; combining it with `knowledge=` is rejected. See ADR 0033.
-
-- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:Agent\\(knowledge=:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
-- Removal in 1.4.0 covers: the `knowledge=` parameter and `KNOWLEDGE_DEPRECATION`, the `LegacyKnowledgeAdapter` block in `Agent.__init__`, the `knowledge=` branch of `validate_knowledge_middleware`, `ag2/knowledge/_legacy.py`, the bound-store (`legacy_store`) branches in knowledge tools and middleware factories, the warning-filtered tests, and the deprecation notes in `website/docs/`. Keep `KnowledgeConfig` and its exports, `ScopedMiddlewareFactory`, and `_additional_tools` (legacy task tools still use it until `TaskConfig` is removed).
-
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.

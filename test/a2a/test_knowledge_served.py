@@ -6,7 +6,7 @@
 
 import pytest
 
-from ag2 import Agent, KnowledgeConfig
+from ag2 import Agent
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.testing import make_test_client_factory
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
@@ -30,18 +30,6 @@ def _client_for(served: Agent) -> Agent:
 async def test_served_agent_with_knowledge_plugin_answers_and_initializes_its_store() -> None:
     store = MemoryKnowledgeStore()
     librarian = Agent("librarian", config=TestConfig("served"), plugins=[KnowledgePlugin(store)])
-
-    reply = await _client_for(librarian).ask("hi")
-
-    assert reply.body == "served"
-    assert await store.read("/.initialized") == "librarian"
-
-
-@pytest.mark.asyncio
-@pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
-async def test_served_agent_with_legacy_knowledge_answers_and_initializes_its_store() -> None:
-    store = MemoryKnowledgeStore()
-    librarian = Agent("librarian", config=TestConfig("served"), knowledge=KnowledgeConfig(store))
 
     reply = await _client_for(librarian).ask("hi")
 
