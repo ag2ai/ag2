@@ -90,10 +90,8 @@ ag-ui = ["ag-ui-protocol>=1.0,<2"]
 openai = ["openai>=3.45.0,<4"]
 anthropic = ["anthropic>=1.15.0,<3"]
 gemini = [
-    # 2.x and 3.x are both supported until 1.4.0, which requires 3.x; what differs
-    # between them lives in ag2/config/gemini/_compat.py.
-    "google-genai>=1.68.0,<4",
-    # `http_client` takes an httpx2 client; google-genai 3.x brings it in, 2.x does not.
+    "google-genai>=3.0.0,<4",
+    # `http_client` takes an httpx2 client; google-genai brings it in transitively.
     "httpx2>=2.0.0,<3",
     # `google.auth.credentials` / `google.oauth2.service_account` in gemini_client.py.
     # Vertex AI is reached through google-genai's own `vertexai=True`, so
