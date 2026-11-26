@@ -26,14 +26,14 @@ Agent(
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `knowledge=` and `tasks=` remain available during their deprecation period. The legacy `assembly=` parameter is deprecated and will be removed in 1.4.0.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `knowledge=` and `tasks=` remain available during their deprecation period.
 
 ## Context policies through `middleware=`
 
 Wrap your [`AssemblyPolicy`](/docs/user-guide/advanced/assembly) instances in `Middleware(AssemblerMiddleware, policies=[...])`. Add `Middleware(HaltCheckMiddleware)` immediately after it when using `AlertPolicy`.
 
-!!! warning "`assembly=` is deprecated"
-    `Agent(assembly=...)` keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed. It will be removed in **1.4.0**. Migrate to `middleware=` as shown below.
+!!! note "`assembly=` was removed in 1.4.0"
+    `Agent(assembly=...)` no longer exists. Register the same policies through `middleware=` as shown below.
 
 ```python linenums="1" hl_lines="13-23"
 from ag2 import Agent
@@ -236,7 +236,7 @@ An Agent reports what it is made of, so you can compare two agents, assert on co
 | `#!python middleware` | agent-level middleware, in registration order |
 | `#!python dependencies` / `#!python variables` | injected values, keyed as supplied |
 | `#!python config` / `#!python response_schema` / `#!python hitl_hook` | model config, schema, human-input hook |
-| `#!python observers` / `#!python assembly` | observers, assembly policies |
+| `#!python observers` / `#!python assembly` | observers, assembly policies from plugins and `add_policy()` |
 | `#!python tasks` | `#!python TaskConfig` or `#!python None`; deprecated, removed in 1.4.0 |
 
 Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.

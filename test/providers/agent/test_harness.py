@@ -14,6 +14,7 @@ from ag2.aggregate import (
     ConversationSummaryAggregate,
     WorkingMemoryAggregate,
 )
+from ag2.assembly import AssemblerMiddleware, AssemblyPolicy
 from ag2.compact import (
     CompactTrigger,
     SummarizeCompact,
@@ -30,6 +31,8 @@ from ag2.knowledge import (
     KnowledgePlugin,
     MemoryKnowledgeStore,
 )
+from ag2.middleware import HaltCheckMiddleware, Middleware
+from ag2.middleware.base import MiddlewareFactory
 from ag2.policies import (
     ConversationPolicy,
     SlidingWindowPolicy,
@@ -37,7 +40,12 @@ from ag2.policies import (
 )
 from ag2.stream import MemoryStream
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")]
+pytestmark = pytest.mark.asyncio
+
+
+def assembled(*policies: AssemblyPolicy) -> list[MiddlewareFactory]:
+    """Policies wired the way the removed ``Agent(assembly=...)`` wired them."""
+    return [Middleware(AssemblerMiddleware, policies=list(policies)), Middleware(HaltCheckMiddleware)]
 
 
 async def test_conversation_policy_basic(provider_config) -> None:
@@ -49,7 +57,7 @@ async def test_conversation_policy_basic(provider_config) -> None:
         "conv",
         prompt="Be concise.",
         config=provider_config,
-        assembly=[ConversationPolicy()],
+        middleware=assembled(ConversationPolicy()),
     )
     reply = await agent.ask("Say 'hello'.")
     assert reply.body is not None
@@ -87,7 +95,7 @@ async def test_sliding_window_trims_long_history(provider_config) -> None:
         "sliding",
         prompt="Be concise.",
         config=_CapturingConfig(provider_config),
-        assembly=[ConversationPolicy(), SlidingWindowPolicy(max_events=4)],
+        middleware=assembled(ConversationPolicy(), SlidingWindowPolicy(max_events=4)),
     )
 
     r1 = await agent.ask("Remember the word 'elephant'.")
@@ -117,7 +125,7 @@ async def test_token_budget_policy_clamps_history(provider_config) -> None:
         "budget",
         prompt="One-word answers.",
         config=provider_config,
-        assembly=[ConversationPolicy(), TokenBudgetPolicy(max_tokens=5)],
+        middleware=assembled(ConversationPolicy(), TokenBudgetPolicy(max_tokens=5)),
     )
     r = await agent.ask("Say 'apple'.")
     r = await r.ask("Say 'banana'.")
@@ -140,11 +148,11 @@ async def test_multiple_policies_compose(provider_config) -> None:
         "composed",
         prompt="Brief.",
         config=provider_config,
-        assembly=[
+        middleware=assembled(
             ConversationPolicy(),
             SlidingWindowPolicy(max_events=20),
             TokenBudgetPolicy(max_tokens=2000),
-        ],
+        ),
     )
     reply = await agent.ask("What is 1+1? Number only.")
     assert reply.body is not None

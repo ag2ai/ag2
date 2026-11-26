@@ -11,6 +11,7 @@ All real LLM calls via Gemini 3 Flash Preview.
 import pytest
 
 from ag2 import Agent, observer
+from ag2.assembly import AssemblerMiddleware, AssemblyPolicy
 from ag2.events import (
     BaseEvent,
     HaltEvent,
@@ -21,12 +22,19 @@ from ag2.events import (
     ObserverStarted,
     Severity,
 )
+from ag2.middleware import HaltCheckMiddleware, Middleware
+from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import BaseObserver, LoopDetector, TokenMonitor
 from ag2.policies import AlertPolicy
 from ag2.stream import MemoryStream
 from ag2.watch import EventWatch
 
-pytestmark = [pytest.mark.asyncio, pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")]
+pytestmark = pytest.mark.asyncio
+
+
+def assembled(*policies: AssemblyPolicy) -> list[MiddlewareFactory]:
+    """Policies wired the way the removed ``Agent(assembly=...)`` wired them."""
+    return [Middleware(AssemblerMiddleware, policies=list(policies)), Middleware(HaltCheckMiddleware)]
 
 
 async def test_stream_observer_decorator_sees_responses(provider_config) -> None:
@@ -200,7 +208,7 @@ async def test_alert_policy_fatal_halts_llm(provider_config) -> None:
         config=provider_config,
         tools=[add],
         observers=[FatalOnFirstResponse()],
-        assembly=[AlertPolicy()],
+        middleware=assembled(AlertPolicy()),
     )
 
     # First turn produces a response → observer fires FATAL → next LLM call halted.

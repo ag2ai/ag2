@@ -46,8 +46,8 @@ A policy receives the current `prompts` and `events`, returns modified copies. P
 
 Register `AssemblerMiddleware` through `middleware=`. Put `HaltCheckMiddleware` immediately after it when using `AlertPolicy`, so a FATAL alert stops the model call. Middleware runs in list order, from outermost to innermost.
 
-!!! warning "`assembly=` is deprecated"
-    `Agent(assembly=...)` will be removed in **1.4.0**. Until then it keeps its existing behavior and emits a `DeprecationWarning` where the agent is constructed, including when an empty iterable was explicitly supplied. Use the middleware configuration below instead; `AssemblyPolicy` and the built-in policies remain supported.
+!!! note "`assembly=` was removed in 1.4.0"
+    `Agent(assembly=...)` no longer exists. Use the middleware configuration below instead; `AssemblyPolicy` and the built-in policies remain supported.
 
 ```python linenums="1" hl_lines="14-24"
 from ag2 import Agent
@@ -85,7 +85,7 @@ Inside each turn the `AssemblerMiddleware`:
 4. Restores the original prompt afterward.
 
 !!! tip
-    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python ag2.assembly`; `Middleware` and `HaltCheckMiddleware` are imported from `#!python ag2.middleware`. If you also use the legacy `assembly=` parameter, both policy chains run; migrate the policies rather than registering them twice. `agent.assembly` reports only legacy and plugin policies, not policies registered through middleware.
+    `AssemblerMiddleware` and `AssemblyPolicy` live in `#!python ag2.assembly`; `Middleware` and `HaltCheckMiddleware` are imported from `#!python ag2.middleware`. `agent.assembly` reports only policies from plugins and `add_policy()`, not policies registered through middleware.
 
 ## Ordering matters
 
