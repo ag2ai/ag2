@@ -147,6 +147,7 @@ class ACPClient:
                 client_capabilities=self._client_capabilities(),
                 additional_directories=[str(Path(d).resolve()) for d in self.config.additional_directories],
                 model=self.config.model,
+                system_prompt=context.prompt,
                 mcp_servers=mcp_servers or None,
                 agent_label=self.config._agent_label,
             )

@@ -4,7 +4,7 @@
 """Reject ACP requests whose ``_meta`` would overwrite a validated parameter.
 
 The SDK's router expands a request into keyword arguments and then merges the
-request's ``_meta`` on top (``acp/router.py``: ``params.update(meta)``). Metadata
+request's ``_meta`` on top (``acp/utils.py``: ``model_to_kwargs``). Metadata
 therefore *wins* over the protocol's own fields: a request carrying
 ``_meta: {"session_id": "..."}`` reaches the handler with its ``session_id``
 silently replaced, and with no trace of the substitution left in ``**kwargs``.
@@ -21,10 +21,13 @@ metadata collides with a field of that request, before the merge takes place.
 
 import asyncio
 import logging
+from functools import cache
 from typing import Any
 
 from acp import schema
 from acp.exceptions import RequestError
+from acp.meta import AGENT_METHODS
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -32,38 +35,44 @@ logger = logging.getLogger(__name__)
 META_KEY = "_meta"
 
 
-def _reserved_names(model: type) -> frozenset[str]:
-    """Every name a request's fields answer to — field name and JSON alias."""
-    names: set[str] = set()
-    for name, field in getattr(model, "model_fields", {}).items():
-        names.add(name)
-        if field.alias:
-            names.add(field.alias)
-    names.discard("field_meta")
-    return frozenset(names)
-
-
-# Built once from the SDK's own models, so a protocol addition is covered
-# automatically rather than needing this list to be maintained by hand.
-_RESERVED: dict[str, frozenset[str]] = {
-    "initialize": _reserved_names(schema.InitializeRequest),
-    "authenticate": _reserved_names(schema.AuthenticateRequest),
-    "session/new": _reserved_names(schema.NewSessionRequest),
-    "session/load": _reserved_names(schema.LoadSessionRequest),
-    "session/prompt": _reserved_names(schema.PromptRequest),
-    "session/cancel": _reserved_names(schema.CancelNotification),
+# The requests ACPAgent serves, by method: the SDK's own models, so a field a
+# newer protocol adds is covered without a list maintained by hand.
+_REQUESTS: dict[str, type[BaseModel]] = {
+    AGENT_METHODS["initialize"]: schema.InitializeRequest,
+    AGENT_METHODS["authenticate"]: schema.AuthenticateRequest,
+    AGENT_METHODS["session_new"]: schema.NewSessionRequest,
+    AGENT_METHODS["session_load"]: schema.LoadSessionRequest,
+    AGENT_METHODS["session_prompt"]: schema.PromptRequest,
+    AGENT_METHODS["session_cancel"]: schema.CancelNotification,
 }
+
+
+@cache
+def request_fields(method: str) -> frozenset[str]:
+    """The names ``method``'s fields reach its handler under: their Python names.
+
+    The SDK never passes a field by its JSON alias (``acp/utils.py``:
+    ``model_to_kwargs``), so a camelCase key in a handler's ``**kwargs`` can only
+    have come from ``_meta``.
+    """
+    return frozenset(_REQUESTS[method].model_fields) - {"field_meta"}
+
+
+@cache
+def _reserved_names(method: str) -> frozenset[str]:
+    """Every name ``method``'s fields answer to: Python name and JSON alias."""
+    aliases = {field.alias for field in _REQUESTS[method].model_fields.values() if field.alias}
+    return request_fields(method) | aliases
 
 
 def colliding_meta_keys(method: str, params: Any) -> frozenset[str]:
     """Metadata keys in ``params`` that would displace one of ``method``'s fields."""
-    reserved = _RESERVED.get(method)
-    if not reserved or not isinstance(params, dict):
+    if method not in _REQUESTS or not isinstance(params, dict):
         return frozenset()
     meta = params.get(META_KEY)
     if not isinstance(meta, dict):
         return frozenset()
-    return frozenset(reserved.intersection(meta))
+    return _reserved_names(method).intersection(meta)
 
 
 def guard_router(handler: Any) -> Any:

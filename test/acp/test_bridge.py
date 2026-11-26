@@ -323,3 +323,21 @@ class TestTerminal:
             assert exited.exit_code is not None
         else:
             assert exited.signal is not None
+
+
+@pytest.mark.asyncio
+class TestUnsupportedClientMethods:
+    async def test_an_mcp_message_is_refused_as_an_unknown_method(self, tmp_path: Path) -> None:
+        async def act(conn: acp.Client, sid: str) -> Any:
+            return await conn.mcp_message(server_id="srv", request_id="1", method="tools/list", session_id=sid)
+
+        error = await agent_asks(act, tmp_path)
+
+        assert isinstance(error, RequestError)
+        assert (error.code, error.data) == (-32601, {"method": "mcp/message"})
+
+    async def test_an_auth_status_update_does_not_disturb_the_turn(self, tmp_path: Path) -> None:
+        async def act(conn: acp.Client, sid: str) -> Any:
+            return await conn.auth_status_update(state="authenticated")
+
+        assert await agent_asks(act, tmp_path) is None

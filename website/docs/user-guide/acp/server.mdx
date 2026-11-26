@@ -452,8 +452,20 @@ interface from that answer. Claiming a feature that is not wired is worse than a
 its absence — the client offers users a button that cannot work.
 
 Reported as **not** supported: `#!python session/resume`, `#!python session/fork`,
-`#!python session/list`, `#!python session/delete`, `#!python session/close`, and
-connecting to client-provided MCP servers over any transport. The client's own filesystem
+`#!python session/list`, `#!python session/delete`, `#!python session/close`,
+`#!python session/archive`, `#!python session/unarchive`, `#!python session/status`,
+`#!python session/options`, `#!python session/set_title`, `#!python auth/status`, and
+connecting to client-provided MCP servers over any transport.
+
+A client-supplied system prompt (`systemPrompt` on `#!python session/new` or
+`#!python session/load`) is refused with `invalid_params` by default, and no session is
+created. It joins the agent's instructions at system level, so whoever connects could steer
+the agent further than a user message can. A host that trusts its clients that far opts in
+with `#!python ACPAgent(agent, accept_system_prompt=True)`: the capability is then advertised,
+and `append` mode adds the client's text after the agent's own prompt for every turn of that
+session. `override` is still refused — it would drop the instructions the agent was built
+with. Initial `configOptions` are ignored, as ACP requires for option ids the agent does not
+know — and this one has none. The client's own filesystem
 and terminal methods are never called either — those the client offers, so there is nothing
 to declare.
 

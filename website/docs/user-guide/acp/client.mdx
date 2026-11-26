@@ -100,13 +100,24 @@ agent = Agent(
 
 !!! note "Model selection"
 
-    `model` is applied at session start via ACP `session/set_config_option`
-    when the agent advertises a model picker — Claude Code, Codex, OpenCode
-    and Kilo Code all do. Use the agent's own advertised ids: for OpenCode and
-    Kilo Code that is `"provider/model"` as listed by `opencode models` /
-    `kilo models`; Claude Code and Codex advertise bare ids. A value the agent
-    does not offer raises `ValueError` before the first turn; leaving `model`
-    unset keeps the agent's default.
+    `model` is applied at session start when the agent advertises a model
+    picker — Claude Code, Codex, OpenCode and Kilo Code all do. An agent that
+    also advertises `sessionCapabilities.options` gets it with `session/new`, so
+    the session starts on it; any other gets it via `session/set_config_option`
+    right after. Use the agent's own advertised ids: for OpenCode and Kilo Code
+    that is `"provider/model"` as listed by `opencode models` / `kilo models`;
+    Claude Code and Codex advertise bare ids. A value the agent does not offer
+    raises `ValueError` before the first turn; leaving `model` unset keeps the
+    agent's default.
+
+!!! note "Instructions"
+
+    The agent's `prompt` (and any `@agent.prompt` hooks) reaches the CLI agent as
+    ACP `systemPrompt` in `append` mode: added to the CLI agent's own instructions,
+    not replacing them. It is sent once, with `session/new`, from the first turn.
+    ACP allows this only for an agent that advertises
+    `sessionCapabilities.systemPrompt`; for any other the instructions cannot be
+    delivered, and AG2 logs a warning saying so.
 
     **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
     may default to an unsuitable model (an image model, at the time of
@@ -560,7 +571,7 @@ config = ACPRemoteConfig(
 | `command` | preset per agent | Executable + args launching the agent in ACP mode |
 | `cwd` | `"."` | Workspace root for the session |
 | `env` | `None` | Extra environment variables for the subprocess |
-| `model` | `None` | Agent model selection — applied via `session/set_config_option` when the agent advertises a model picker |
+| `model` | `None` | Agent model selection — applied at session start when the agent advertises a model picker (see *Model selection* above) |
 | `permission_policy` | `"ask"` | `ask` / `auto` / `deny` |
 | `elicitation_policy` | `"ask"` | `ask` / `decline` — whether the agent may ask *you* a question |
 | `fs_root` | `cwd` | Root for mediated `fs/*` access (path-confined) |

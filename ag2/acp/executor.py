@@ -313,6 +313,9 @@ class AgentExecutor:
         # so a served agent would drop the per-request policy those hooks carry,
         # which the same agent applies under ``ask``.
         client = await agent._prepare_turn(initial_event, context, None)
+        # The Client's ``systemPrompt`` (``append`` mode) goes after the agent's
+        # own instructions, so it adds to them and never displaces them.
+        context.prompt.extend(session.system_prompt)
 
         return await agent._execute(
             initial_event,

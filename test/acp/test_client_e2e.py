@@ -660,6 +660,125 @@ async def test_external_server_named_like_the_gateway_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+class TestInitialModelOption:
+    """With ``sessionCapabilities.options`` the model goes with ``session/new``."""
+
+    OPTIONS = schema.AgentCapabilities(
+        session_capabilities=schema.SessionCapabilities(options=schema.SessionOptionsCapabilities())
+    )
+
+    async def test_the_session_starts_on_the_model(self) -> None:
+        calls: list[tuple[str, str | bool]] = []
+        cfg = fake_acp_config(
+            _hi_turn(),
+            agent_capabilities=self.OPTIONS,
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            config_option_calls=calls,
+            permission_policy="auto",
+            model="provider/smart",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            reply = await agent.ask("hello")
+            session = next(iter(cfg.sessions.values()))
+            sent = session.conn.new_session_kwargs["config_options"]
+        finally:
+            await cfg.aclose()
+
+        assert sent == [schema.InitialSessionConfigOption2(config_id="model", value="provider/smart")]
+        assert calls == []  # applied at setup, so no session/set_config_option
+        assert reply.response.model == "provider/smart"
+
+    async def test_nothing_is_sent_for_the_current_model(self) -> None:
+        cfg = fake_acp_config(
+            _hi_turn(),
+            agent_capabilities=self.OPTIONS,
+            config_options=[_model_option("provider/default", "provider/default", "provider/smart")],
+            permission_policy="auto",
+            model="provider/default",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            await agent.ask("hello")
+            session = next(iter(cfg.sessions.values()))
+            sent = session.conn.new_session_kwargs["config_options"]
+        finally:
+            await cfg.aclose()
+
+        assert sent is None
+
+    async def test_a_model_not_offered_still_fails(self) -> None:
+        cfg = fake_acp_config(
+            _hi_turn(),
+            agent_capabilities=self.OPTIONS,
+            config_options=[_model_option("provider/default", "provider/default")],
+            permission_policy="auto",
+            model="provider/nonexistent",
+        )
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with pytest.raises(ValueError, match="not offered by the ACP agent"):
+                await agent.ask("hello")
+        finally:
+            await cfg.aclose()
+
+
+@pytest.mark.asyncio
+class TestSystemPrompt:
+    """The AG2 agent's instructions reach a CLI agent as ACP ``systemPrompt``."""
+
+    ACCEPTS = schema.AgentCapabilities(
+        session_capabilities=schema.SessionCapabilities(system_prompt=schema.SessionSystemPromptCapabilities())
+    )
+
+    async def test_sent_in_append_mode_when_the_agent_accepts_one(self) -> None:
+        cfg = fake_acp_config(_hi_turn(), agent_capabilities=self.ACCEPTS, permission_policy="auto")
+        agent = Agent("acp", "Answer in French.", config=cfg)
+
+        try:
+            await agent.ask("hello")
+            session = next(iter(cfg.sessions.values()))
+            sent = session.conn.new_session_kwargs["system_prompt"]
+        finally:
+            await cfg.aclose()
+
+        assert sent == schema.SystemPrompt(mode="append", content=[_text("Answer in French.")])
+
+    async def test_withheld_with_a_warning_when_the_agent_does_not(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(_hi_turn(), permission_policy="auto")
+        agent = Agent("acp", "Answer in French.", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.session"):
+                await agent.ask("hello")
+            session = next(iter(cfg.sessions.values()))
+            sent = session.conn.new_session_kwargs["system_prompt"]
+        finally:
+            await cfg.aclose()
+
+        assert sent is None
+        assert "does not accept a system prompt" in caplog.text
+
+    async def test_nothing_sent_and_no_warning_without_instructions(self, caplog: pytest.LogCaptureFixture) -> None:
+        cfg = fake_acp_config(_hi_turn(), permission_policy="auto")
+        agent = Agent("acp", config=cfg)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.session"):
+                await agent.ask("hello")
+            session = next(iter(cfg.sessions.values()))
+            sent = session.conn.new_session_kwargs["system_prompt"]
+        finally:
+            await cfg.aclose()
+
+        assert sent is None
+        assert caplog.text == ""
+
+
+@pytest.mark.asyncio
 async def test_external_server_named_like_the_gateway_is_fine_without_function_tools() -> None:
     """No function tools means no gateway, so there is nothing to collide with."""
     cfg = fake_acp_config(ACPTurn(updates=[_text_update("hi")]), permission_policy="auto")

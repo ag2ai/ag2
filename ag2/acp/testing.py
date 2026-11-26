@@ -25,6 +25,7 @@ import acp
 from acp import schema
 
 from .config import ACPConfig
+from .session import _model_values
 from .types import SessionUpdate
 
 if TYPE_CHECKING:
@@ -156,10 +157,23 @@ class _FakeConnection:
             if not PurePath(path).is_absolute():
                 raise acp.RequestError.invalid_params({"path": f"must be an absolute path, but received: {path}"})
         self.new_session_kwargs = kwargs
+        # Initial values apply in list order; per ACP one the agent will not
+        # apply is ignored, and the response carries what the session really has.
+        for entry in kwargs.get("config_options") or []:
+            self._config_options = [
+                option.model_copy(update={"current_value": entry.value})
+                if option.id == entry.config_id and entry.value in _model_values(option)
+                else option
+                for option in self._config_options
+            ]
         return schema.NewSessionResponse(
             session_id=FAKE_SESSION_ID,
             config_options=self._config_options or None,
         )
+
+    async def session_options(self, **kwargs: Any) -> schema.SessionOptionsResponse:
+        """What a new session would start with: the advertised config options."""
+        return schema.SessionOptionsResponse(config_options=list(self._config_options) or None)
 
     async def _elicit(self, elicitations: "Sequence[ScriptedElicitation]") -> None:
         """Put each scripted question to the client, recording what it answered."""
@@ -310,8 +324,11 @@ def fake_acp_config(
     ``permission_policy=...``, ``turn_timeout=...``). ``agent_capabilities``
     shapes the fake's ``initialize`` response; by default it advertises HTTP MCP
     support like the real Claude Code / Codex / OpenCode adapters do.
-    ``config_options`` are advertised in the ``session/new`` response (the
-    agent's model picker et al.); ``session/set_config_option`` calls are
+    ``config_options`` are advertised in the ``session/new`` and
+    ``session/options`` responses (the agent's model picker et al.), and initial
+    values sent with ``session/new`` are applied to them when offered — give
+    ``agent_capabilities`` ``sessionCapabilities.options`` for the client to send
+    any. ``session/set_config_option`` calls are
     appended to the caller-supplied ``config_option_calls`` list as
     ``(config_id, value)`` tuples. The text of each ``session/prompt`` the agent
     receives is appended to ``prompt_calls``.

@@ -28,6 +28,7 @@ from uuid import UUID
 import acp
 from acp import schema
 from acp.core import DEFAULT_STDIO_BUFFER_LIMIT_BYTES
+from acp.meta import AGENT_METHODS
 from acp.stdio import stdio_streams
 
 from ag2.agent import Agent, _get_stream_turn_lock
@@ -42,7 +43,7 @@ from .executor import (
     heal_cancelled_turn,
     isolate_variables,
 )
-from .guard import serve
+from .guard import request_fields, serve
 from .mappers import history_to_session_updates
 from .sessions import (
     AgentSession,
@@ -57,7 +58,7 @@ from .sessions import (
 if TYPE_CHECKING:
     from ag2.hitl import HumanHook
 
-    from .types import ContentBlock, McpServer
+    from .types import ContentBlock, InitialConfigOption, McpServer
 
 logger = logging.getLogger(__name__)
 
@@ -94,18 +95,48 @@ class PromptContent:
     embedded_context: bool = True
 
 
-def _request_meta(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """The request's ACP ``_meta`` map, as delivered to a handler.
+def _request_meta(kwargs: dict[str, Any], method: str) -> dict[str, Any]:
+    """The request's ACP ``_meta`` map, as delivered to ``method``'s handler.
 
     The SDK router *spreads* a request's ``_meta`` entries into the handler's
-    keyword arguments rather than passing the map itself (``acp/router.py``:
-    ``params.update(meta)``). Every declared parameter is bound by name, so
-    whatever is left in ``**kwargs`` is exactly the metadata the Client sent.
+    keyword arguments rather than passing the map itself (``acp/utils.py``:
+    ``model_to_kwargs``). ``**kwargs`` also collects every request field the
+    handler does not declare — fields a newer SDK added — so those are taken out
+    by name; what is left is the metadata the Client sent.
+
+    Only Python field names are taken out: the SDK never passes a field by its
+    JSON alias, so a camelCase key such as ``systemPrompt`` is the Client's
+    metadata and stays.
 
     Kept verbatim. ``_meta`` is where applications put their own namespaced data
     — AG2 Space provenance, say — and AG2 has no business interpreting it.
     """
-    return dict(kwargs)
+    fields = request_fields(method)
+    return {k: v for k, v in kwargs.items() if k not in fields}
+
+
+def _system_prompt_texts(system_prompt: "schema.SystemPrompt | None", accepted: bool) -> list[str] | None:
+    """The text of a Client's ``systemPrompt``, or ``None`` when none was sent.
+
+    Only ``append`` mode with text blocks is applied: the Client's text joins the
+    agent's own instructions, never replaces them. Anything else fails the request
+    with ``invalid_params`` before a session is created or loaded, as ACP requires
+    of an Agent that cannot apply a prompt — including any prompt at all when
+    ``accepted`` is off and the capability was never advertised.
+    """
+    if system_prompt is None:
+        return None
+    if not accepted:
+        reason = "systemPrompt is not supported"
+    elif system_prompt.mode != "append":
+        reason = f"systemPrompt mode {system_prompt.mode!r} is not supported; only 'append' is"
+    elif not system_prompt.content:
+        reason = "systemPrompt content is empty"
+    elif not all(isinstance(block, schema.TextContentBlock) for block in system_prompt.content):
+        reason = "systemPrompt supports text content blocks only"
+    else:
+        return [block.text for block in system_prompt.content if isinstance(block, schema.TextContentBlock)]
+    raise acp.RequestError.invalid_params({"reason": reason})
 
 
 def _package_version() -> str:
@@ -166,6 +197,16 @@ class ACPAgent:
         prompt_content: Which non-text prompt content to advertise as supported.
             See :class:`PromptContent` — it depends on the model behind the
             agent, so it is declared rather than guessed.
+        accept_system_prompt: Whether a Client may add instructions with ACP
+            ``systemPrompt`` on ``session/new`` and ``session/load``. Off by
+            default: the text joins the agent's own instructions at system level,
+            so whoever connects can steer the agent beyond what a user message
+            does — enable it only for Clients you trust that far. When on,
+            ``sessionCapabilities.systemPrompt`` is advertised and ``append`` mode
+            is honoured; ``override`` is refused, since it would drop the
+            instructions this agent was built with. A ``session/load`` that sends
+            no prompt keeps the one the live session has; one restored from
+            storage starts without it.
         hitl_hook: How to answer a turn that calls ``context.input()``. ``None``
             (the default) fails the turn with
             :class:`~ag2.acp.executor.HumanInputUnsupportedError`, because ACP
@@ -199,6 +240,7 @@ class ACPAgent:
         "_auth",
         "_stream_thoughts",
         "_prompt_content",
+        "_accept_system_prompt",
         "_session_config",
         "_on_session",
         "_scope",
@@ -215,6 +257,7 @@ class ACPAgent:
         auth: AuthProvider | None = None,
         stream_thoughts: bool = False,
         prompt_content: PromptContent | None = None,
+        accept_system_prompt: bool = False,
         hitl_hook: "HumanHook | None" = None,
         on_session: SessionObserver | None = None,
     ) -> None:
@@ -225,6 +268,7 @@ class ACPAgent:
         self._auth = auth
         self._stream_thoughts = stream_thoughts
         self._prompt_content = prompt_content or PromptContent()
+        self._accept_system_prompt = accept_system_prompt
         config = sessions if isinstance(sessions, SessionConfig) else SessionConfig()
         self._executor = AgentExecutor(agent, stream_thoughts=stream_thoughts, hitl_hook=hitl_hook)
         self._session_config = config
@@ -366,8 +410,12 @@ class _ConnectionScope:
             # list, delete, fork, resume, close — is unimplemented. (``resume``,
             # ``fork`` and ``close`` are also gated behind the SDK's unstable
             # protocol flag, so a stable v1 Client could not call them even if
-            # they were wired.)
-            session_capabilities=schema.SessionCapabilities(),
+            # they were wired.) So are archive / unarchive, status, options,
+            # set_title and ``auth/status``. ``systemPrompt`` is advertised only
+            # when the host opted in to Client instructions.
+            session_capabilities=schema.SessionCapabilities(
+                system_prompt=schema.SessionSystemPromptCapabilities() if self._owner._accept_system_prompt else None,
+            ),
         )
 
     async def authenticate(self, method_id: str, **kwargs: Any) -> schema.AuthenticateResponse:
@@ -387,6 +435,8 @@ class _ConnectionScope:
         cwd: str,
         additional_directories: "list[str] | None" = None,
         mcp_servers: "list[McpServer] | None" = None,
+        system_prompt: "schema.SystemPrompt | None" = None,
+        config_options: "list[InitialConfigOption] | None" = None,
         **kwargs: Any,
     ) -> schema.NewSessionResponse:
         """Create an isolated session and return its id.
@@ -395,14 +445,23 @@ class _ConnectionScope:
         session context. They are *not* acted on: a path or MCP server named by a
         Client is context, not authorization for the agent to reach it. An
         embedding application decides what to honour.
+
+        A ``system_prompt`` in ``append`` mode is added to the agent's own
+        instructions for every turn of the session, when the host enabled
+        ``accept_system_prompt``; otherwise, or in any other mode, it fails the
+        request and no session is created. ``config_options`` are ignored, as ACP
+        requires for every option id the Agent does not know — and ACPAgent has no
+        config options at all.
         """
         self._require_session_scope()
+        instructions = _system_prompt_texts(system_prompt, self._owner._accept_system_prompt)
         try:
             session = await self._sessions.create(
                 cwd=cwd,
                 additional_directories=list(additional_directories or []),
                 mcp_servers=list(mcp_servers or []),
-                meta=_request_meta(kwargs),
+                system_prompt=instructions or [],
+                meta=_request_meta(kwargs, AGENT_METHODS["session_new"]),
                 # Seeded by value: this conversation owns its variables from here on.
                 variables=isolate_variables(self._owner._agent._agent_variables),
             )
@@ -423,9 +482,16 @@ class _ConnectionScope:
         session_id: str,
         mcp_servers: "list[McpServer] | None" = None,
         additional_directories: "list[str] | None" = None,
+        system_prompt: "schema.SystemPrompt | None" = None,
+        config_options: "list[InitialConfigOption] | None" = None,
         **kwargs: Any,
     ) -> None:
         """Reattach to a session by id and replay its history to the Client.
+
+        ``system_prompt`` and ``config_options`` are treated as in
+        :meth:`new_session`. A load that sends no ``system_prompt`` keeps the one
+        a live session already has; ACP leaves that to the Agent, and asks the
+        Client to resend the prompt it created the session with.
 
         The id names the session's history directly (it is the stream id, in
         hex), so a session can be loaded that this connection never issued: one
@@ -453,6 +519,7 @@ class _ConnectionScope:
         or in ``on_session``.
         """
         self._require_session_scope()
+        instructions = _system_prompt_texts(system_prompt, self._owner._accept_system_prompt)
         client = self._require_client()
         stream_id = self._parse_session_id(session_id)
         session_id = stream_id.hex  # the canonical form, whatever the Client sent
@@ -461,8 +528,9 @@ class _ConnectionScope:
             "cwd": cwd,
             "additional_directories": list(additional_directories or []),
             "mcp_servers": list(mcp_servers or []),
+            "system_prompt": instructions or [],
         }
-        meta = _request_meta(kwargs)
+        meta = _request_meta(kwargs, AGENT_METHODS["session_load"])
 
         # Not live here? Then only storage can vouch for the id. An id with no
         # history is indistinguishable from one never issued, and is answered
@@ -499,6 +567,8 @@ class _ConnectionScope:
                 session.cwd = cwd
                 session.additional_directories = context["additional_directories"]
                 session.mcp_servers = context["mcp_servers"]
+                if instructions is not None:
+                    session.system_prompt = instructions
                 if meta:
                     session.meta = meta
             if not session.is_idle:
@@ -561,7 +631,7 @@ class _ConnectionScope:
         self._require_session_scope()
         session = await self._get_session(session_id)
         client = self._require_client()
-        meta = _request_meta(kwargs) or dict(session.meta)
+        meta = _request_meta(kwargs, AGENT_METHODS["session_prompt"]) or dict(session.meta)
 
         abandoned = False
         try:
