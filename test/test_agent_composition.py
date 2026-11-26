@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 from pydantic import BaseModel
 
-from ag2 import Agent, Context, TaskConfig, tool
+from ag2 import Agent, Context, tool
 from ag2.events import BaseEvent, ToolCallEvent
 from ag2.middleware import (
     ApprovalRequired,
@@ -73,19 +72,16 @@ class TestAgentComposition:
         assert agent.dynamic_prompt == ()
         assert agent.observers == ()
         assert agent.assembly == ()
-        assert agent.tasks is None
         assert agent.response_schema is None
 
-    @pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
     def test_set_slots_are_reported(self) -> None:
         @observer()
         def watcher(event: BaseEvent) -> None:
             return None
 
-        agent = Agent("bot", prompt="p", observers=[watcher], tasks=TaskConfig(), response_schema=Out)
+        agent = Agent("bot", prompt="p", observers=[watcher], response_schema=Out)
 
         assert len(agent.observers) == 1
-        assert isinstance(agent.tasks, TaskConfig)
         assert agent.response_schema is not None
 
     def test_dynamic_prompt_hooks_are_nameable(self) -> None:

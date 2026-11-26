@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import pytest
 
-from ag2 import Agent, TaskConfig
+from ag2 import Agent
 from ag2.events import HumanInputRequest, HumanMessage, ToolCallEvent
 from ag2.middleware import approval_required
 from ag2.testing import TestConfig
@@ -103,19 +103,14 @@ async def test_subagent_always_does_not_approve_the_parents_call() -> None:
 
 
 @pytest.mark.asyncio()
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_sibling_always_does_not_approve_the_next_siblings_call() -> None:
     tools, executed = _gated_tools()
     human, asked = _human({"read_logs": "always", "purge_cache": "always"})
+    sub = Agent("sub", config=TestConfig(ToolCallEvent(name="purge_cache"), "done"), tools=[tools["purge_cache"]])
     parent = Agent(
         "parent",
-        config=TestConfig(
-            ToolCallEvent(name="read_logs"),
-            ToolCallEvent(name="run_subtasks", arguments='{"tasks": ["a", "b"], "parallel": false}'),
-            "done",
-        ),
-        tools=[tools["read_logs"], tools["purge_cache"]],
-        tasks=TaskConfig(config=TestConfig(ToolCallEvent(name="purge_cache"), "done")),
+        config=TestConfig(ToolCallEvent(name="read_logs"), _delegate(sub), _delegate(sub), "done"),
+        tools=[tools["read_logs"], sub.as_tool(description="sub")],
         hitl_hook=human,
     )
 

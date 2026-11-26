@@ -211,13 +211,6 @@ Each delegation runs on its own stream. Operational events reach ancestors as
 `ChildEvent` observations; usage and lifecycle events reach every ancestor as
 themselves, including events from grandchildren.
 
-### Deprecated: `TaskConfig` / auto-injected `run_subtask` (removed in 1.4.0)
-
-Do not use `TaskConfig`, `Agent(tasks=...)` or `run_subtask` / `run_subtasks` in new code, docs or examples. The legacy path still ships in `ag2/agent.py` until removal.
-
-- Tests that exercise it on purpose carry `@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")` (or a module-level `pytestmark`); new tests must not depend on it.
-- Removal in 1.4.0 covers: `TaskConfig` and its re-export from `ag2`, the `tasks=` parameter and `Agent.tasks`, `_build_subtask_toolkit` / `_spawn_subtask` / `_run_subtask` / `_task_slots_for`, the `agent.tasks` check in `ag2/ag_ui/capabilities.py`, those tests, and the deprecation notes in `website/docs/`.
-
 ### persistent_stream
 
 `persistent_stream()` returns a `StreamFactory` that gives the same agent a consistent stream across multiple invocations within a context. It stores the stream ID in `context.dependencies` keyed by `ag:{agent.name}:stream`, and reuses the parent stream's storage backend.

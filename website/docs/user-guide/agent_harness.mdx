@@ -26,7 +26,7 @@ Agent(
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `tasks=` remains available during its deprecation period.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`.
 
 ## Context policies through `middleware=`
 
@@ -184,12 +184,11 @@ To let the model compose a worker per objective, use
 
 ### Migrating from TaskConfig
 
-!!! warning "Deprecated — removal in 1.4.0"
+!!! note "Removed in 1.4.0"
     `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the auto-injected
-    `run_subtask` / `run_subtasks` tools remain available during the deprecation
-    period and will be removed in **1.4.0**. Move the worker's config, prompt and
-    tools onto an explicit Agent, then register its `Agent.as_tool()` on the
-    parent. See the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig)
+    `run_subtask` / `run_subtasks` tools were removed in **1.4.0**. Move the
+    worker's config, prompt and tools onto an explicit Agent, then register its
+    `Agent.as_tool()` on the parent. See the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig)
     for the field mapping and concurrency changes.
 
 ## Agent.as_tool()
@@ -233,7 +232,6 @@ An Agent reports what it is made of, so you can compare two agents, assert on co
 | `#!python dependencies` / `#!python variables` | injected values, keyed as supplied |
 | `#!python config` / `#!python response_schema` / `#!python hitl_hook` | model config, schema, human-input hook |
 | `#!python observers` / `#!python assembly` | observers, assembly policies from plugins and `add_policy()` |
-| `#!python tasks` | `#!python TaskConfig` or `#!python None`; deprecated, removed in 1.4.0 |
 
 Sequences come back as tuples and mappings as read-only views, so an agent cannot be changed through them.
 
