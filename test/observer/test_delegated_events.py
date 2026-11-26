@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, field
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,6 +19,7 @@ from ag2.events import (
     UsageEvent,
 )
 from ag2.observers import LoopDetector, TokenMonitor
+from ag2.policies import AlertPolicy
 from ag2.testing import TestConfig
 from ag2.usage import UsageReport
 
@@ -173,3 +175,19 @@ async def test_loop_detector_observes_descendants_without_combining_sibling_hist
     journal = Journal()
     await root.ask("start", observers=[LoopDetector(), observer(callback=journal.record)])
     assert len([event for event in journal.events if isinstance(event, ObserverAlert)]) == alerts
+
+
+@pytest.mark.asyncio
+async def test_alert_policy_delivers_loop_alerts_from_each_subtask() -> None:
+    detector, policy, context = LoopDetector(), AlertPolicy(), MagicMock()
+    call = ToolCallEvent(name="do_nothing", arguments="{}")
+    alerts = []
+    for task_id in ("task-a", "task-b"):
+        child = ChildEvent(inner=call, task_id=task_id, path=(task_id,), agent_name="worker", origin_event_id=call.id)
+        alerts.append(await detector.process([child] * 3, context))
+
+    first, _ = await policy.apply([], alerts[:1], context)
+    second, _ = await policy.apply([], alerts, context)
+
+    assert "task-a" in first[0]
+    assert "task-b" in second[0]
