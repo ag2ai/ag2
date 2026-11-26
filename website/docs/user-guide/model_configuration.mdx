@@ -87,7 +87,7 @@ config = AnthropicConfig(
 )
 ```
 
-`ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why `temperature`, `top_p` and `top_k` are deprecated.
+`ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why it has no `temperature`, `top_p` or `top_k`.
   </Tab>
 
   <Tab title="Gemini">
@@ -355,11 +355,11 @@ config = AnthropicConfig(
 
 #### Sampling Parameters
 
-`temperature`, `top_p` and `top_k` on `AnthropicConfig` are deprecated and are removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included. With `anthropic` 2.x, AG2 therefore drops the value; with `anthropic` 1.x it is still sent. Either way, `config.create()` emits a `#!python DeprecationWarning`.
+`AnthropicConfig` has no `temperature`, `top_p` or `top_k`; they were removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included.
 
 !!! note "`extra_body`"
 
-    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it, so the API still answers 400 to a sampling key written there.
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it. With `anthropic` 1.x, whose API version still reads the sampling keys, `#!python extra_body={"temperature": 0}` sends one; with `anthropic` 2.x the API answers 400 to it.
 
 ### Amazon Bedrock Authentication
 

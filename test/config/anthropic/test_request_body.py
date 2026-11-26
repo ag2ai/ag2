@@ -18,7 +18,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from ag2 import Context, MemoryStream
-from ag2.config.anthropic import AnthropicClient, AnthropicConfig, _compat
+from ag2.config.anthropic import AnthropicClient, AnthropicConfig
 from ag2.events import ImageInput, ModelRequest, ModelResponse, TextInput
 from ag2.exceptions import WebFetchOptionUnsupportedError, WebFetchUrlSourceToolNotFoundError
 from ag2.tools.builtin.mcp_server import MCPServerTool
@@ -123,38 +123,6 @@ async def test_speed_preserves_the_users_beta_header_with_mcp(
     assert captured["body"] == IsPartialDict({"speed": speed})
     headers = captured["headers"]
     assert headers.get_list("anthropic-beta") == ["fast-mode-2026-02-01,mcp-client-2025-11-20"]
-
-
-@pytest.mark.asyncio
-async def test_no_sampling_fields_leaves_the_body_alone() -> None:
-    captured: _Captured = {}
-    config = AnthropicConfig(model="claude-haiku-4-5", api_key="test", http_client=_capturing_client(captured))
-
-    await _ask(config)
-
-    body = captured["body"]
-    assert not {"temperature", "top_p", "top_k"} & body.keys()
-
-
-@pytest.mark.asyncio
-async def test_deprecated_sampling_fields_reach_the_body_only_with_sdk_1x() -> None:
-    sent = not _compat.SDK_2X
-    captured: _Captured = {}
-    config = AnthropicConfig(
-        model="claude-haiku-4-5",
-        api_key="test",
-        http_client=_capturing_client(captured),
-        temperature=0,
-        top_p=0.9,
-        top_k=5,
-    )
-
-    with pytest.warns(DeprecationWarning):
-        await _ask(config)
-
-    body = captured["body"]
-    assert ({"temperature", "top_p", "top_k"} <= body.keys()) is sent
-    assert bool({"temperature", "top_p", "top_k"} & body.keys()) is sent
 
 
 @pytest.mark.asyncio
