@@ -118,7 +118,7 @@ coordinator = Agent(
     "coordinator",
     prompt="Delegate independent work to task_worker, then combine the results.",
     config=config,
-    tools=[worker.as_tool(description="Complete a focused sub-task.")],
+    tools=[search, worker.as_tool(description="Complete a focused sub-task.")],
 )
 ```
 
