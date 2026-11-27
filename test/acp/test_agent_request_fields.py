@@ -27,7 +27,7 @@ from ag2.events import ToolCallEvent
 from ag2.history import MemoryStorage
 from ag2.testing import TestConfig, TrackingConfig
 
-INVALID_PARAMS = -32602
+INVALID_PARAMS = RequestError.invalid_params().code
 AGENT_PROMPT = "You are workie."
 
 

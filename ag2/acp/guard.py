@@ -24,6 +24,8 @@ import logging
 from typing import Any
 
 from acp import schema
+from acp.agent.connection import AgentSideConnection
+from acp.connection import Connection
 from acp.exceptions import RequestError
 from acp.meta import AGENT_METHODS
 
@@ -110,7 +112,6 @@ async def serve(agent: Any, reader: Any, writer: Any) -> None:
     created here, releasing it is this function's job too: nothing else ever sees
     it, so nobody else could.
     """
-    from acp.agent.connection import AgentSideConnection
 
     # ``AgentSideConnection`` invokes the factory and keeps the result to itself,
     # so intercept it on the way past. Only what the factory produced is closed
@@ -122,14 +123,26 @@ async def serve(agent: Any, reader: Any, writer: Any) -> None:
         scope = agent(client)
         return scope
 
-    # ``AgentSideConnection`` takes (input=writer, output=reader).
-    conn = AgentSideConnection(bind if callable(agent) else agent, writer, reader, listening=False)
-    # The router is built inside ``AgentSideConnection`` and is not exposed, so
-    # the guard is installed by wrapping it here — before anything is read off
-    # the wire, and before any handler can be reached.
-    conn._conn._handler = guard_router(conn._conn._handler)
+    # Own the ``Connection`` so the guard sits between the transport and the
+    # router without reaching into SDK internals. The connection is built with a
+    # forwarder we can retarget once the router exists; ``attach`` then wires the
+    # agent to it and hands back the very handler ``run_agent`` would have used,
+    # which is what we wrap. ``(input=writer, output=reader)`` as the constructor
+    # takes them.
+    routed: dict[str, Any] = {}
+
+    async def forward(method: str, params: Any = None, is_notification: bool = False) -> Any:
+        return await routed["handler"](method, params, is_notification)
+
+    conn = Connection(forward, writer, reader, listening=False)
+    # ``attach`` runs the factory (``bind``) with the wrapper — so each connection
+    # still gets its own scope — and returns the SDK's own message handler, built
+    # before anything is read off the wire. The guard wraps it, and the forwarder
+    # above points at the guarded version from the first frame on.
+    _wrapper, handler = AgentSideConnection.attach(bind if callable(agent) else agent, conn)
+    routed["handler"] = guard_router(handler)
     try:
-        await conn.listen()
+        await conn.main_loop()
     finally:
         try:
             # Shielded like ``acp.run_agent`` does: teardown must finish even when

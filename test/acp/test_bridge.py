@@ -12,6 +12,7 @@ from typing import Any
 import acp
 import pytest
 from acp import RequestError, schema
+from acp.meta import CLIENT_METHODS
 
 from ag2 import Agent
 from ag2.acp import PermissionPolicy
@@ -335,7 +336,8 @@ class TestUnsupportedClientMethods:
         error = await agent_asks(act, tmp_path)
 
         assert isinstance(error, RequestError)
-        assert (error.code, error.data) == (-32601, {"method": "mcp/message"})
+        expected = RequestError.method_not_found(CLIENT_METHODS["mcp_message"])
+        assert (error.code, error.data) == (expected.code, expected.data)
 
     async def test_an_auth_status_update_is_dispatched_cleanly_and_the_turn_goes_on(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
