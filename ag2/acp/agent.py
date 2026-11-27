@@ -105,8 +105,9 @@ def _request_meta(kwargs: dict[str, Any], method: str) -> dict[str, Any]:
     by name; what is left is the metadata the Client sent.
 
     Only Python field names are taken out: the SDK never passes a field by its
-    JSON alias, so a camelCase key such as ``systemPrompt`` is the Client's
-    metadata and stays.
+    JSON alias. A ``_meta`` key spelled like a field — either spelling, such as
+    ``system_prompt`` or ``systemPrompt`` — never gets this far: the guard
+    (:mod:`ag2.acp.guard`) refuses the request first.
 
     Kept verbatim. ``_meta`` is where applications put their own namespaced data
     — AG2 Space provenance, say — and AG2 has no business interpreting it.
@@ -137,6 +138,20 @@ def _system_prompt_texts(system_prompt: "schema.SystemPrompt | None", accepted: 
     else:
         return [block.text for block in system_prompt.content if isinstance(block, schema.TextContentBlock)]
     raise acp.RequestError.invalid_params({"reason": reason})
+
+
+def _check_config_options(config_options: "list[InitialConfigOption] | None") -> None:
+    """Fail the request on initial ``configOptions`` that name one id twice.
+
+    ACPAgent has no config options, so every id is unknown and ignored — but ACP
+    still requires duplicate ids to fail with ``invalid_params``, before a
+    session is created or changed.
+    """
+    seen: set[str] = set()
+    for entry in config_options or []:
+        if entry.config_id in seen:
+            raise acp.RequestError.invalid_params({"reason": f"configOptions repeats configId {entry.config_id!r}"})
+        seen.add(entry.config_id)
 
 
 def _package_version() -> str:
@@ -451,10 +466,11 @@ class _ConnectionScope:
         ``accept_system_prompt``; otherwise, or in any other mode, it fails the
         request and no session is created. ``config_options`` are ignored, as ACP
         requires for every option id the Agent does not know — and ACPAgent has no
-        config options at all.
+        config options at all — except that one id sent twice fails the request.
         """
         self._require_session_scope()
         instructions = _system_prompt_texts(system_prompt, self._owner._accept_system_prompt)
+        _check_config_options(config_options)
         try:
             session = await self._sessions.create(
                 cwd=cwd,
@@ -491,7 +507,9 @@ class _ConnectionScope:
         ``system_prompt`` and ``config_options`` are treated as in
         :meth:`new_session`. A load that sends no ``system_prompt`` keeps the one
         a live session already has; ACP leaves that to the Agent, and asks the
-        Client to resend the prompt it created the session with.
+        Client to resend the prompt it created the session with. A replacement
+        takes effect only once the load has succeeded: a refused load leaves the
+        live session's prompt as it was.
 
         The id names the session's history directly (it is the stream id, in
         hex), so a session can be loaded that this connection never issued: one
@@ -520,6 +538,7 @@ class _ConnectionScope:
         """
         self._require_session_scope()
         instructions = _system_prompt_texts(system_prompt, self._owner._accept_system_prompt)
+        _check_config_options(config_options)
         client = self._require_client()
         stream_id = self._parse_session_id(session_id)
         session_id = stream_id.hex  # the canonical form, whatever the Client sent
@@ -567,8 +586,6 @@ class _ConnectionScope:
                 session.cwd = cwd
                 session.additional_directories = context["additional_directories"]
                 session.mcp_servers = context["mcp_servers"]
-                if instructions is not None:
-                    session.system_prompt = instructions
                 if meta:
                     session.meta = meta
             if not session.is_idle:
@@ -598,6 +615,12 @@ class _ConnectionScope:
                         events = list(await stream.history.get_events())
                     updates = history_to_session_updates(events, session_id=session_id)
                     await self._owner._executor.deliver(updates, client=client, session_id=session_id)
+                    # Last, and still under the session's turn lock: a load that
+                    # was refused or failed must not leave the live session on
+                    # the replacement, nor may a turn assemble its prompt midway.
+                    # An adopted session was seeded with it already.
+                    if instructions is not None:
+                        session.system_prompt = instructions
             loaded = True
         except acp.RequestError:
             raise

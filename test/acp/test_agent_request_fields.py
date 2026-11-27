@@ -10,6 +10,8 @@ cannot apply to fail the request without creating or loading a session. Initial
 ignore. Neither may leak into the session's ``_meta``.
 """
 
+import asyncio
+from typing import Any
 from uuid import uuid4
 
 import acp
@@ -19,9 +21,10 @@ from acp.core import ClientSideConnection
 from acp.exceptions import RequestError
 
 from ag2 import Agent
-from ag2.acp import ACPAgent
-from ag2.acp.guard import request_fields
+from ag2.acp import ACPAgent, SessionConfig
 from ag2.acp.testing import connect
+from ag2.events import ToolCallEvent
+from ag2.history import MemoryStorage
 from ag2.testing import TestConfig, TrackingConfig
 
 INVALID_PARAMS = -32602
@@ -41,13 +44,17 @@ async def _ask(conn: ClientSideConnection, session_id: str) -> None:
     await conn.prompt(session_id=session_id, prompt=[schema.TextContentBlock(type="text", text="hi")])
 
 
+def _retaining() -> SessionConfig:
+    return SessionConfig(storage=MemoryStorage(), retain_history=True)
+
+
 @pytest.mark.asyncio
 class TestSystemPromptByDefault:
     async def test_is_not_advertised(self) -> None:
         async with connect(ACPAgent(_tracked()[0]), initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert response.agent_capabilities.session_capabilities.system_prompt is None
+        assert response.agent_capabilities.session_capabilities == schema.SessionCapabilities()
 
     async def test_fails_new_session_without_creating_one(self) -> None:
         server = ACPAgent(_tracked()[0])
@@ -78,8 +85,8 @@ class TestSystemPromptAccepted:
         async with connect(server, initialize=False) as (conn, _):
             response = await conn.initialize(protocol_version=acp.PROTOCOL_VERSION)
 
-        assert response.agent_capabilities.session_capabilities.system_prompt == (
-            schema.SessionSystemPromptCapabilities()
+        assert response.agent_capabilities.session_capabilities == schema.SessionCapabilities(
+            system_prompt=schema.SessionSystemPromptCapabilities()
         )
 
     async def test_is_appended_to_the_agent_s_own_instructions(self) -> None:
@@ -163,27 +170,151 @@ class TestSystemPromptAccepted:
 
 
 @pytest.mark.asyncio
-async def test_config_options_are_ignored_and_stay_out_of_meta() -> None:
-    server = ACPAgent(_tracked()[0])
-    options = [
-        schema.InitialSessionConfigOption1(config_id="thinking", value=True),
-        schema.InitialSessionConfigOption2(config_id="model", value="fast"),
-    ]
+class TestSystemPromptOnLoad:
+    """A replacement sent with ``session/load`` takes effect only if the load succeeds."""
+
+    async def test_a_load_refused_by_the_hook_keeps_the_prompt_it_had(self) -> None:
+        def refuse_loads(session: Any, origin: str) -> None:
+            if origin == "loaded":
+                raise PermissionError("not this caller's conversation")
+
+        agent, config = _tracked("ok", "ok")
+        server = ACPAgent(agent, accept_system_prompt=True, on_session=refuse_loads)
+
+        async with connect(server) as (conn, _):
+            session = await conn.new_session(cwd="/tmp", system_prompt=_system_prompt("A"))
+            with pytest.raises(RequestError):
+                await conn.load_session(cwd="/tmp", session_id=session.session_id, system_prompt=_system_prompt("B"))
+            await _ask(conn, session.session_id)
+
+        assert config.calls[-1].prompt == (AGENT_PROMPT, "A")
+
+    async def test_a_load_refused_mid_turn_keeps_the_prompt_it_had(self) -> None:
+        entered, release = asyncio.Event(), asyncio.Event()
+        config = TrackingConfig(TestConfig(ToolCallEvent(name="slow", arguments="{}"), "one", "two"))
+        agent = Agent("workie", AGENT_PROMPT, config=config)
+
+        @agent.tool
+        async def slow() -> str:
+            """Holds the turn in progress until released."""
+            entered.set()
+            await release.wait()
+            return "done"
+
+        server = ACPAgent(agent, accept_system_prompt=True)
+
+        async with connect(server) as (conn, _):
+            session = await conn.new_session(cwd="/tmp", system_prompt=_system_prompt("A"))
+            turn = asyncio.create_task(_ask(conn, session.session_id))
+            await asyncio.wait_for(entered.wait(), timeout=5)
+
+            with pytest.raises(RequestError):
+                await conn.load_session(cwd="/tmp", session_id=session.session_id, system_prompt=_system_prompt("B"))
+
+            release.set()
+            await turn
+            await _ask(conn, session.session_id)
+
+        assert {call.prompt for call in config.calls} == {(AGENT_PROMPT, "A")}
+
+    async def test_a_session_restored_from_storage_starts_without_one(self) -> None:
+        agent, config = _tracked("one", "two")
+        server = ACPAgent(agent, accept_system_prompt=True, sessions=_retaining())
+
+        async with connect(server) as (first, _):
+            session = await first.new_session(cwd="/tmp", system_prompt=_system_prompt("A"))
+            await _ask(first, session.session_id)
+
+        async with connect(server) as (second, _):
+            await second.load_session(cwd="/tmp", session_id=session.session_id)
+            await _ask(second, session.session_id)
+
+        assert config.calls[-1].prompt == (AGENT_PROMPT,)
+
+    async def test_a_session_restored_from_storage_takes_the_one_the_load_sends(self) -> None:
+        agent, config = _tracked("one", "two")
+        server = ACPAgent(agent, accept_system_prompt=True, sessions=_retaining())
+
+        async with connect(server) as (first, _):
+            session = await first.new_session(cwd="/tmp", system_prompt=_system_prompt("A"))
+            await _ask(first, session.session_id)
+
+        async with connect(server) as (second, _):
+            await second.load_session(cwd="/tmp", session_id=session.session_id, system_prompt=_system_prompt("B"))
+            await _ask(second, session.session_id)
+
+        assert config.calls[-1].prompt == (AGENT_PROMPT, "B")
+
+
+DUPLICATE_OPTIONS = [
+    schema.InitialSessionConfigOption2(config_id="unknown", value="a"),
+    schema.InitialSessionConfigOption2(config_id="unknown", value="b"),
+]
+
+
+@pytest.mark.asyncio
+class TestConfigOptions:
+    async def test_are_ignored_and_stay_out_of_meta(self) -> None:
+        server = ACPAgent(_tracked()[0])
+        options = [
+            schema.InitialSessionConfigOption1(config_id="thinking", value=True),
+            schema.InitialSessionConfigOption2(config_id="model", value="fast"),
+        ]
+
+        async with connect(server) as (conn, _):
+            created = await conn.new_session(cwd="/tmp", config_options=options, **{"ag2.space": {"room": "!r"}})
+            session = await server.sessions.get(created.session_id)
+
+        assert session.meta == {"ag2.space": {"room": "!r"}}
+
+    async def test_a_repeated_id_fails_new_session_without_creating_one(self) -> None:
+        server = ACPAgent(_tracked()[0])
+
+        async with connect(server) as (conn, _):
+            with pytest.raises(RequestError) as caught:
+                await conn.new_session(cwd="/tmp", config_options=DUPLICATE_OPTIONS)
+
+            assert len(server.sessions) == 0
+
+        assert (caught.value.code, caught.value.data) == (
+            INVALID_PARAMS,
+            {"reason": "configOptions repeats configId 'unknown'"},
+        )
+
+    async def test_a_repeated_id_fails_load_session_without_changing_it(self) -> None:
+        agent, config = _tracked("ok", "ok")
+        server = ACPAgent(agent, accept_system_prompt=True)
+
+        async with connect(server) as (conn, _):
+            session = await conn.new_session(cwd="/tmp", system_prompt=_system_prompt("A"))
+            with pytest.raises(RequestError) as caught:
+                await conn.load_session(
+                    cwd="/elsewhere",
+                    session_id=session.session_id,
+                    system_prompt=_system_prompt("B"),
+                    config_options=DUPLICATE_OPTIONS,
+                )
+            live = await server.sessions.get(session.session_id)
+            await _ask(conn, session.session_id)
+
+        assert caught.value.code == INVALID_PARAMS
+        assert live.cwd == "/tmp"
+        assert config.calls[-1].prompt == (AGENT_PROMPT, "A")
+
+
+@pytest.mark.asyncio
+async def test_only_the_client_s_metadata_is_kept_from_a_request_carrying_every_field() -> None:
+    server = ACPAgent(_tracked()[0], accept_system_prompt=True)
 
     async with connect(server) as (conn, _):
-        created = await conn.new_session(cwd="/tmp", config_options=options, **{"ag2.space": {"room": "!r"}})
+        created = await conn.new_session(
+            cwd="/tmp",
+            additional_directories=["/data"],
+            mcp_servers=[],
+            system_prompt=_system_prompt("Answer in French."),
+            config_options=[schema.InitialSessionConfigOption2(config_id="model", value="fast")],
+            **{"ag2.space": {"room": "!r"}},
+        )
         session = await server.sessions.get(created.session_id)
 
     assert session.meta == {"ag2.space": {"room": "!r"}}
-
-
-def test_request_fields_are_python_names_only() -> None:
-    # The SDK hands fields to a handler by Python name, so only those are
-    # stripped from its ``**kwargs``; a camelCase key there is ``_meta`` and stays.
-    assert request_fields("session/new") == {
-        "cwd",
-        "additional_directories",
-        "mcp_servers",
-        "system_prompt",
-        "config_options",
-    }

@@ -393,11 +393,14 @@ def fake_remote_acp_config(
     return config
 
 
-def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook":
+def _duplex_connect(
+    agent: "Callable[[acp.Client], Any] | Any", *, use_unstable_protocol: bool = False
+) -> "ConnectHook":
     """A connection hook that reaches ``agent`` over a real ACP connection in-process.
 
     ``agent`` is what ``acp.run_agent`` takes: an object implementing the SDK's
     ``Agent`` protocol, or a callable handed the connection to talk back through.
+    ``use_unstable_protocol`` opens the agent side's unstable routes.
     """
 
     @asynccontextmanager
@@ -407,7 +410,9 @@ def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook"
         (agent_reader, agent_writer), (client_reader, client_writer) = await duplex()
         # `listening=False` + an explicit task: the receive loop must be owned here
         # so it is cancelled with the connection rather than outliving the test.
-        agent_conn = AgentSideConnection(agent, agent_writer, agent_reader, listening=False)
+        agent_conn = AgentSideConnection(
+            agent, agent_writer, agent_reader, listening=False, use_unstable_protocol=use_unstable_protocol
+        )
         serving = asyncio.ensure_future(agent_conn.listen())
         # The same arguments the real transports pass: a harness that connected
         # differently would not be exercising AG2's wiring.
@@ -426,7 +431,12 @@ def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook"
     return cast("ConnectHook", connect)
 
 
-def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: Any) -> FakeACPConfig:
+def duplex_acp_config(
+    agent: "Callable[[acp.Client], Any] | Any",
+    *,
+    use_unstable_protocol: bool = False,
+    **overrides: Any,
+) -> FakeACPConfig:
     """An :class:`~.config.ACPConfig` reaching ``agent`` over a real ACP connection.
 
     Unlike :func:`fake_acp_config`, which calls the client's methods directly, both
@@ -440,9 +450,13 @@ def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: A
     :func:`fake_acp_config` — a scripted turn says more about behaviour with less
     machinery. What this does not cover is the launch path itself (argv, env,
     ``cwd``, a process to terminate); a test about that needs a real subprocess.
+
+    ``use_unstable_protocol`` opens the agent side's unstable routes — such as
+    ``session/options`` — which a real agent serving them would have enabled. The
+    client side always has them, as AG2's own transports do.
     """
     config = FakeACPConfig(**overrides)
-    config._connect = _duplex_connect(agent)
+    config._connect = _duplex_connect(agent, use_unstable_protocol=use_unstable_protocol)
     return config
 
 

@@ -55,9 +55,18 @@ def new_prompt_blocks(
 
 
 def _model_option(options: "Sequence[ConfigOption] | None") -> schema.SessionConfigOptionSelect | None:
-    """The agent's model picker among ``options``, if it advertises one."""
-    for option in options or []:
-        if isinstance(option, schema.SessionConfigOptionSelect) and option.id == "model":
+    """The agent's model picker among ``options``, if it advertises one.
+
+    ACP marks a picker's purpose with ``category="model"``, whatever its id; an
+    uncategorised select with the id ``model`` is taken as one too, as agents
+    predating categories name it that way.
+    """
+    selects = [option for option in options or [] if isinstance(option, schema.SessionConfigOptionSelect)]
+    for option in selects:
+        if option.category == "model":
+            return option
+    for option in selects:
+        if option.id == "model":
             return option
     return None
 
@@ -107,17 +116,20 @@ async def initial_model_option(
     the session actually has — :func:`select_model` reads those afterwards and
     falls back to ``session/set_config_option`` if the model was not applied.
 
+    The preview only decides what to send. Per ACP the ``session/new`` response
+    is authoritative, so a model the preview does not offer is simply not sent
+    here; :func:`select_model` then judges it against the created session.
+
     ``None`` when there is nothing to send: no ``model``, an agent without the
-    capability, no model picker, or a picker already on ``model``. A value the
-    picker does not offer raises ``ValueError``, as :func:`select_model` does.
+    capability, no model picker in the preview, or one already on ``model`` or
+    not offering it.
     """
     if model is None or capabilities is None or capabilities.options is None:
         return None
     options = await conn.session_options(cwd=cwd, additional_directories=additional_directories)
     option = _model_option(options.config_options)
-    if option is None or option.current_value == model:
+    if option is None or option.current_value == model or model not in _model_values(option):
         return None
-    _check_offered(option, model)
     return [schema.InitialSessionConfigOption2(config_id=option.id, value=model)]
 
 
@@ -165,7 +177,8 @@ def _system_prompt(
         return None
     if capabilities is None or capabilities.system_prompt is None:
         logger.warning(
-            "ACP agent %r does not accept a system prompt; the AG2 agent's instructions are not sent to it",
+            "ACP agent %r does not accept a system prompt; the AG2 agent's instructions are not sent to it."
+            " Updating its ACP adapter may add support for it.",
             agent_name,
         )
         return None

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """What an ACP agent can ask of AG2, as the agent sees it: files, terminals and permission."""
 
+import logging
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -336,8 +337,31 @@ class TestUnsupportedClientMethods:
         assert isinstance(error, RequestError)
         assert (error.code, error.data) == (-32601, {"method": "mcp/message"})
 
-    async def test_an_auth_status_update_does_not_disturb_the_turn(self, tmp_path: Path) -> None:
-        async def act(conn: acp.Client, sid: str) -> Any:
-            return await conn.auth_status_update(state="authenticated")
+    async def test_an_auth_status_update_is_dispatched_cleanly_and_the_turn_goes_on(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "f.txt").write_text("x")
 
-        assert await agent_asks(act, tmp_path) is None
+        async def act(conn: acp.Client, sid: str) -> Any:
+            await conn.auth_status_update(state="authenticated")
+            # A request round trip after it: the client reads messages in order,
+            # so once this is answered the notification has been dispatched.
+            await conn.read_text_file(session_id=sid, path="f.txt")
+            await conn.session_update(
+                session_id=sid,
+                update=schema.AgentMessageChunk(
+                    session_update="agent_message_chunk", content=schema.TextContentBlock(type="text", text="after")
+                ),
+            )
+
+        outcome: list[Any] = []
+        cfg = duplex_acp_config(lambda conn: CallingAgent(conn, act, outcome), cwd=str(tmp_path))
+        try:
+            with caplog.at_level(logging.ERROR, logger="acp"):
+                reply = await Agent("acp", config=cfg).ask("go")
+        finally:
+            await cfg.aclose()
+
+        assert outcome == [None]
+        assert reply.body == "after"
+        assert [r for r in caplog.records if r.name.startswith("acp")] == []

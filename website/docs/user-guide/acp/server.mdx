@@ -309,6 +309,7 @@ acp_agent = ACPAgent(
 | `#!python auth` | Authentication provider. `#!python None` (the default) advertises no methods and rejects `#!python authenticate` |
 | `#!python prompt_content` | Which non-text prompt content to advertise — see [Multimodal content](#multimodal-content) |
 | `#!python stream_thoughts` | Whether to forward the agent's reasoning as `#!python agent_thought_chunk` updates. Off by default |
+| `#!python accept_system_prompt` | Whether a client may add instructions with ACP `systemPrompt`. Off by default — see [Client instructions](#client-instructions) |
 | `#!python hitl_hook` | How to answer a turn that calls `#!python context.input()` — see [Human input](#human-input). `#!python None` (the default) fails such a turn |
 | `#!python on_session` | Called with `#!python (session, origin)` after `#!python session/new` (`#!python "created"`) and `#!python session/load` (`#!python "loaded"`) — see [Loading a session](#loading-a-session) |
 
@@ -341,6 +342,43 @@ of provider modalities to consult — the ACP mapper will happily build an
 `#!python AudioInput` that the Anthropic mapper then rejects. So this is a declaration by
 whoever deploys the agent, not a guess. Audio is off by default because most providers do
 not accept it.
+
+### Client instructions
+
+A client may send its own instructions with `#!python session/new` or `#!python session/load`
+as ACP `systemPrompt`. They join the agent's instructions at system level, so whoever
+connects could steer the agent further than a user message can. That is why it is off by
+default: such a request is refused with `invalid_params`, and no session is created.
+
+A host that trusts its clients that far opts in:
+
+```python linenums="1" hl_lines="11"
+from ag2 import Agent
+from ag2.acp import ACPAgent
+from ag2.config import AnthropicConfig
+
+agent = Agent(
+    "workie",
+    "You review pull requests.",
+    config=AnthropicConfig(model="claude-haiku-4-5-20251001"),
+)
+
+acp_agent = ACPAgent(agent, accept_system_prompt=True)
+```
+
+The agent then advertises `sessionCapabilities.systemPrompt`, and a prompt in `append` mode
+is added after the agent's own instructions for every turn of that session. Only text
+content is accepted. `override` mode is still refused, since it would drop the instructions
+the agent was built with.
+
+On `#!python session/load`:
+
+- A load that sends no `systemPrompt` keeps the one the live session already has.
+- A load that sends one replaces it, but only once the load has succeeded. A refused load
+  — by `#!python on_session`, or because a turn is in progress — leaves the session's
+  instructions as they were.
+- A session restored from storage starts without client instructions, unless the load
+  sends them.
 
 ## Authentication
 
@@ -455,17 +493,7 @@ Reported as **not** supported: `#!python session/resume`, `#!python session/fork
 `#!python session/list`, `#!python session/delete`, `#!python session/close`,
 `#!python session/archive`, `#!python session/unarchive`, `#!python session/status`,
 `#!python session/options`, `#!python session/set_title`, `#!python auth/status`, and
-connecting to client-provided MCP servers over any transport.
-
-A client-supplied system prompt (`systemPrompt` on `#!python session/new` or
-`#!python session/load`) is refused with `invalid_params` by default, and no session is
-created. It joins the agent's instructions at system level, so whoever connects could steer
-the agent further than a user message can. A host that trusts its clients that far opts in
-with `#!python ACPAgent(agent, accept_system_prompt=True)`: the capability is then advertised,
-and `append` mode adds the client's text after the agent's own prompt for every turn of that
-session. `override` is still refused — it would drop the instructions the agent was built
-with. Initial `configOptions` are ignored, as ACP requires for option ids the agent does not
-know — and this one has none. The client's own filesystem
+connecting to client-provided MCP servers over any transport. The client's own filesystem
 and terminal methods are never called either — those the client offers, so there is nothing
 to declare.
 
@@ -490,6 +518,15 @@ protocol flag besides.
 A `#!python cwd`, an additional directory or an MCP server named by a client is recorded as
 *context* and acted on by nothing. A path a client names is not authority to reach it;
 deciding what to honour belongs to the application embedding the agent.
+
+A client's initial `configOptions` on `#!python session/new` and `#!python session/load` are
+ignored, as ACP requires for option ids the agent does not know, and this one has none.
+A request that names the same id twice is refused with `invalid_params`.
+
+Request field names are reserved in a request's `_meta`, in either spelling
+(`sessionId` / `session_id`), because the SDK would let metadata overwrite the field
+itself. A request whose `_meta` uses one is refused with `invalid_params`. Since ACP 1.1
+that includes `systemPrompt` and `configOptions`.
 
 ## Testing
 

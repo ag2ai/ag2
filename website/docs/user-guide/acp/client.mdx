@@ -20,6 +20,18 @@ observe, gate, and orchestrate it like any other AG2 agent.
 pip install "ag2[acp]"
 ```
 
+Claude Code and Codex are reached through separate ACP adapters, which you install
+yourself; OpenCode and Kilo Code speak ACP from their own CLI. Keep whichever you use up
+to date: an outdated one still runs turns, but silently lacks newer protocol features —
+with older Claude Code and Codex adapters, the agent's instructions never reach the CLI
+agent (see *Instructions* below). To install or update the two adapters:
+
+```bash
+npm install -g @agentclientprotocol/claude-agent-acp@latest @agentclientprotocol/codex-acp@latest
+```
+
+`npm ls -g --depth=0` shows the installed versions.
+
 The integration is a configuration class — a subclass of `ACPConfig` carrying the
 launch defaults for each adapter (`ClaudeCodeConfig`, `CodexConfig`,
 `OpenCodeConfig`, `KiloCodeConfig`) — and there are no changes to the `Agent` API.
@@ -100,15 +112,21 @@ agent = Agent(
 
 !!! note "Model selection"
 
-    `model` is applied at session start when the agent advertises a model
-    picker — Claude Code, Codex, OpenCode and Kilo Code all do. An agent that
-    also advertises `sessionCapabilities.options` gets it with `session/new`, so
-    the session starts on it; any other gets it via `session/set_config_option`
-    right after. Use the agent's own advertised ids: for OpenCode and Kilo Code
-    that is `"provider/model"` as listed by `opencode models` / `kilo models`;
-    Claude Code and Codex advertise bare ids. A value the agent does not offer
-    raises `ValueError` before the first turn; leaving `model` unset keeps the
-    agent's default.
+    `model` is applied at session start when the agent advertises a model picker —
+    a select config option in the `model` category, or one with the id `model` —
+    and Claude Code, Codex, OpenCode and Kilo Code all do. An agent that also
+    advertises `sessionCapabilities.options` gets it with `session/new`, so the
+    session starts on it; when the session it creates is not on that model (or the
+    agent lacks the capability), it gets it via `session/set_config_option` right
+    after. Use the agent's own advertised ids: for OpenCode and Kilo Code that is
+    `"provider/model"` as listed by `opencode models` / `kilo models`; Claude Code
+    and Codex advertise bare ids. A value the agent does not offer raises
+    `ValueError` before the first turn — judged by the options the created session
+    reports; leaving `model` unset keeps the agent's default.
+
+    **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
+    may default to an unsuitable model (an image model, at the time of
+    writing), which ends every turn with an empty reply.
 
 !!! note "Instructions"
 
@@ -119,9 +137,12 @@ agent = Agent(
     `sessionCapabilities.systemPrompt`; for any other the instructions cannot be
     delivered, and AG2 logs a warning saying so.
 
-    **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
-    may default to an unsuitable model (an image model, at the time of
-    writing), which ends every turn with an empty reply.
+    Whether an agent advertises it depends on the adapter version. Older
+    adapters do not, so with them the agent's `prompt` never reaches the CLI agent;
+    `claude-agent-acp` 0.113 and `codex-acp` 2.12 do (0.55 and 1.1 did not). If you
+    see the warning, update the adapter with the `npm install` command at the top of
+    this page. The same versions also take `model` with `session/new` (see *Model
+    selection*).
 
 !!! warning "Empty replies"
 

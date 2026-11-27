@@ -57,7 +57,10 @@ def colliding_meta_keys(method: str, params: Any) -> frozenset[str]:
     """Metadata keys in ``params`` that would displace one of ``method``'s fields.
 
     Both spellings count: the Python name, which the merge would overwrite, and
-    the JSON alias, which names the same field on the wire.
+    the JSON alias, which names the same field on the wire. That makes every
+    field a protocol release adds reserved too — ``systemPrompt`` and
+    ``configOptions`` since ACP 1.1 — so ``_meta`` cannot use either spelling of
+    them, whether or not the request sets the field itself.
     """
     model = _REQUESTS.get(method)
     if model is None or not isinstance(params, dict):
