@@ -1,0 +1,37 @@
+name: Dependabot auto-merge
+
+# API calls only. Do not check out the PR or run code or artifacts from it.
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- no PR code runs with write access.
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions: {}
+
+jobs:
+  automerge:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Enable auto-merge for signed Dependabot commits
+        run: |
+          commits=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR/commits?per_page=100")
+          if ! jq -e --arg head "$HEAD_SHA" 'flatten | length > 0 and last.sha == $head and
+            all(.[]; .author.login == "dependabot[bot]" and .commit.verification.verified == true)' \
+            <<< "$commits" > /dev/null; then
+            echo 'Not a verified Dependabot head; leaving this PR for manual review.'
+            exit 0
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" \
+            -f event=APPROVE -f commit_id="$HEAD_SHA" > /dev/null
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD_SHA"
