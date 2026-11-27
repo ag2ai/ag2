@@ -26,7 +26,7 @@ from acp import schema
 
 from .config import ACPConfig
 from .session import _model_values
-from .types import SessionUpdate
+from .types import ContentBlock, SessionUpdate
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -187,7 +187,7 @@ class _FakeConnection:
                 await self._client.complete_elicitation(elicitation_id=elicitation.mode.elicitation_id)
 
     async def set_config_option(
-        self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
+        self, *, session_id: str, config_id: str, value: str | bool, **kwargs: Any
     ) -> schema.SetSessionConfigOptionResponse:
         """Record the call and echo back the option set with ``value`` applied.
 
@@ -206,7 +206,9 @@ class _FakeConnection:
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
 
-    async def prompt(self, *, session_id: str, prompt: Sequence[Any] = (), **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(
+        self, *, session_id: str, prompt: Sequence[ContentBlock] = (), **kwargs: Any
+    ) -> schema.PromptResponse:
         self.prompt_calls.append("".join(block.text for block in prompt if isinstance(block, schema.TextContentBlock)))
         turn = next(self._turns)
         if turn.on_prompt is not None:
@@ -479,7 +481,7 @@ class RecordingClient:
         """Only the updates belonging to ``session_id``, in arrival order."""
         return [u for sid, u in self.updates if sid == session_id]
 
-    async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+    async def session_update(self, *, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
         self.updates.append((session_id, update))
 
     async def request_permission(self, **kwargs: Any) -> Any:
