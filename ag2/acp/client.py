@@ -36,6 +36,7 @@ from ag2.events.types import ModelMessage, ModelResponse
 from ag2.response import ResponseProto
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+from ag2.utils import CONFIGURED_PROMPT_CONTEXT_KEY
 
 from .bridge import make_bridge
 from .mappers import map_usage, text_block
@@ -67,6 +68,26 @@ def _elicitation_capabilities(policy: "ElicitationPolicy") -> schema.Elicitation
     )
 
 
+def _session_instructions(context: ConversationContext, agent_label: str) -> list[str]:
+    """The instructions an ACP session may be created with: the agent's own prompt.
+
+    ACP fixes ``systemPrompt`` at ``session/new``, and the session outlives the
+    invocation that created it. What was supplied for a single invocation (an
+    ``ask(..., plugins=[...])`` prompt, invocation middleware rewriting the
+    prompt) lives only as long as that invocation, so it is left out: the CLI
+    agent would otherwise keep following it on every later turn, after AG2 had
+    already dropped it. A warning says it was not delivered.
+    """
+    configured = context.dependencies.get(CONFIGURED_PROMPT_CONTEXT_KEY, ())
+    if list(configured) != list(context.prompt):
+        logger.warning(
+            "Instructions supplied for this invocation only are not sent to ACP agent %r: ACP fixes the"
+            " system prompt for the whole session, and they apply to this invocation only.",
+            agent_label,
+        )
+    return list(configured)
+
+
 def _terminate_proc(proc: Process | None) -> None:
     """Best-effort synchronous subprocess termination (finalizer safety net)."""
     try:
@@ -95,6 +116,9 @@ class ACPClient:
         )
 
     async def _session_for(self, context: ConversationContext, tools: Sequence[ToolSchema]) -> ACPSession:
+        # Every turn, not only the one that creates the session: a later
+        # invocation's own instructions never reach the agent either.
+        instructions = _session_instructions(context, self.config._agent_label)
         key = context.stream.id
         session = self.config._sessions.get(key)
         if session is not None and session.started:
@@ -147,6 +171,7 @@ class ACPClient:
                 client_capabilities=self._client_capabilities(),
                 additional_directories=[str(Path(d).resolve()) for d in self.config.additional_directories],
                 model=self.config.model,
+                system_prompt=instructions,
                 mcp_servers=mcp_servers or None,
                 agent_label=self.config._agent_label,
             )
