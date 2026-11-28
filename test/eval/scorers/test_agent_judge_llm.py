@@ -18,7 +18,7 @@ import os
 
 import pytest
 
-from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAICompletionsConfig
 from ag2.eval import Feedback, Scorer
 from ag2.eval.dataset.task import Task
 from ag2.eval.scorers import agent_judge
@@ -43,7 +43,7 @@ def _require(*envs: str) -> str:
 )
 def judge_config(request):
     if request.param == "openai":
-        return OpenAIConfig(model="gpt-5.4-nano", api_key=_require("OPENAI_API_KEY"), temperature=0)
+        return OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=_require("OPENAI_API_KEY"), temperature=0)
     if request.param == "anthropic":
         return AnthropicConfig(model="claude-haiku-5-5", api_key=_require("ANTHROPIC_API_KEY"))
     return GeminiConfig(

@@ -8,17 +8,17 @@ from dataclasses import dataclass
 import pytest
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig, OpenAIResponsesConfig
+from ag2.config import OpenAICompletionsConfig, OpenAIResponsesConfig
 from ag2.events import ImageInput
 from ag2.tools import ImageGenerationTool
 
 
 @pytest.fixture()
-def openai_config() -> OpenAIConfig:
+def openai_config() -> OpenAICompletionsConfig:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         pytest.skip("OPENAI_API_KEY not set")
-    return OpenAIConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
+    return OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
 
 
 @pytest.fixture()
@@ -73,7 +73,7 @@ async def test_image_editing(openai_responses_config: OpenAIResponsesConfig) -> 
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_system_prompt(openai_config: OpenAIConfig) -> None:
+async def test_system_prompt(openai_config: OpenAICompletionsConfig) -> None:
     agent = Agent(
         name="french_agent",
         prompt="You must always respond in French, no matter what language the user uses.",
@@ -90,7 +90,7 @@ async def test_system_prompt(openai_config: OpenAIConfig) -> None:
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_tool_use(openai_config: OpenAIConfig) -> None:
+async def test_tool_use(openai_config: OpenAICompletionsConfig) -> None:
     def get_weather(city: str) -> str:
         """Get the current weather for a city."""
         return f"The weather in {city} is sunny and 22°C."
@@ -110,7 +110,7 @@ async def test_tool_use(openai_config: OpenAIConfig) -> None:
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_structured_output_primitive(openai_config: OpenAIConfig) -> None:
+async def test_structured_output_primitive(openai_config: OpenAICompletionsConfig) -> None:
     agent = Agent(
         name="math_agent",
         prompt="You are a math assistant. Return only the numeric answer.",
@@ -126,7 +126,7 @@ async def test_structured_output_primitive(openai_config: OpenAIConfig) -> None:
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_structured_output_dataclass(openai_config: OpenAIConfig) -> None:
+async def test_structured_output_dataclass(openai_config: OpenAICompletionsConfig) -> None:
     @dataclass
     class City:
         name: str
@@ -150,7 +150,7 @@ async def test_structured_output_dataclass(openai_config: OpenAIConfig) -> None:
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_multi_turn(openai_config: OpenAIConfig) -> None:
+async def test_multi_turn(openai_config: OpenAICompletionsConfig) -> None:
     agent = Agent(
         name="memory_agent",
         prompt="You are a helpful assistant. Be concise.",
@@ -167,7 +167,7 @@ async def test_multi_turn(openai_config: OpenAIConfig) -> None:
 
 @pytest.mark.openai
 @pytest.mark.asyncio()
-async def test_multi_turn_after_empty_args_tool_call(openai_config: OpenAIConfig) -> None:
+async def test_multi_turn_after_empty_args_tool_call(openai_config: OpenAICompletionsConfig) -> None:
     """A follow-up question after an empty-args tool call must not crash."""
 
     def discover_agents(capability: str = "") -> str:

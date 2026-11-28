@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from ag2 import Agent
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_TEXT,
@@ -42,11 +42,11 @@ except ImportError:
 
 
 @pytest.fixture()
-def openai_config() -> OpenAIConfig:
+def openai_config() -> OpenAICompletionsConfig:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         pytest.skip("OPENAI_API_KEY not set")
-    return OpenAIConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
+    return OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=api_key, temperature=0)
 
 
 async def _wait_for_text_count(
@@ -69,7 +69,7 @@ async def _wait_for_text_count(
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_peers_then_delegate_consults_a_specialist(
-    openai_config: OpenAIConfig,
+    openai_config: OpenAICompletionsConfig,
 ) -> None:
     """alice's LLM discovers bob via ``peers`` then consults via ``delegate``."""
     hub = await Hub.open(
@@ -114,7 +114,7 @@ async def test_peers_then_delegate_consults_a_specialist(
 @pytest.mark.openai
 @pytest.mark.asyncio()
 async def test_3way_discussion_round_robin(
-    openai_config: OpenAIConfig,
+    openai_config: OpenAICompletionsConfig,
 ) -> None:
     """Three OpenAI agents take round-robin turns by replying with text.
 

@@ -30,7 +30,7 @@ pytest.importorskip("openai")
 pytest.importorskip("google.genai")
 
 from ag2 import Agent
-from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_PACKET,
@@ -123,7 +123,7 @@ async def test_consulting_anthropic_initiator_openai_specialist() -> None:
     bob = Agent(
         name="bob",
         prompt=("You are a math specialist. Answer with just the numeric result, no explanation."),
-        config=OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
+        config=OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
     )
 
     alice_c = await hub.register(alice, resume=Resume(summary="multi-agent coordinator"))
@@ -159,7 +159,7 @@ async def test_3way_discussion_one_per_provider() -> None:
 
     configs = {
         "alice": AnthropicConfig(model="claude-haiku-5-5", api_key=anth_key),
-        "bob": OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
+        "bob": OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
         "carol": GeminiConfig(model="gemini-3.6-flash", api_key=gemini_key, temperature=0),
     }
 
@@ -262,7 +262,7 @@ async def test_workflow_handoff_anthropic_to_openai() -> None:
     eng_agent = Agent(
         name="eng",
         prompt="You are a senior engineer. Answer concisely in one sentence.",
-        config=OpenAIConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
+        config=OpenAICompletionsConfig(model="gpt-5.4-nano", api_key=oai_key, temperature=0),
     )
 
     user_hc = HubClient(link, hub=hub)

@@ -47,7 +47,7 @@ pytest.importorskip("openai")
 pytest.importorskip("google.genai")
 
 from ag2 import Agent
-from ag2.config import AnthropicConfig, GeminiConfig, OpenAIConfig
+from ag2.config import AnthropicConfig, GeminiConfig, OpenAICompletionsConfig
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
     EV_PACKET,
@@ -104,8 +104,8 @@ def _anthropic(keys: dict[str, str]) -> AnthropicConfig:
     return AnthropicConfig(model=ANTHROPIC_MODEL, api_key=keys["ANTHROPIC_API_KEY"])
 
 
-def _openai(keys: dict[str, str]) -> OpenAIConfig:
-    return OpenAIConfig(model=OPENAI_MODEL, api_key=keys["OPENAI_API_KEY"], temperature=0)
+def _openai(keys: dict[str, str]) -> OpenAICompletionsConfig:
+    return OpenAICompletionsConfig(model=OPENAI_MODEL, api_key=keys["OPENAI_API_KEY"], temperature=0)
 
 
 def _gemini(keys: dict[str, str]) -> GeminiConfig:

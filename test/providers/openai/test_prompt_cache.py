@@ -29,7 +29,7 @@ from openai import BadRequestError, omit
 from openai.types.chat.completion_create_params import PromptCacheOptions
 
 from ag2 import Agent, MemoryStream
-from ag2.config import OpenAIConfig
+from ag2.config import OpenAICompletionsConfig
 from ag2.events import ModelResponse
 
 try:
@@ -67,12 +67,12 @@ def _config(
     *,
     model: str = MODEL,
     options: PromptCacheOptions | None = None,
-) -> OpenAIConfig:
+) -> OpenAICompletionsConfig:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         pytest.skip("OPENAI_API_KEY not set")
 
-    return OpenAIConfig(
+    return OpenAICompletionsConfig(
         model=model,
         api_key=api_key,
         prompt_cache_key=cache_key,
@@ -80,7 +80,7 @@ def _config(
     )
 
 
-async def _cached_tokens(config: OpenAIConfig, prompt: str) -> float:
+async def _cached_tokens(config: OpenAICompletionsConfig, prompt: str) -> float:
     stream = MemoryStream()
 
     await Agent("scribe", prompt, config=config).ask("Capital of France?", stream=stream)
