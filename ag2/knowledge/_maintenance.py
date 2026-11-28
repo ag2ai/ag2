@@ -5,6 +5,7 @@
 import logging
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from ag2.annotations import Context
@@ -20,6 +21,7 @@ from ag2.events import (
     ModelResponse,
     ToolCallsEvent,
     ToolResultsEvent,
+    Usage,
     UsageEvent,
     estimated_tokens,
     is_conversational,
@@ -285,14 +287,21 @@ class _AggregationMiddleware(BaseMiddleware):
                         )
                     )
                 try:
-                    await self._strategy.aggregate(events_after, context, self._store)
+                    spent_during: list[UsageEvent] = []
+                    with context.stream.where(UsageEvent).sub_scope(collect_usage_events(spent_during)):
+                        await self._strategy.aggregate(events_after, context, self._store)
                     usage = getattr(self._strategy, "last_usage", {})
+                    aggregation_calls = [record for record in spent_during if record.kind == "aggregation"]
+                    llm_calls = 1 if usage else 0
+                    if aggregation_calls:
+                        llm_calls = len(aggregation_calls)
+                        usage = asdict(sum((record.usage for record in aggregation_calls), start=Usage()))
                     await context.send(
                         AggregationCompleted(
                             agent=self._actor_name,
                             strategy=strategy_name,
                             event_count=count_after,
-                            llm_calls=1 if usage else 0,
+                            llm_calls=llm_calls,
                             usage=usage,
                         )
                     )

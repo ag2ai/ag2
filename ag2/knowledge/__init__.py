@@ -19,6 +19,7 @@ from ag2.exceptions import missing_additional_dependency
 from .base import (
     ChangeCallback,
     ChangeSubscription,
+    CompareAndSwapStore,
     KnowledgeStore,
     NoopChangeSubscription,
 )
@@ -42,6 +43,7 @@ __all__ = [
     "WORKING_MEMORY_PATH",
     "ChangeCallback",
     "ChangeSubscription",
+    "CompareAndSwapStore",
     "DefaultBootstrap",
     "DiskKnowledgeStore",
     "EventLogWriter",
