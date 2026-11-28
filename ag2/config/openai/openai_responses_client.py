@@ -9,14 +9,17 @@ from typing import Any, Literal, Required, TypedDict, cast
 
 import httpx2
 from fast_depends.library.serializer import SerializerProto
-from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, Omit, not_given, omit
+from openai import DEFAULT_MAX_RETRIES, APIError, AsyncOpenAI, AsyncStream, Omit, not_given, omit
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
     ResponseCompletedEvent,
+    ResponseErrorEvent,
+    ResponseFailedEvent,
     ResponseFunctionShellToolCall,
     ResponseFunctionShellToolCallOutput,
     ResponseFunctionToolCall,
+    ResponseIncompleteEvent,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseOutputText,
@@ -375,8 +378,8 @@ class OpenAIResponsesClient(LLMClient):
                     if shell_result := shell_calls.close(event.item):
                         await context.send(shell_result)
 
-            elif isinstance(event, ResponseCompletedEvent):
-                # Stream finished
+            elif isinstance(event, ResponseCompletedEvent | ResponseIncompleteEvent | ResponseFailedEvent):
+                # Stream finished; `status` says how
                 if event.response.usage:
                     usage = normalize_responses_usage(event.response.usage)
 
@@ -385,6 +388,9 @@ class OpenAIResponsesClient(LLMClient):
                 response_id = event.response.id
 
                 await self._report_cache_diagnostics(event.response, context, comparison_id)
+
+            elif isinstance(event, ResponseErrorEvent):
+                raise APIError(event.message, response_stream.response.request, body=event.model_dump())
 
         message: ModelMessage | None = None
         if full_content:
