@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import acp
 from acp import schema
+from acp.meta import CLIENT_METHODS
 
 from ag2.events.types import BinaryResult, ModelMessage
 from ag2.exceptions import HumanInputError
@@ -383,21 +384,22 @@ class ACPBridge(acp.Client):
         await self.state.terminals.release(terminal_id)
         return schema.ReleaseTerminalResponse()
 
-    async def connect_mcp(self, server_id: str, **kwargs: Any) -> schema.ConnectMcpResponse:
-        raise acp.RequestError.method_not_found("mcp/connect")
-
-    async def disconnect_mcp(self, connection_id: str, **kwargs: Any) -> schema.DisconnectMcpResponse:
-        raise acp.RequestError.method_not_found("mcp/disconnect")
-
     async def mcp_message(
-        self, connection_id: str, method: str, params: dict[str, Any] | None = None, **kwargs: Any
-    ) -> Any:
-        raise acp.RequestError.method_not_found("mcp/message")
+        self,
+        server_id: str,
+        request_id: str,
+        method: str,
+        params: dict[str, Any] | None = None,
+        session_id: str | None = None,
+        tool_call_id: str | None = None,
+        **kwargs: Any,
+    ) -> schema.MessageMcpResponse:
+        raise acp.RequestError.method_not_found(CLIENT_METHODS["mcp_message"])
 
-    async def notify_mcp(
-        self, connection_id: str, method: str, params: dict[str, Any] | None = None, **kwargs: Any
+    async def auth_status_update(
+        self, state: str, accounts: list[schema.AuthAccount] | None = None, **kwargs: Any
     ) -> None:
-        """Ignore the notification: the bridge advertises no ACP-hosted MCP servers."""
+        """Ignore the notification: the bridge does not track the Agent's auth status."""
 
     def on_connect(self, conn: "acp.Agent") -> None:
         """No-op: the bridge does not need the reverse agent handle."""

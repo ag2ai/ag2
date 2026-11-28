@@ -24,9 +24,9 @@ from acp import schema
 
 from ag2.events import BaseEvent, ModelRequest
 
-from .mappers import input_to_prompt_block
+from .mappers import input_to_prompt_block, text_block
 from .tool_gateway import MCPCapabilityError
-from .types import ContentBlock
+from .types import ConfigOption, ContentBlock, InitialConfigOption
 
 if TYPE_CHECKING:
     from .bridge import ACPBridge
@@ -54,17 +54,28 @@ def new_prompt_blocks(
     return [input_to_prompt_block(p, capabilities) for req in new for p in req.parts], len(requests)
 
 
-def _model_option(session: schema.NewSessionResponse) -> schema.SessionConfigOptionSelect | None:
-    """The agent's model picker, if it advertised one in ``session/new``."""
-    for option in session.config_options or []:
-        if isinstance(option, schema.SessionConfigOptionSelect) and option.id == "model":
+def _model_option(options: "Sequence[ConfigOption] | None") -> schema.SessionConfigOptionSelect | None:
+    """The agent's model picker among ``options``, if it advertises one.
+
+    ACP marks a picker's purpose with ``category="model"``, whatever its id; an
+    uncategorised select with the id ``model`` is taken as one too, as agents
+    predating categories name it that way. A select with that id but another
+    category — ``mode``, say — is not: a model setting sent to it would change
+    something else.
+    """
+    selects = [option for option in options or [] if isinstance(option, schema.SessionConfigOptionSelect)]
+    for option in selects:
+        if option.category == "model":
+            return option
+    for option in selects:
+        if option.id == "model" and option.category is None:
             return option
     return None
 
 
 def current_model(session: schema.NewSessionResponse) -> str | None:
     """The model the agent reports it is running, if it advertised a picker."""
-    option = _model_option(session)
+    option = _model_option(session.config_options)
     return option.current_value if option is not None else None
 
 
@@ -79,6 +90,51 @@ def _model_values(option: schema.SessionConfigOptionSelect) -> list[str]:
     return values
 
 
+def _check_offered(option: schema.SessionConfigOptionSelect, model: str) -> None:
+    """Raise ``ValueError`` up front for a ``model`` the picker does not offer."""
+    values = _model_values(option)
+    if model not in values:
+        # Agents can offer hundreds of ids (Kilo advertises 320), so list close
+        # matches rather than the whole set.
+        close = get_close_matches(model, values, n=3)
+        hint = f"; closest offered: {close}" if close else ""
+        raise ValueError(f"model {model!r} is not offered by the ACP agent ({len(values)} offered){hint}")
+
+
+async def initial_model_option(
+    conn: "acp.core.ClientSideConnection",
+    capabilities: "schema.SessionCapabilities | None",
+    model: str | None,
+    *,
+    cwd: str,
+    additional_directories: list[str] | None,
+) -> "list[InitialConfigOption] | None":
+    """``model`` as an initial config option for ``session/new``, when the agent takes them.
+
+    The ACP flow for an agent advertising ``sessionCapabilities.options``: ask
+    ``session/options`` what a new session would start with, then send the chosen
+    values with ``session/new``, so the session starts on the requested model. The
+    agent ignores an entry it will not apply, and its response carries the values
+    the session actually has — :func:`select_model` reads those afterwards and
+    falls back to ``session/set_config_option`` if the model was not applied.
+
+    The preview only decides what to send. Per ACP the ``session/new`` response
+    is authoritative, so a model the preview does not offer is simply not sent
+    here; :func:`select_model` then judges it against the created session.
+
+    ``None`` when there is nothing to send: no ``model``, an agent without the
+    capability, no model picker in the preview, or one already on ``model`` or
+    not offering it.
+    """
+    if model is None or capabilities is None or capabilities.options is None:
+        return None
+    options = await conn.session_options(cwd=cwd, additional_directories=additional_directories)
+    option = _model_option(options.config_options)
+    if option is None or option.current_value == model or model not in _model_values(option):
+        return None
+    return [schema.InitialSessionConfigOption2(config_id=option.id, value=model)]
+
+
 async def select_model(
     conn: "acp.core.ClientSideConnection",
     session: schema.NewSessionResponse,
@@ -87,11 +143,18 @@ async def select_model(
     """Apply ``model`` via ``session/set_config_option``.
 
     No-op when the agent advertises no model picker (``model`` then stays
-    response metadata, as before) or when it already runs the requested model.
-    A value the agent does not offer raises ``ValueError`` up front rather
-    than failing on the wire.
+    response metadata, as before) or when it already runs the requested model —
+    which includes a model :func:`initial_model_option` had it start on. A value
+    the agent does not offer raises ``ValueError`` up front rather than failing
+    on the wire.
+
+    The setter's response carries the session's options as they now stand, and
+    is what decides whether the switch happened: an agent that answers still on
+    another model raises ``ValueError`` too, rather than leaving every reply
+    labelled with a model that never ran. A response without a model picker says
+    nothing either way, and is taken as applied.
     """
-    option = _model_option(session)
+    option = _model_option(session.config_options)
     if option is None:
         # Not an error: `model` legitimately degrades to response metadata on an
         # agent without a picker. Logged because the *same* typo hard-errors on
@@ -100,14 +163,40 @@ async def select_model(
         return
     if option.current_value == model:
         return
-    values = _model_values(option)
-    if model not in values:
-        # Agents can offer hundreds of ids (Kilo advertises 320), so list close
-        # matches rather than the whole set.
-        close = get_close_matches(model, values, n=3)
-        hint = f"; closest offered: {close}" if close else ""
-        raise ValueError(f"model {model!r} is not offered by the ACP agent ({len(values)} offered){hint}")
-    await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
+    _check_offered(option, model)
+    response = await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
+    applied = _model_option(response.config_options)
+    if applied is not None and applied.current_value != model:
+        raise ValueError(
+            f"ACP agent did not switch to model {model!r}: session/set_config_option left it on "
+            f"{applied.current_value!r}"
+        )
+
+
+def _system_prompt(
+    prompt: Sequence[str],
+    capabilities: "schema.SessionCapabilities | None",
+    agent_name: str,
+) -> schema.SystemPrompt | None:
+    """The AG2 agent's instructions as an ACP ``systemPrompt``, when the agent takes one.
+
+    Sent in ``append`` mode — every agent advertising the capability supports it,
+    and the CLI agent keeps its own instructions, the AG2 ones added to them. ACP
+    forbids sending the field to an agent that did not advertise
+    ``sessionCapabilities.systemPrompt`` and defines no fallback, so the
+    instructions are then not delivered, and a warning says so.
+    """
+    texts = [text for text in prompt if text.strip()]
+    if not texts:
+        return None
+    if capabilities is None or capabilities.system_prompt is None:
+        logger.warning(
+            "ACP agent %r does not accept a system prompt; the AG2 agent's instructions are not sent to it."
+            " Updating its ACP adapter may add support for it.",
+            agent_name,
+        )
+        return None
+    return schema.SystemPrompt(mode="append", content=[text_block(text) for text in texts])
 
 
 class ACPSession:
@@ -151,6 +240,7 @@ class ACPSession:
         client_capabilities: acp.schema.ClientCapabilities | None = None,
         additional_directories: list[str] | None = None,
         model: str | None = None,
+        system_prompt: Sequence[str] = (),
         mcp_servers: "Sequence[acp.schema.HttpMcpServer] | None" = None,
         agent_label: str = "acp-agent",
     ) -> None:
@@ -166,6 +256,11 @@ class ACPSession:
         torn down. ``agent_label`` names the agent in that error until the agent
         introduces itself in ``initialize``.
 
+        ``system_prompt`` is the AG2 agent's instructions, sent as ACP
+        ``systemPrompt`` when the agent accepts one (see :func:`_system_prompt`).
+        ``model`` goes with ``session/new`` as an initial config option where the
+        agent takes those, and via ``session/set_config_option`` otherwise.
+
         Not concurrency-safe: callers rely on model-turns within a run being
         sequential (and on the per-stream session registry in ``ACPClient``) to
         avoid opening two connections for the same session.
@@ -180,17 +275,27 @@ class ACPSession:
                 protocol_version=protocol_version,
                 client_capabilities=client_capabilities,
             )
+            agent_name = (init.agent_info.name if init.agent_info else None) or agent_label
+            session_capabilities = None
             if init.agent_capabilities:
                 self.prompt_capabilities = init.agent_capabilities.prompt_capabilities
+                session_capabilities = init.agent_capabilities.session_capabilities
             if mcp_servers:
                 caps = init.agent_capabilities.mcp_capabilities if init.agent_capabilities else None
                 if caps is None or not caps.http:
-                    agent_name = (init.agent_info.name if init.agent_info else None) or agent_label
                     raise MCPCapabilityError(agent_name)
             session = await self.conn.new_session(
                 cwd=cwd,
                 additional_directories=additional_directories or None,
                 mcp_servers=list(mcp_servers) if mcp_servers else None,
+                system_prompt=_system_prompt(system_prompt, session_capabilities, agent_name),
+                config_options=await initial_model_option(
+                    self.conn,
+                    session_capabilities,
+                    model,
+                    cwd=cwd,
+                    additional_directories=additional_directories or None,
+                ),
             )
             if model is not None:
                 await select_model(self.conn, session, model)

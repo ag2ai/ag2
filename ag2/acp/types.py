@@ -30,6 +30,11 @@ SessionUpdate: TypeAlias = (
     | schema.SessionUpdateNotice
     | schema.SessionUpdateCompactionUpdate
     | schema.SessionUpdateCompactionSummaryChunk
+    | schema.SessionUpdatePromptSuggestionsUpdate
+    | schema.SessionUpdateCursorUpdate
+    | schema.SessionUpdateSubagentUpdate
+    | schema.SessionUpdateSessionMessage
+    | schema.SessionUpdateSessionMessageChunk
 )
 
 # A single content block carried by message/thought chunks and tool-call content.
@@ -43,7 +48,10 @@ ContentBlock: TypeAlias = (
 
 # The items of a tool call's ``content`` list.
 ToolCallContent: TypeAlias = (
-    schema.ContentToolCallContent | schema.FileEditToolCallContent | schema.TerminalToolCallContent
+    schema.ContentToolCallContent
+    | schema.FileEditToolCallContent
+    | schema.TerminalToolCallContent
+    | schema.ToolCallContentSession
 )
 
 # One property of an elicitation form's requested schema, mirroring the union
@@ -68,3 +76,11 @@ ElicitationValue: TypeAlias = str | int | float | bool | list[str]
 # the result here is what keeps a recorded server readable as its own model
 # rather than as ``Any`` at every point it is passed along.
 McpServer: TypeAlias = schema.HttpMcpServer | schema.SseMcpServer | schema.AcpMcpServer | schema.McpServerStdio
+
+# One initial config-option value a Client may send with ``session/new`` or
+# ``session/load``, mirroring ``NewSessionRequest.config_options``.
+InitialConfigOption: TypeAlias = schema.InitialSessionConfigOption1 | schema.InitialSessionConfigOption2
+
+# One config option an agent advertises (``NewSessionResponse.config_options``,
+# ``SessionOptionsResponse.config_options``).
+ConfigOption: TypeAlias = schema.SessionConfigOptionSelect | schema.SessionConfigOptionBoolean
