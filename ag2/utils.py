@@ -20,6 +20,10 @@ MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY = "__ag2_model_config__"
 # (constructor, plugin defaults, or configuration inherited by a delegation).
 # A context value that is not that same object was supplied for the request.
 CONFIGURED_DEPENDENCIES_CONTEXT_KEY = "__ag2_configured_dependencies__"
+# The prompt as the running agent composes it on its own, refreshed before each
+# LLM call: after the agent's own middleware, before anything supplied for the
+# current invocation only (plugin prompts, invocation middleware).
+CONFIGURED_PROMPT_CONTEXT_KEY = "__ag2_configured_prompt__"
 
 
 def _validate_timeout(timeout: float | None) -> None:

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """What an ACP agent can ask of AG2, as the agent sees it: files, terminals and permission."""
 
+import logging
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 import acp
 import pytest
 from acp import RequestError, schema
+from acp.meta import CLIENT_METHODS
 
 from ag2 import Agent
 from ag2.acp import PermissionPolicy
@@ -323,3 +325,45 @@ class TestTerminal:
             assert exited.exit_code is not None
         else:
             assert exited.signal is not None
+
+
+@pytest.mark.asyncio
+class TestUnsupportedClientMethods:
+    async def test_an_mcp_message_is_refused_as_an_unknown_method(self, tmp_path: Path) -> None:
+        async def act(conn: acp.Client, sid: str) -> Any:
+            return await conn.mcp_message(server_id="srv", request_id="1", method="tools/list", session_id=sid)
+
+        error = await agent_asks(act, tmp_path)
+
+        assert isinstance(error, RequestError)
+        expected = RequestError.method_not_found(CLIENT_METHODS["mcp_message"])
+        assert (error.code, error.data) == (expected.code, expected.data)
+
+    async def test_an_auth_status_update_is_dispatched_cleanly_and_the_turn_goes_on(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "f.txt").write_text("x")
+
+        async def act(conn: acp.Client, sid: str) -> Any:
+            await conn.auth_status_update(state="authenticated")
+            # A request round trip after it: the client reads messages in order,
+            # so once this is answered the notification has been dispatched.
+            await conn.read_text_file(session_id=sid, path="f.txt")
+            await conn.session_update(
+                session_id=sid,
+                update=schema.AgentMessageChunk(
+                    session_update="agent_message_chunk", content=schema.TextContentBlock(type="text", text="after")
+                ),
+            )
+
+        outcome: list[Any] = []
+        cfg = duplex_acp_config(lambda conn: CallingAgent(conn, act, outcome), cwd=str(tmp_path))
+        try:
+            with caplog.at_level(logging.ERROR, logger="acp"):
+                reply = await Agent("acp", config=cfg).ask("go")
+        finally:
+            await cfg.aclose()
+
+        assert outcome == [None]
+        assert reply.body == "after"
+        assert [r for r in caplog.records if r.name.startswith("acp")] == []
