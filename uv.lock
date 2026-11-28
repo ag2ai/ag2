@@ -316,7 +316,7 @@ requires-dist = [
     { name = "ag2", extras = ["mcp"], marker = "extra == 'acp'" },
     { name = "agent-client-protocol", marker = "extra == 'acp'", specifier = ">=1.1.0,<2" },
     { name = "aiobotocore", marker = "extra == 'bedrock'", specifier = ">=3.9.1,<4" },
-    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=1.15.0,<3" },
+    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=2.0.0,<3" },
     { name = "anyio", specifier = ">=4.0.0,<5.0.0" },
     { name = "dashscope", marker = "extra == 'dashscope'", specifier = ">=1.25.13" },
     { name = "ddgs", marker = "extra == 'ddgs'", specifier = ">=9.0.0,<10" },
