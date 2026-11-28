@@ -15,18 +15,20 @@ import acp
 import pytest
 from acp import schema
 
-from ag2 import Agent
+from ag2 import Agent, MemoryStream, Plugin
 from ag2.acp.testing import FakeACPConfig, duplex_acp_config
 
 OPTIONS = schema.SessionCapabilities(options=schema.SessionOptionsCapabilities())
 SYSTEM_PROMPT = schema.SessionCapabilities(system_prompt=schema.SessionSystemPromptCapabilities())
 
 
-def _picker(current: str, *values: str, option_id: str = "model") -> schema.SessionConfigOptionSelect:
+def _picker(
+    current: str, *values: str, option_id: str = "model", category: str | None = "model"
+) -> schema.SessionConfigOptionSelect:
     return schema.SessionConfigOptionSelect(
         id=option_id,
         name="Model",
-        category="model",
+        category=category,
         type="select",
         current_value=current,
         options=[schema.SessionConfigSelectOption(value=v, name=v) for v in values],
@@ -38,7 +40,10 @@ class SetupPeer:
 
     ``preview`` answers ``session/options``; ``created`` is what ``session/new``
     reports, whatever initial values the client sent — so a test decides whether
-    the session really starts on the requested model.
+    the session really starts on the requested model. ``session/set_config_option``
+    applies the value unless ``applies`` is off, and answers with the options as
+    they then stand. Each ``session/prompt`` logs the instructions the session is
+    running with: the ``systemPrompt`` text it was created with.
     """
 
     def __init__(
@@ -49,12 +54,15 @@ class SetupPeer:
         capabilities: schema.SessionCapabilities,
         preview: list[schema.SessionConfigOptionSelect] | None = None,
         created: list[schema.SessionConfigOptionSelect] | None = None,
+        applies: bool = True,
     ) -> None:
         self.conn = conn
         self.log = log
         self.capabilities = capabilities
         self.preview = preview
         self.created = created
+        self.applies = applies
+        self.instructions: list[str] | None = None
 
     async def initialize(self, **kwargs: Any) -> schema.InitializeResponse:
         return schema.InitializeResponse(
@@ -75,16 +83,22 @@ class SetupPeer:
         **kwargs: Any,
     ) -> schema.NewSessionResponse:
         self.log.append(("session/new", {"system_prompt": system_prompt, "config_options": config_options}))
+        if system_prompt is not None:
+            self.instructions = [b.text for b in system_prompt.content if isinstance(b, schema.TextContentBlock)]
         return schema.NewSessionResponse(session_id="setup-1", config_options=self.created)
 
     async def set_config_option(
         self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
     ) -> schema.SetSessionConfigOptionResponse:
         self.log.append(("session/set_config_option", (config_id, value)))
+        if self.applies:
+            self.created = [
+                o.model_copy(update={"current_value": value}) if o.id == config_id else o for o in self.created or []
+            ]
         return schema.SetSessionConfigOptionResponse(config_options=self.created or [])
 
     async def prompt(self, *, session_id: str, **kwargs: Any) -> schema.PromptResponse:
-        self.log.append(("session/prompt", None))
+        self.log.append(("session/prompt", self.instructions))
         await self.conn.session_update(
             session_id=session_id,
             update=schema.AgentMessageChunk(
@@ -163,6 +177,27 @@ class TestInstructions:
 
         assert log[0] == ("session/new", {"system_prompt": None, "config_options": None})
         assert caplog.text == ""
+
+    async def test_an_invocation_plugin_does_not_outlive_its_invocation_on_the_peer(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        log: list[tuple[str, Any]] = []
+        cfg = _config(log, capabilities=SYSTEM_PROMPT)
+        agent = Agent("acp", "Answer in French.", config=cfg)
+        stream = MemoryStream()
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                await agent.ask("first", stream=stream, plugins=[Plugin(prompt="First turn only")])
+            await agent.ask("second", stream=stream)
+        finally:
+            await cfg.aclose()
+
+        assert [entry for entry in log if entry[0] == "session/prompt"] == [
+            ("session/prompt", ["Answer in French."]),
+            ("session/prompt", ["Answer in French."]),
+        ]
+        assert "Instructions from plugins passed to this invocation are not sent" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -288,3 +323,52 @@ class TestModelSelection:
             ("session/set_config_option", ("engine", "smart")),
             ("session/prompt", None),
         ]
+
+    async def test_an_uncategorised_picker_with_the_model_id_is_still_used(self) -> None:
+        log: list[tuple[str, Any]] = []
+        cfg = _config(
+            log,
+            model="smart",
+            capabilities=schema.SessionCapabilities(),
+            created=[_picker("default", "default", "smart", category=None)],
+        )
+
+        try:
+            reply = await Agent("acp", config=cfg).ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert log[1:] == [
+            ("session/set_config_option", ("model", "smart")),
+            ("session/prompt", None),
+        ]
+        assert reply.response.model == "smart"
+
+    async def test_a_picker_with_the_model_id_in_another_category_is_left_alone(self) -> None:
+        log: list[tuple[str, Any]] = []
+        mode = _picker("ask", "ask", "code", category="mode")
+        cfg = _config(log, model="code", capabilities=OPTIONS, preview=[mode], created=[mode])
+
+        try:
+            await Agent("acp", config=cfg).ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert log == [
+            ("session/options", None),
+            ("session/new", {"system_prompt": None, "config_options": None}),
+            ("session/prompt", None),
+        ]
+
+    async def test_setup_fails_when_set_config_option_leaves_the_session_on_another_model(self) -> None:
+        log: list[tuple[str, Any]] = []
+        picker = _picker("default", "default", "smart")
+        cfg = _config(log, model="smart", capabilities=OPTIONS, preview=[picker], created=[picker], applies=False)
+
+        try:
+            with pytest.raises(ValueError, match="did not switch to model 'smart'.*left it on 'default'"):
+                await Agent("acp", config=cfg).ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert _methods(log)[-1] == "session/set_config_option"

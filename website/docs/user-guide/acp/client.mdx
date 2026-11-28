@@ -113,8 +113,8 @@ agent = Agent(
 !!! note "Model selection"
 
     `model` is applied at session start when the agent advertises a model picker —
-    a select config option in the `model` category, or one with the id `model` —
-    and Claude Code, Codex, OpenCode and Kilo Code all do. An agent that also
+    a select config option in the `model` category, or an uncategorised one with
+    the id `model` — and Claude Code, Codex, OpenCode and Kilo Code all do. An agent that also
     advertises `sessionCapabilities.options` gets it with `session/new`, so the
     session starts on it; when the session it creates is not on that model (or the
     agent lacks the capability), it gets it via `session/set_config_option` right
@@ -122,7 +122,8 @@ agent = Agent(
     `"provider/model"` as listed by `opencode models` / `kilo models`; Claude Code
     and Codex advertise bare ids. A value the agent does not offer raises
     `ValueError` before the first turn — judged by the options the created session
-    reports; leaving `model` unset keeps the agent's default.
+    reports — and so does an agent whose `session/set_config_option` response still
+    reports another model; leaving `model` unset keeps the agent's default.
 
     **For Kilo Code, always set `model` explicitly**: a fresh Kilo ACP session
     may default to an unsuitable model (an image model, at the time of
@@ -133,7 +134,9 @@ agent = Agent(
     The agent's `prompt` (and any `@agent.prompt` hooks) reaches the CLI agent as
     ACP `systemPrompt` in `append` mode: added to the CLI agent's own instructions,
     not replacing them. It is sent once, with `session/new`, from the first turn.
-    ACP allows this only for an agent that advertises
+    Instructions from plugins passed to a single `ask(..., plugins=[...])` are not
+    sent: the CLI agent would keep them for the whole session, past the invocation
+    they belong to. AG2 logs a warning when it leaves them out. ACP allows this only for an agent that advertises
     `sessionCapabilities.systemPrompt`; for any other the instructions cannot be
     delivered, and AG2 logs a warning saying so.
 

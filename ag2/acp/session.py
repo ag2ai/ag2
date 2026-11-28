@@ -59,14 +59,16 @@ def _model_option(options: "Sequence[ConfigOption] | None") -> schema.SessionCon
 
     ACP marks a picker's purpose with ``category="model"``, whatever its id; an
     uncategorised select with the id ``model`` is taken as one too, as agents
-    predating categories name it that way.
+    predating categories name it that way. A select with that id but another
+    category — ``mode``, say — is not: a model setting sent to it would change
+    something else.
     """
     selects = [option for option in options or [] if isinstance(option, schema.SessionConfigOptionSelect)]
     for option in selects:
         if option.category == "model":
             return option
     for option in selects:
-        if option.id == "model":
+        if option.id == "model" and option.category is None:
             return option
     return None
 
@@ -145,6 +147,12 @@ async def select_model(
     which includes a model :func:`initial_model_option` had it start on. A value
     the agent does not offer raises ``ValueError`` up front rather than failing
     on the wire.
+
+    The setter's response carries the session's options as they now stand, and
+    is what decides whether the switch happened: an agent that answers still on
+    another model raises ``ValueError`` too, rather than leaving every reply
+    labelled with a model that never ran. A response without a model picker says
+    nothing either way, and is taken as applied.
     """
     option = _model_option(session.config_options)
     if option is None:
@@ -156,7 +164,13 @@ async def select_model(
     if option.current_value == model:
         return
     _check_offered(option, model)
-    await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
+    response = await conn.set_config_option(session_id=session.session_id, config_id=option.id, value=model)
+    applied = _model_option(response.config_options)
+    if applied is not None and applied.current_value != model:
+        raise ValueError(
+            f"ACP agent did not switch to model {model!r}: session/set_config_option left it on "
+            f"{applied.current_value!r}"
+        )
 
 
 def _system_prompt(
