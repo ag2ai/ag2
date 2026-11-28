@@ -153,10 +153,12 @@ class TestBackgroundDelivery:
         )
 
         with caplog.at_level("ERROR", logger="ag2.context"):
-            reply = await asyncio.wait_for(agent.ask("go"), timeout=1.0)
+            # Generous: the bound only turns a hang into a failure, and a 1s one
+            # timed out on loaded CI runners.
+            reply = await asyncio.wait_for(agent.ask("go"), timeout=10.0)
 
         # Give the done-callback a chance to fire after the task raised.
-        await asyncio.wait_for(bg_failed.wait(), timeout=1.0)
+        await asyncio.wait_for(bg_failed.wait(), timeout=10.0)
         await asyncio.sleep(0)
 
         assert reply.body == "ok"
