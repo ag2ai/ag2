@@ -88,7 +88,7 @@ ag-ui = ["ag-ui-protocol>=1.0,<2"]
 
 # === LLM providers (ag2.config) ===
 openai = ["openai>=3.45.0,<4"]
-anthropic = ["anthropic>=1.15.0,<3"]
+anthropic = ["anthropic>=2.0.0,<3"]
 gemini = [
     "google-genai>=3.0.0,<4",
     # `http_client` takes an httpx2 client; google-genai brings it in transitively.
