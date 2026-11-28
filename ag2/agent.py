@@ -85,7 +85,7 @@ from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .scopes import merge_variables, overlay_variables
 from .stream import MemoryStream, Stream
-from .task import CheckpointStore, Task, TaskSpec
+from .task import TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit
 from .tools.precedence import resolve_tools
@@ -125,14 +125,6 @@ ASSEMBLY_DEPRECATION = (
 KNOWLEDGE_DEPRECATION = (
     "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
     "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
-)
-
-
-AGENT_TASK_DEPRECATION = (
-    "Agent.task() is deprecated and will be removed in 1.4.0. "
-    "Use Task(owner_id=agent.name, spec=TaskSpec(title=..., description=..., payload=..., capability=...), ...) "
-    "instead; import Task and TaskSpec from ag2.task. Pass context, ttl_seconds, checkpoint_store and resume_from "
-    "directly to Task."
 )
 
 
@@ -1141,65 +1133,6 @@ class Agent(PluginTarget, Generic[TResult]):
         """
 
         return tuple(self._policies)
-
-    @deprecated(AGENT_TASK_DEPRECATION)
-    def task(
-        self,
-        title: str,
-        *,
-        description: str = "",
-        payload: dict[str, Any] | None = None,
-        capability: str | None = None,
-        ttl_seconds: int | None = None,
-        context: Context | None = None,
-        checkpoint_store: CheckpointStore | None = None,
-        resume_from: str | None = None,
-    ) -> Task:
-        """Create a ``Task`` whose lifecycle this Agent owns.
-
-        Deprecated; will be removed in 1.4.0. Construct
-        ``Task(owner_id=self.name, spec=TaskSpec(title=title, ...), ...)``
-        directly instead. The remaining Task parameters are unchanged.
-
-        Returns an unentered ``Task``, used as an async context manager.
-        Events flow on ``context.stream`` if a ``ConversationContext`` is
-        supplied; else the Task creates a private ``MemoryStream`` on entry
-        and events fire on it (only observers attached to that private
-        stream see them).
-
-        Inside the ``async with`` block, tools annotated with ``TaskInject``
-        resolve to this Task — per asyncio task, so sibling tool calls that
-        each open a task resolve their own, and a nested block resolves to
-        the innermost enclosing task. ``context.dependencies`` also carries
-        an ``ag2.task`` slot for the block (best-effort under overlapping
-        siblings; kept for direct readers of the dict).
-
-        ``capability`` tags the task with a capability name. When the
-        agent is registered with the network, the ``TaskMirror`` calls
-        ``Hub.record_observation`` on the terminal event so the matching
-        ``Resume.observed[capability]`` track record updates.
-
-        ``checkpoint_store`` plus ``resume_from`` opt the task into
-        restart-recoverable work: ``checkpoint(state)`` writes via the
-        store, and on the next run ``resume_from=<prior_task_id>``
-        reads that state back into ``task.resumed_state``. Standalone
-        agents that don't supply a store pay no cost — checkpoint
-        calls become silent no-ops.
-        """
-        spec = TaskSpec(
-            title=title,
-            description=description,
-            payload=dict(payload) if payload else {},
-            capability=capability,
-        )
-        return Task(
-            owner_id=self.name,
-            spec=spec,
-            context=context,
-            ttl_seconds=ttl_seconds,
-            checkpoint_store=checkpoint_store,
-            resume_from=resume_from,
-        )
 
     @overload
     async def ask(
