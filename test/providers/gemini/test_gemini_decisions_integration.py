@@ -17,8 +17,6 @@ from typing import Annotated
 
 import pytest
 
-pytest.importorskip("google.genai.decisions", reason="the Gemini Decisions API needs google-genai>=3.2")
-
 from ag2 import Agent, ImageInput, ResponseSchema
 from ag2.config import GeminiDecisionsConfig
 from ag2.response import Question

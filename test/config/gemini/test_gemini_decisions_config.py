@@ -3,14 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, make_dataclass
 from enum import Enum, IntEnum
 from typing import Annotated, Any
 
 import httpx2
 import pytest
-
-pytest.importorskip("google.genai.decisions", reason="the Gemini Decisions API needs google-genai>=3.2")
 
 from ag2 import Agent, ImageInput, ResponseSchema
 from ag2.config import GeminiDecisionsConfig
@@ -54,17 +52,18 @@ def lookup(order_id: str) -> str:
 class _FakeAPI:
     requests: list[httpx2.Request]
     body: dict[str, Any]
+    status: int
 
     def __call__(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
-        return httpx2.Response(200, json=self.body)
+        return httpx2.Response(self.status, json=self.body)
 
 
 def _config(
-    requests: list[httpx2.Request], answers: dict[str, Any] | None = None, **body: Any
+    requests: list[httpx2.Request], answers: dict[str, Any] | None = None, *, status: int = 200, **body: Any
 ) -> GeminiDecisionsConfig:
     payload = {"answers": answers, "usage": USAGE, **body} if answers is not None else {"usage": USAGE, **body}
-    client = httpx2.AsyncClient(transport=httpx2.MockTransport(_FakeAPI(requests, payload)))
+    client = httpx2.AsyncClient(transport=httpx2.MockTransport(_FakeAPI(requests, payload, status)))
     return GeminiDecisionsConfig(api_key="test-key", http_client=client)
 
 
@@ -134,7 +133,7 @@ async def test_bool_schema_is_a_noul_thresholded(threshold: float, expected: boo
     config = _config(requests, {"answer": {"type": "noul", "noul": 0.92, "confidence": 0.92}})
     guard = Agent(
         "guard",
-        config=config.copy(boolean_threshold=threshold, descriptions={"true": "Wants money back."}),
+        config=config.copy(boolean_threshold=threshold),
         response_schema=ResponseSchema(bool, description="Is the customer asking for a refund?"),
     )
 
@@ -143,11 +142,7 @@ async def test_bool_schema_is_a_noul_thresholded(threshold: float, expected: boo
     assert await reply.content() is expected
     assert reply.response.metadata == {"noul": 0.92, "confidence": 0.92}
     assert _body(requests[0])["questions"] == {
-        "answer": {
-            "type": "noul",
-            "instructions": "Is the customer asking for a refund?",
-            "criteria": {"true_description": "Wants money back."},
-        }
+        "answer": {"type": "noul", "instructions": "Is the customer asking for a refund?"}
     }
 
 
@@ -193,13 +188,61 @@ async def test_history_and_media_are_flat_content_blocks() -> None:
         response_schema=ResponseSchema(bool, description="Is there a cat?"),
     )
 
-    await guard.ask("Look:", ImageInput(data=b"hi", media_type="image/png"), ImageInput(url="gs://b/cat.png"))
+    await guard.ask(
+        "Look:", ImageInput(data=b"hi", media_type="image/png"), ImageInput("https://example.com/cat.png"), "Well?"
+    )
 
     assert _body(requests[0])["input"] == [
         {"type": "text", "text": "Look:"},
         {"type": "image", "data": "aGk=", "mime_type": "image/png"},
-        {"type": "image", "uri": "gs://b/cat.png"},
+        {"type": "image", "uri": "https://example.com/cat.png", "mime_type": "image/png"},
+        {"type": "text", "text": "Well?"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_adjacent_text_blocks_are_separated() -> None:
+    # The API concatenates adjacent text blocks with no separator.
+    requests: list[httpx2.Request] = []
+    guard = Agent(
+        "guard",
+        config=_config(requests, {"answer": {"type": "noul", "noul": 0.9, "confidence": 0.9}}),
+        response_schema=ResponseSchema(bool, description="Is this a refund request?"),
+    )
+
+    reply = await guard.ask("first")
+    await reply.ask("second")
+
+    assert _body(requests[1])["input"] == [
+        {"type": "text", "text": "first"},
+        {"type": "text", "text": '\n\n[Assistant]\n{"data": true}'},
+        {"type": "text", "text": "\n\nsecond"},
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url",
+    ["gs://bucket/cat.png", "https://www.youtube.com/watch?v=abc", "https://example.com/files/abc"],
+    ids=["gcs", "youtube", "no-extension"],
+)
+async def test_unsupported_urls_are_rejected_before_a_request(url: str) -> None:
+    requests: list[httpx2.Request] = []
+    agent = Agent("guard", config=_config(requests, {}), response_schema=ResponseSchema(bool, description="Cat?"))
+
+    with pytest.raises(UnsupportedInputError):
+        await agent.ask(ImageInput(url))
+    assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_empty_input_is_rejected_before_a_request() -> None:
+    requests: list[httpx2.Request] = []
+    agent = Agent("guard", config=_config(requests, {}), response_schema=ResponseSchema(bool, description="Cat?"))
+
+    with pytest.raises(ValueError, match="needs input"):
+        await agent.ask()
+    assert requests == []
 
 
 @pytest.mark.asyncio
@@ -216,6 +259,66 @@ async def test_blocked_input_raises() -> None:
         await guard.ask("...")
 
     assert info.value.reason == "safety"
+
+
+@pytest.mark.asyncio
+async def test_blocked_input_http_error_raises() -> None:
+    requests: list[httpx2.Request] = []
+    error = {"error": {"code": "prohibited_content", "message": "Request blocked."}}
+    guard = Agent(
+        "guard",
+        config=_config(requests, status=400, **error),
+        response_schema=ResponseSchema(bool, description="Is this fine?"),
+    )
+
+    with pytest.raises(
+        DecisionBlockedError, match=r"blocked the input \(prohibited_content\): Request blocked\."
+    ) as info:
+        await guard.ask("...")
+
+    assert info.value.reason == "prohibited_content"
+
+
+@pytest.mark.asyncio
+async def test_unlisted_choice_raises() -> None:
+    requests: list[httpx2.Request] = []
+    answer = {"type": "choice", "choice": "shipping", "confidence": 0.9, "probabilities": {}}
+    agent = Agent("router", config=_config(requests, {"answer": answer}), response_schema=Department)
+
+    with pytest.raises(ValueError, match="'shipping', not one of its options"):
+        await agent.ask("...")
+
+
+class Lonely(Enum):
+    """Which one?"""
+
+    ONLY = "only"
+
+
+class Padded(Enum):
+    """Which one?"""
+
+    A = " a"
+    B = "b"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("schema", "match"),
+    [
+        (Lonely, "needs 2 to 255 options"),
+        (Padded, "cannot be an option ID"),
+        (make_dataclass("NonAscii", [("sécurité", Annotated[bool, Question("Safe?")])]), "cannot be a question key"),
+    ],
+    ids=["one-option", "padded-option-id", "non-ascii-key"],
+)
+async def test_schemas_the_api_rejects_fail_before_a_request(schema: Any, match: str) -> None:
+    requests: list[httpx2.Request] = []
+    agent = Agent("router", config=_config(requests, {}), response_schema=schema)
+
+    with pytest.raises(UnsupportedResponseSchemaError, match=match):
+        await agent.ask("...")
+    assert requests == []
 
 
 @pytest.mark.asyncio
@@ -252,9 +355,18 @@ async def test_free_text_schema_is_rejected_before_a_request() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generic_binary_is_rejected() -> None:
+@pytest.mark.parametrize(
+    ("media_type", "match"),
+    [
+        ("application/zip", r"BinaryInput\(binary\)"),
+        ("application/octet-stream", r"BinaryInput\(application/octet-stream\)"),
+    ],
+    ids=["non-media", "generic-type"],
+)
+async def test_unsupported_binaries_are_rejected(media_type: str, match: str) -> None:
     requests: list[httpx2.Request] = []
     agent = Agent("router", config=_config(requests, {}), response_schema=Department)
 
-    with pytest.raises(UnsupportedInputError, match=r"BinaryInput\(binary\)"):
-        await agent.ask(BinaryInput(b"x", media_type="application/octet-stream"))
+    with pytest.raises(UnsupportedInputError, match=match):
+        await agent.ask(BinaryInput(b"x", media_type=media_type))
+    assert requests == []

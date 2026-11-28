@@ -19,6 +19,7 @@ from ._compat import build_http_options
 from .decisions_mappers import (
     PROVIDER,
     answers_to_reply,
+    blocked_error,
     convert_input,
     normalize_usage,
     question_instructions,
@@ -72,13 +73,21 @@ class GeminiDecisionsClient(LLMClient):
             descriptions=self._descriptions,
         )
 
-        decision = await self._client.aio.decisions.create(
-            model=self._model,
-            input=convert_input(messages, serializer),
-            questions=questions,
-            api_version=self._api_version,
-            extra_body=self._extra_body,
-        )
+        if not (decision_input := convert_input(messages, serializer)):
+            raise ValueError("A Gemini decision needs input: the conversation has nothing to send.")
+
+        try:
+            decision = await self._client.aio.decisions.create(
+                model=self._model,
+                input=decision_input,
+                questions=questions,
+                api_version=self._api_version,
+                extra_body=self._extra_body,
+            )
+        except Exception as e:
+            if (blocked := blocked_error(e)) is not None:
+                raise blocked from e
+            raise
 
         content, metadata = answers_to_reply(response_schema, decision, boolean_threshold=self._boolean_threshold)
         model_msg = ModelMessage(content, metadata=metadata)

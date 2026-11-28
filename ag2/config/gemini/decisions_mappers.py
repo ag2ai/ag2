@@ -2,11 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Pure conversions between ag2 and the Gemini Decisions API (`google-genai>=3.2`)."""
+"""Pure conversions between ag2 and the Gemini Decisions API."""
 
 import base64
+import re
+import unicodedata
 from collections.abc import Iterable, Mapping
 from typing import Any, NoReturn
+from urllib.parse import urlparse
 
 from fast_depends.library.serializer import SerializerProto
 from google.genai.decisions import (
@@ -16,7 +19,6 @@ from google.genai.decisions import (
     CreateDecisionResponse,
     DecisionInputContentParam,
     NoulAnswer,
-    NoulCriteriaParam,
     NoulQuestionParam,
     QuestionParam,
     ScoreAnswer,
@@ -53,13 +55,24 @@ from ag2.response.decision import ANSWER_KEY, DecisionValue
 from ag2.tools.schemas import ToolSchema
 
 from .decisions_errors import DecisionBlockedError, UnsupportedResponseSchemaError
+from .mappers import _mime_from_url
 
 PROVIDER = "gemini-decisions"
-MAX_QUESTIONS = 1000  # The API's limit on questions per request
 
-# `descriptions` keys for the two outcomes of a yes/no question.
-_TRUE_KEY = "true"
-_FALSE_KEY = "false"
+# The API's request limits.
+MAX_QUESTIONS = 1000
+MAX_OPTIONS = 255
+MAX_OPTION_ID_LENGTH = 128
+_QUESTION_KEY = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+# `error.code` of the HTTP 400 the API answers when its input filters block a request.
+BLOCK_CODES = frozenset(("safety", "prohibited_content", "blocklist", "image_safety", "content_blocked"))
+
+# Text blocks are concatenated with no separator, so adjacent ones get this between them.
+_TEXT_SEPARATOR = "\n\n"
+
+_GENERIC_MIME = "application/octet-stream"
+_UNSUPPORTED_HOSTS = ("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
 
 
 def tool_to_api(t: ToolSchema) -> NoReturn:
@@ -91,6 +104,16 @@ def convert_input(messages: Iterable[BaseEvent], serializer: SerializerProto) ->
                 result.append(_text("[Tool result]"))
                 result.extend(_part(p, serializer) for p in r.result.parts)
 
+    return _separate_text(result)
+
+
+def _separate_text(blocks: list[DecisionInputContentParam]) -> list[DecisionInputContentParam]:
+    """Start each text block that follows another with a separator, so the two do not run together."""
+    result: list[DecisionInputContentParam] = []
+    for block in blocks:
+        if block["type"] == "text" and result and result[-1]["type"] == "text":
+            block = _text(_TEXT_SEPARATOR + block["text"])
+        result.append(block)
     return result
 
 
@@ -106,12 +129,26 @@ def _part(part: Input, serializer: SerializerProto) -> DecisionInputContentParam
         return _text(serializer.encode(part.data).decode())
 
     if isinstance(part, BinaryInput):
+        if part.media_type == _GENERIC_MIME:
+            # The API rejects a generic type; it needs the real file format.
+            raise UnsupportedInputError(f"BinaryInput({_GENERIC_MIME})", PROVIDER)
         return _media(part, data=base64.b64encode(part.data).decode(), mime_type=part.media_type)
 
     if isinstance(part, UrlInput):
-        return _media(part, uri=part.url)
+        return _url_media(part)
 
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
+
+
+def _url_media(part: UrlInput) -> DecisionInputContentParam:
+    """A media block by URI: an HTTPS URL whose file extension gives its MIME type."""
+    url = urlparse(part.url)
+    if url.scheme != "https" or url.hostname in _UNSUPPORTED_HOSTS:
+        # The API takes HTTPS and Files API URIs, not `gs://` or YouTube.
+        raise UnsupportedInputError(f"UrlInput({url.scheme}://{url.hostname or ''})", PROVIDER)
+    if (mime_type := _mime_from_url(part.url)) is None:
+        raise UnsupportedInputError("UrlInput without a known file extension; pass the bytes instead", PROVIDER)
+    return _media(part, uri=part.url, mime_type=mime_type)
 
 
 def _media(part: BinaryInput | UrlInput, **fields: str) -> DecisionInputContentParam:
@@ -160,10 +197,15 @@ def response_proto_to_questions(
         raise UnsupportedResponseSchemaError(
             f"`response_schema` has {len(decisions)} fields; one request takes at most {MAX_QUESTIONS} questions."
         )
-    return {
-        name: _spec_to_question(spec, instructions=instructions, descriptions=descriptions or {})
-        for name, spec in decisions.items()
-    }
+    questions: dict[str, QuestionParam] = {}
+    for name, spec in decisions.items():
+        if not _QUESTION_KEY.fullmatch(name):
+            raise UnsupportedResponseSchemaError(
+                f"Field {name!r} of `response_schema` cannot be a question key: "
+                "keys are 1 to 64 ASCII letters, digits, `_` or `-`."
+            )
+        questions[name] = _spec_to_question(spec, instructions=instructions, descriptions=descriptions or {})
+    return questions
 
 
 def _spec_to_question(
@@ -178,34 +220,55 @@ def _spec_to_question(
         )
 
     if spec.kind == "predicate":
-        noul = NoulQuestionParam(type="noul", instructions=text)
-        criteria = NoulCriteriaParam()
-        if true_description := descriptions.get(_TRUE_KEY):
-            criteria["true_description"] = true_description
-        if false_description := descriptions.get(_FALSE_KEY):
-            criteria["false_description"] = false_description
-        if criteria:
-            noul["criteria"] = criteria
-        return noul
+        return NoulQuestionParam(type="noul", instructions=text)
+
+    if not 2 <= len(spec.options) <= MAX_OPTIONS:
+        raise UnsupportedResponseSchemaError(f"A {spec.kind} needs 2 to {MAX_OPTIONS} options.")
 
     if spec.kind == "choice":
-        options = {
-            str(option.value): descriptions.get(str(option.value)) or option.description or ""
-            for option in spec.options
-        }
+        options: dict[str, str] = {}
+        for option in spec.options:
+            option_id = str(option.value)
+            _check_option_id(option_id)
+            options[option_id] = descriptions.get(option_id) or option.description or ""
         return ChoiceQuestionParam(type="choice", instructions=text, criteria=options)
 
     # The API numbers levels by position, so the rubric must already be 0..n-1.
-    if not spec.is_rubric or len(spec.options) < 2:
-        raise UnsupportedResponseSchemaError("A score needs 2 or more levels numbered from 0.")
+    if not spec.is_rubric:
+        raise UnsupportedResponseSchemaError("A score needs levels numbered from 0.")
     levels = [_level(option.name, descriptions.get(str(option.value)) or option.description) for option in spec.options]
     return ScoreQuestionParam(type="score", instructions=text, criteria=levels)
+
+
+def _check_option_id(option_id: str) -> None:
+    """Fail on a choice value the API rejects as an option ID."""
+    if (
+        not option_id
+        or len(option_id) > MAX_OPTION_ID_LENGTH
+        or option_id != option_id.strip()
+        or any(unicodedata.category(c) == "Cc" or (c.isspace() and c != " ") for c in option_id)
+    ):
+        raise UnsupportedResponseSchemaError(
+            f"Choice {option_id!r} cannot be an option ID: IDs are 1 to {MAX_OPTION_ID_LENGTH} characters, "
+            "without leading or trailing spaces or control characters."
+        )
 
 
 def _level(name: str, description: str | None) -> str:
     """A level's rubric text: its label from the member name, then its description."""
     label = name.replace("_", " ").capitalize()
     return f"{label}: {description}" if description else label
+
+
+def blocked_error(error: Exception) -> DecisionBlockedError | None:
+    """The ``DecisionBlockedError`` for an SDK error that is the API's HTTP 400 for blocked input, else ``None``."""
+    body = getattr(error, "body", None)
+    if getattr(error, "status_code", None) != 400 or not isinstance(body, Mapping):
+        return None
+    detail = body.get("error")
+    if not isinstance(detail, Mapping) or detail.get("code") not in BLOCK_CODES:
+        return None
+    return DecisionBlockedError(str(detail["code"]), detail.get("message"))
 
 
 def check_blocked(decision: CreateDecisionResponse) -> None:
@@ -243,6 +306,10 @@ def _answer_value(spec: DecisionSpec, answer: Answer, *, name: str, boolean_thre
     if isinstance(answer, NoulAnswer) and spec.kind == "predicate":
         return spec.predicate_value(answer.noul, threshold=boolean_threshold)
     if isinstance(answer, ChoiceAnswer) and spec.kind == "choice":
+        if answer.choice not in {str(o.value) for o in spec.options}:
+            raise ValueError(
+                f"Gemini Decisions answered question {name!r} with {answer.choice!r}, not one of its options."
+            )
         return answer.choice
     if isinstance(answer, ScoreAnswer) and spec.kind == "score":
         # `score` is the probability-weighted mean of the level indices; snap to the nearest level.

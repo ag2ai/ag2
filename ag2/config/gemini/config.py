@@ -13,7 +13,6 @@ from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
-from ._compat import warn_if_sdk_2x
 from .files import GeminiFilesClient
 from .gemini_client import CreateConfig, GeminiApiVersion, GeminiClient, ThinkingLevel, VertexAIApiVersion
 
@@ -70,12 +69,11 @@ class GeminiBaseConfig:
     thinking_level: ThinkingLevel | None = None
     thinking_budget: int | None = None
     # A response cut at the per-request token limit ends with finish reason
-    # `CONTINUATION`; google-genai >= 2.30 then resumes it with the returned token
-    # until the model finishes, unless this is False. Each resumed request is
-    # billed on its own, and the usage reported is their sum. When off (or on
-    # google-genai 2.29), the response reports `finish_reason="continuation"`.
+    # `CONTINUATION`; the SDK then resumes it with the returned token until the
+    # model finishes, unless this is False. Each resumed request is billed on its
+    # own, and the usage reported is their sum. When off, the response reports
+    # `finish_reason="continuation"`.
     automatic_continuation: bool | None = None
-    # google-genai 3.x accepts an httpx2 or an httpx client; 2.x only an httpx one.
     http_client: httpx.AsyncClient | httpx2.AsyncClient | None = None
 
     def _build_create_config(self) -> CreateConfig:
@@ -126,14 +124,13 @@ class GeminiBaseConfig:
 @dataclass(slots=True)
 class GeminiConfig(GeminiBaseConfig, ModelConfig):
     api_key: str | None = None
-    # None keeps the SDK's default: `v1` from google-genai 3.x, `v1beta` before it.
+    # None keeps the SDK's default, `v1`.
     api_version: GeminiApiVersion | None = None
 
     def copy(self, /, **overrides: Unpack[GeminiConfigOverrides]) -> "GeminiConfig":
         return replace(self, **overrides)
 
     def create(self) -> GeminiClient:
-        warn_if_sdk_2x()
         return GeminiClient(
             model=self.model,
             api_key=self.api_key,
@@ -146,7 +143,6 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
         )
 
     def create_files_client(self) -> GeminiFilesClient:
-        warn_if_sdk_2x()
         return GeminiFilesClient(self)
 
     @property
@@ -170,7 +166,6 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
         return ModelProvider.VERTEXAI
 
     def create(self) -> GeminiClient:
-        warn_if_sdk_2x()
         return GeminiClient(
             model=self.model,
             vertexai=True,

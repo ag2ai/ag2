@@ -34,7 +34,7 @@ class GeminiDecisionsConfig(ModelConfig):
     """Gemini's Decisions API: typed questions taken from the agent's ``response_schema``, sent in one request.
 
     A scalar schema is one question; a flat class is one question per field.
-    Gemini Developer API only, and needs ``google-genai>=3.2``.
+    Gemini Developer API only.
     """
 
     model: str = "gemini-decision-1"
@@ -45,8 +45,7 @@ class GeminiDecisionsConfig(ModelConfig):
     # A ``bool`` schema is ``True`` once the probability of ``true`` reaches this.
     boolean_threshold: float = 0.5
     # Option descriptions keyed by choice value or score level as a string; they
-    # outrank the docstrings under ``Enum`` members. For a ``bool`` schema the keys
-    # ``"true"`` and ``"false"`` describe the two outcomes. Single-question schemas only.
+    # outrank the docstrings under ``Enum`` members. Single-question schemas only.
     descriptions: Mapping[str, str] | None = None
     # Text the question carries after the agent prompt; the schema description is still appended.
     question_instructions: str | None = None

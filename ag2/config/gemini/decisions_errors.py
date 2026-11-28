@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Errors of `GeminiDecisionsConfig`, importable whatever google-genai version is installed."""
+"""Errors of `GeminiDecisionsConfig`."""
 
 from ag2.exceptions import AG2Error
 from ag2.response import NotADecisionError
@@ -20,7 +20,10 @@ class UnsupportedResponseSchemaError(NotADecisionError):
 
 
 class DecisionBlockedError(AG2Error):
-    """Raised when Gemini's input filters block the request, so no question is answered."""
+    """Raised when Gemini's input filters block the request, so no question is answered.
+
+    ``reason`` is the API's block code, such as ``"safety"`` or ``"prohibited_content"``.
+    """
 
     def __init__(self, reason: str, message: str | None = None) -> None:
         self.reason = reason
