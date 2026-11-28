@@ -26,7 +26,7 @@ from referencing import Registry, Resource
 from starlette.applications import Starlette
 from starlette.routing import Route
 
-from ag2 import Agent, TaskConfig
+from ag2 import Agent
 from ag2.a2ui import A2UIServer
 from ag2.a2ui.transports import AgUiTransport
 from ag2.ag_ui import AGUIStream
@@ -83,11 +83,10 @@ async def _capabilities(app: Any, route: str = "/agent/capabilities") -> dict[st
 @_APPS
 @_ROUTES
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
 async def test_the_declaration_conforms_to_the_protocol_schema(
     make_app: Callable[[Agent], Any], route: str, capabilities_schema: Draft202012Validator
 ) -> None:
-    document = await _capabilities(make_app(_agent(tasks=TaskConfig())), route)
+    document = await _capabilities(make_app(_agent(tools=[_agent().as_tool(description="Works.")])), route)
 
     capabilities_schema.validate(document)
 
@@ -145,15 +144,6 @@ async def test_an_agent_answering_its_own_questions_puts_none_to_the_client(make
     document = await _capabilities(make_app(_agent(hitl_hook=_answer_in_process)))
 
     assert document["humanInTheLoop"] == {"supported": True, "interrupts": False}
-
-
-@_APPS
-@pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
-async def test_an_agent_that_runs_subtasks_declares_delegation(make_app: Callable[[Agent], Any]) -> None:
-    document = await _capabilities(make_app(_agent(tasks=TaskConfig())))
-
-    assert document["multiAgent"] == {"supported": True, "delegation": True}
 
 
 @_APPS

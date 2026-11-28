@@ -6,7 +6,7 @@ sidebarTitle: "05 · Research Squad"
 Two complementary multi-Agent patterns in one example. First, a coordinator calls a researcher's delegate tool for three independent factual lookups, requesting concurrent calls in one response. Then a second coordinator delegates arithmetic to a `math_expert` Agent. Both use `Agent.as_tool()` with explicitly constructed workers.
 
 !!! note "Migrating older examples"
-    `TaskConfig` and the automatically injected `run_subtask` / `run_subtasks` tools are deprecated and will be removed in **1.4.0**. This example uses [explicit delegation](/docs/user-guide/subagents#migrating-from-taskconfig).
+    `TaskConfig` and the automatically injected `run_subtask` / `run_subtasks` tools were removed in **1.4.0**. This example uses [explicit delegation](/docs/user-guide/subagents#migrating-from-taskconfig).
 
 ## What it covers
 

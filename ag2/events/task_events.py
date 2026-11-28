@@ -41,8 +41,7 @@ class TaskProgress(TaskEvent):
 
     Two distinct uses on one event:
 
-    * ``content`` carries streamed sub-agent output (``run_subtask`` /
-      ``subagent_tool``). Marked transient — superseded by the final
+    * ``content`` carries streamed sub-agent output (``subagent_tool``). Marked transient — superseded by the final
       ``TaskCompleted``.
     * ``payload`` carries structured checkpoint data emitted by the task
       owner via ``Task.progress({...})``. Persistent within the parent

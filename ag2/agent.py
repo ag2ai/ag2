@@ -6,20 +6,17 @@
 
 An ``Agent`` runs a model loop, invokes tools, honours middleware, surfaces
 events through observers, and optionally runs the harness primitives
-(assembly policies, compaction/aggregation, knowledge store, subtask
-spawning).
+(assembly policies, compaction/aggregation, knowledge store).
 
 A bare ``Agent(name, config=cfg)`` has zero harness middleware — it behaves
 exactly like a plain LLM loop. Harness features are opt-in: use ``middleware=``
 for context policies, ``plugins=[KnowledgePlugin(...)]`` for a knowledge store,
-or use ``Agent.as_tool()`` for explicit subagent delegation. The legacy
-``tasks=TaskConfig(...)`` API is deprecated and will be removed in 1.4.0.
+or use ``Agent.as_tool()`` for explicit subagent delegation.
 """
 
 import asyncio
 import json
 import logging
-import threading
 import types
 import warnings
 import weakref
@@ -29,13 +26,11 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 from typing import Any, Generic, Literal, TypeGuard, TypeVar, overload
-from uuid import uuid4
 
 from fast_depends import Provider
 from fast_depends.library.serializer import SerializerProto
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
-from typing_extensions import deprecated
 
 from ag2.events import BinaryResult
 
@@ -85,11 +80,10 @@ from .scopes import merge_variables, overlay_variables
 from .stream import MemoryStream, Stream
 from .task import TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
-from .tools.final import FunctionTool, Toolkit
+from .tools.final import FunctionTool
 from .tools.precedence import resolve_tools
 from .tools.schemas import ToolSchema
 from .tools.subagents._forwarding import PARENT_CANCELLED, DelegationRegistry, Forwarder
-from .tools.subagents.run_task import run_task as _run_task
 from .tools.subagents.subagent_tool import StreamOrFactory, SubagentTool, subagent_tool
 from .tools.tool import Tool
 from .types import Omit, Omittable, RequestOrigin, SendableMessage, omit
@@ -106,45 +100,6 @@ logger = logging.getLogger(__name__)
 TResult = TypeVar313("TResult", default=str)
 TAgent = TypeVar313("TAgent", default=str)
 T2 = TypeVar("T2")
-
-
-TASK_CONFIG_DEPRECATION = (
-    "TaskConfig, Agent(tasks=...) and the auto-injected run_subtask / run_subtasks tools are deprecated "
-    "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
-)
-
-
-@deprecated(TASK_CONFIG_DEPRECATION, category=None)
-@dataclass
-class TaskConfig:
-    """Groups task-spawning Agent parameters.
-
-    Deprecated; will be removed in 1.4.0 along with ``Agent(tasks=...)`` and
-    the auto-injected ``run_subtask`` / ``run_subtasks`` tools. Construct
-    worker Agents explicitly and pass their ``Agent.as_tool()`` tools to
-    the parent instead.
-
-    By default a subtask Agent inherits **all** of the parent's user-supplied
-    tools (everything passed via ``tools=``). Subtask Agents never receive the
-    auto-injected ``run_subtask`` / ``run_subtasks`` tools, so recursive
-    delegation is structurally impossible — no depth limiting required.
-
-    Use ``include_tools`` (allowlist) and ``exclude_tools`` (blocklist) to
-    narrow what the subtask sees, and ``extra_tools`` to add capabilities the
-    parent doesn't have. ``max_concurrency`` optionally bounds the total
-    number of sub-tasks running for this Agent across both spawning tools.
-    """
-
-    config: ModelConfig | None = None
-    prompt: str = "You are a task agent. Complete the assigned task thoroughly and concisely. Return only the result."
-    include_tools: Iterable[str] | None = None
-    exclude_tools: Iterable[str] = ()
-    extra_tools: Iterable[Callable[..., Any] | Tool] = ()
-    max_concurrency: int | None = None
-
-    def __post_init__(self) -> None:
-        if self.max_concurrency is not None and self.max_concurrency < 1:
-            raise ValueError(f"max_concurrency must be >= 1 when set, got {self.max_concurrency}.")
 
 
 class AgentReply(Generic[TResult, TAgent]):
@@ -798,7 +753,7 @@ def _get_stream_turn_lock(stream: Stream) -> asyncio.Lock:
     same ``(id, storage)`` pair (``persistent_stream()``, a session resumed
     from storage, a stream reconstructed in user code) denote one stream and
     take one lock, so:
-      * A fresh stream per turn (the default subtask / subagent path)
+      * A fresh stream per turn (the default subagent path)
         pays a trivial no-contention acquire — no behaviour change.
       * Concurrent ``Agent.ask`` calls on a stream, however each caller got
         hold of it, serialize so subscribers registered by one turn never
@@ -836,7 +791,7 @@ class Agent(PluginTarget, Generic[TResult]):
 
     An Agent runs a model loop, invokes tools, honours middleware, surfaces
     events through observers, and optionally runs the harness primitives
-    (assembly, compaction, aggregation, knowledge store, subtask spawning).
+    (assembly, compaction, aggregation, knowledge store).
 
     A bare ``Agent(name, config=cfg)`` has zero harness middleware and
     behaves exactly like a plain LLM loop. Harness features are opt-in:
@@ -846,11 +801,8 @@ class Agent(PluginTarget, Generic[TResult]):
       ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
     * ``plugins=[KnowledgePlugin(store=...)]`` — persistent knowledge store,
       compaction, aggregation.
-    * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
-      / ``run_subtasks`` tools, and override the LLM config / prompt /
-      tool-inheritance rules for sub-task Agents. Defaults to ``False``
-      (sub-task tools disabled). Deprecated; will be removed in 1.4.0.
-      Use worker Agents exposed through ``Agent.as_tool()`` instead.
+    * ``tools=[worker.as_tool(...)]`` — delegate to explicitly constructed
+      worker Agents.
     """
 
     @overload
@@ -868,7 +820,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: type[TResult],
         plugins: Iterable["Plugin"] = ...,
-        tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
     @overload
@@ -886,7 +837,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[TResult],
         plugins: Iterable["Plugin"] = ...,
-        tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
     @overload
@@ -904,7 +854,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: types.UnionType,
         plugins: Iterable["Plugin"] = ...,
-        tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
     @overload
@@ -922,7 +871,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: None = ...,
         plugins: Iterable["Plugin"] = ...,
-        tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
     # A schema only known at run time (e.g. forwarded from a caller's argument):
@@ -942,7 +890,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = ...,
         response_schema: ResponseProto[Any] | type | types.UnionType | None = ...,
         plugins: Iterable["Plugin"] = ...,
-        tasks: TaskConfig | Literal[False] = ...,
     ) -> None: ...
 
     def __init__(
@@ -959,7 +906,6 @@ class Agent(PluginTarget, Generic[TResult]):
         variables: Mapping[str, Any] | None = None,
         response_schema: (ResponseProto[TResult] | type[TResult] | types.UnionType | None) = None,
         plugins: Iterable["Plugin"] = (),
-        tasks: TaskConfig | Literal[False] = False,
     ) -> None:
         self._init_target(
             name,
@@ -974,31 +920,6 @@ class Agent(PluginTarget, Generic[TResult]):
         )
         self.config = config
         self._response_schema = ResponseSchema.ensure_schema(response_schema)
-
-        # Auto-injected tools (the subtask toolkit) live here, NOT in the
-        # public ``self.tools`` (which holds only user-supplied tools). They
-        # are chained into the tool set at execution time but kept out of
-        # ``self.tools`` so they are never inherited by spawned subtasks —
-        # that would re-enable recursion (run_subtask).
-        self._additional_tools: list[Tool] = []
-
-        # Task spawning. ``tasks=False`` (the default) means no auto-injected
-        # ``run_subtask`` / ``run_subtasks`` tools. Pass ``tasks=TaskConfig(...)``
-        # to opt in.
-        # ``None`` is treated as disabled: older docs showed it as the default.
-        if tasks is False or tasks is None:
-            self._task_config: TaskConfig | None = None
-        else:
-            warnings.warn(TASK_CONFIG_DEPRECATION, DeprecationWarning, stacklevel=2)
-            self._task_config = tasks
-            self._additional_tools.append(_build_subtask_toolkit(self))
-        # One Semaphore per running loop: sharing one raises once a second loop
-        # awaits it contended (the hazard ag2/extensions/docker/sandbox.py also
-        # calls out). Provisioned by ``_task_slots_for``.
-        self._task_slots: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
-            weakref.WeakKeyDictionary()
-        )
-        self._task_slots_lock = threading.Lock()
 
         validate_knowledge_middleware(self._middleware)
 
@@ -1075,15 +996,6 @@ class Agent(PluginTarget, Generic[TResult]):
         """Observers attached to this agent, in registration order."""
 
         return tuple(self._observers)
-
-    @property
-    def tasks(self) -> TaskConfig | None:
-        """Sub-task configuration, or ``None`` when sub-tasks are not enabled.
-
-        Deprecated; will be removed in 1.4.0 with ``Agent(tasks=...)``.
-        """
-
-        return self._task_config
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
@@ -1697,8 +1609,8 @@ class Agent(PluginTarget, Generic[TResult]):
         racing ``set_result`` calls on ``context.stream.get`` futures, and
         orphaned tool_use records that break subsequent Anthropic turns. The lock
         is a lazy per-stream ``asyncio.Lock``; a fresh single-turn stream pays a
-        no-contention acquire. Sub-tasks spawn on their own stream, so they never
-        contend with the parent turn's lock.
+        no-contention acquire. Delegated workers run on their own stream, so they
+        never contend with the parent turn's lock.
         """
         additional_middleware = tuple(additional_middleware)
         async with AsyncExitStack() as scope_stack:
@@ -1713,7 +1625,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 final_schema = ResponseSchema.ensure_schema(response_schema)
 
             # collect actual tools
-            all_tools: tuple[Tool, ...] = tuple(chain(self.tools, self._additional_tools, additional_tools))
+            all_tools: tuple[Tool, ...] = tuple(chain(self.tools, additional_tools))
 
             all_schemas: list[ToolSchema] = []
             tool_search_schema: ToolSearchToolSchema | None = None
@@ -1900,62 +1812,6 @@ class Agent(PluginTarget, Generic[TResult]):
 
                     yield drive
 
-    async def _spawn_subtask(self, task: str, ctx: Context) -> str:
-        """Spawn a subtask Agent and delegate via ``run_task``.
-
-        The subtask inherits the parent's user-supplied tools (filtered by
-        ``TaskConfig.include_tools`` / ``exclude_tools``) plus
-        ``TaskConfig.extra_tools``. It is constructed with ``tasks=False``
-        (the default) so the child has **no** ``run_subtask`` tools —
-        recursive delegation is impossible by construction. The delegated run
-        uses the common task lifecycle; ``run_task`` handles dependency/variable
-        copying and HITL bridging.
-        """
-        tc = self._task_config
-        if tc is None:
-            return "Error: subtask spawning is disabled on this Agent (pass tasks=TaskConfig(...) to enable)."
-        if tc.max_concurrency is not None:
-            async with self._task_slots_for(tc.max_concurrency):
-                return await self._run_subtask(task, ctx, tc)
-        return await self._run_subtask(task, ctx, tc)
-
-    def _task_slots_for(self, max_concurrency: int) -> asyncio.Semaphore:
-        """The subtask semaphore for the running loop, created on first use.
-
-        A ``threading.Lock`` because several OS threads can drive one Agent, and
-        two racing creators would leave the loser capped by a semaphore nothing
-        else holds. Closed loops are dropped on the way past: a contended
-        ``asyncio.Semaphore`` caches its loop, keeping its own weak key alive.
-        """
-        loop = asyncio.get_running_loop()
-        with self._task_slots_lock:
-            slots = self._task_slots.get(loop)
-            if slots is None:
-                for closed in [cached for cached in self._task_slots if cached.is_closed()]:
-                    del self._task_slots[closed]
-                slots = asyncio.Semaphore(max_concurrency)
-                self._task_slots[loop] = slots
-            return slots
-
-    async def _run_subtask(self, task: str, ctx: Context, tc: TaskConfig) -> str:
-        # Inherit only the parent's user-supplied tools — never the
-        # auto-injected subtask toolkit (excluded by
-        # identity), so the child can't recurse or see parent-only tooling.
-        inherited = _filter_subtask_tools(self.tools, tc.include_tools, tc.exclude_tools)
-
-        bare = Agent(
-            name=f"subtask-{uuid4().hex[:8]}",
-            prompt=tc.prompt,
-            config=tc.config or self.config,
-            tools=[*inherited, *tc.extra_tools],
-            tasks=False,
-        )
-
-        result = await _run_task(bare, task, parent_context=ctx)
-        if not result.completed:
-            return f"Error: {result.error}"
-        return result.result or ""
-
     def __build_context(
         self,
         stream: Stream,
@@ -2088,92 +1944,6 @@ async def _observer_lifecycle(
         for obs in observers:
             with suppress(Exception):
                 await context.send(ObserverCompleted(name=getattr(obs, "name", type(obs).__name__)))
-
-
-_RUN_SUBTASK_DESCRIPTION = (
-    "Spawn an isolated subtask agent for self-contained focused work. "
-    "The subtask runs with a fresh conversation history and inherits this "
-    "agent's tools, then returns its result as a string. "
-    "You can call this tool multiple times in parallel within a single "
-    "response — each call runs concurrently in its own context. For "
-    "deliberate fan-out with one tool call, use run_subtasks instead."
-)
-
-_RUN_SUBTASKS_DESCRIPTION = (
-    "Run multiple subtasks bundled into one tool call. Each task runs in "
-    "its own isolated subtask agent (fresh history, parent's tools). "
-    "Set parallel=True (default) to dispatch them concurrently — preferred "
-    "when the tasks are independent. parallel=False runs them sequentially "
-    "and is useful only when later tasks depend on earlier results."
-)
-
-
-def _build_subtask_toolkit(agent: "Agent[Any]") -> Toolkit:
-    """Construct the ``run_subtask`` / ``run_subtasks`` tools for ``agent``.
-
-    Called once per Agent instance from ``__init__``. The closures capture
-    ``agent`` so the resulting Tools can be reused across every turn without
-    re-allocation (per AGENTS.md: no nested function creation in runtime
-    execution paths).
-    """
-    toolkit = Toolkit()
-
-    @toolkit.tool(name="run_subtask", description=_RUN_SUBTASK_DESCRIPTION)
-    async def run_subtask(task: str, ctx: Context) -> str:
-        return await agent._spawn_subtask(task, ctx)
-
-    @toolkit.tool(name="run_subtasks", description=_RUN_SUBTASKS_DESCRIPTION)
-    async def run_subtasks(ctx: Context, tasks: list[str], parallel: bool = True) -> str:
-        if parallel:
-            raw = await asyncio.gather(
-                *(agent._spawn_subtask(t, ctx) for t in tasks),
-                return_exceptions=True,
-            )
-            # One sub-task that could not reach a human sinks the whole call:
-            # rendering it as text would make it the tool's output, and the
-            # model would read an unaskable approval as a subtask that failed.
-            for r in raw:
-                if isinstance(r, HumanInputError):
-                    raise r
-            results = [r if not isinstance(r, BaseException) else f"Error: {r}" for r in raw]
-        else:
-            results = []
-            for t in tasks:
-                try:
-                    results.append(await agent._spawn_subtask(t, ctx))
-                except HumanInputError:
-                    raise
-                except Exception as e:
-                    results.append(f"Error: {e}")
-
-        parts = [f"## {task_desc}\n\n{result}" for task_desc, result in zip(tasks, results)]
-        return "\n\n---\n\n".join(parts)
-
-    return toolkit
-
-
-def _filter_subtask_tools(
-    tools: Iterable[Tool],
-    include: Iterable[str] | None,
-    exclude: Iterable[str],
-) -> list[Tool]:
-    """Apply ``include_tools`` / ``exclude_tools`` filters to ``tools``.
-
-    ``include`` is an allowlist of tool names — ``None`` (the default) lets
-    every tool through. ``exclude`` is always applied as a blocklist after
-    the allowlist. Tool identity is by ``Tool.name``.
-    """
-    include_set = set(include) if include is not None else None
-    exclude_set = set(exclude)
-    result: list[Tool] = []
-    for t in tools:
-        name = t.name
-        if include_set is not None and name not in include_set:
-            continue
-        if name in exclude_set:
-            continue
-        result.append(t)
-    return result
 
 
 def _is_user_assembler(factory: MiddlewareFactory) -> TypeGuard[Middleware]:

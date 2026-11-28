@@ -16,8 +16,8 @@ Breaking work across multiple agents gives you:
 !!! note
     When the LLM returns multiple tool calls in a single response, the framework dispatches them concurrently. Plain variables are deep-copied for each branch; explicitly shared variables remain visible across the tree. See [Variable Scopes Across Subagents](/docs/user-guide/context/variables#variable-scopes-across-subagents) for ownership and synchronization rules.
 
-!!! warning "TaskConfig is deprecated"
-    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools will be removed in **1.4.0**. Existing code continues to work with deprecation warnings. Use `Agent.as_tool()` for new code and follow the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) below.
+!!! note "TaskConfig was removed in 1.4.0"
+    `TaskConfig`, `Agent(tasks=...)`, `Agent.tasks`, and the automatically injected `run_subtask` / `run_subtasks` tools were removed in **1.4.0**. Use `Agent.as_tool()` and follow the [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) below.
 
 ## Subagents API
 
@@ -200,10 +200,6 @@ coordinator = Agent(
 
 !!! warning "Use a function, not a middleware object"
     Tool middleware is deep-copied when its tool is registered. A callable *object* holding the semaphore is copied once per delegate, so each delegate silently gets its own cap. A function and its closure are not copied, so every delegate shares one semaphore. Create the limiter inside the event loop that runs the agent; an `asyncio.Semaphore` must not be shared across loops.
-
-### Deprecation warnings
-
-`Agent(tasks=TaskConfig(...))` emits one `DeprecationWarning` pointing at the line that builds the Agent. Constructing, copying or pickling a `TaskConfig` doesn't warn at runtime, but type checkers flag every use of the class. Reading `Agent.tasks` and leaving tasks disabled emit no warning.
 
 ## Background Subagents
 

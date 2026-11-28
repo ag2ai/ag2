@@ -13,7 +13,6 @@ import pytest
 from pydantic import BaseModel, Field
 
 from ag2 import Agent
-from ag2.agent import TaskConfig
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import CompactionCompleted
 from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
@@ -84,50 +83,6 @@ async def test_unicode_and_emoji_pass_through(provider_config) -> None:
     body = reply.body
     # At least one of the unicode tokens should round-trip
     assert any(token in body for token in ["日本語", "🎌", "ñoño", "🚀"])
-
-
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
-async def test_concurrent_tool_calls_via_run_subtasks(provider_config) -> None:
-    """run_subtasks(parallel=True) dispatches subtasks concurrently.
-
-    Verified by inspecting ``TaskStarted.created_at`` for the three subtasks:
-    when dispatched in parallel they are kicked off within the same event-loop
-    tick, so the spread between the earliest and latest ``created_at`` must
-    be far smaller than a single LLM round trip. Sequential dispatch would
-    space them by 1+ seconds each.
-    """
-    from ag2.events import TaskStarted
-
-    starts: list[TaskStarted] = []
-    stream = MemoryStream()
-    stream.where(TaskStarted).subscribe(lambda e: starts.append(e))
-
-    agent = Agent(
-        "parallel",
-        prompt=("Use run_subtasks with parallel=True to dispatch independent jobs. Be concise."),
-        config=provider_config,
-        tasks=TaskConfig(),
-    )
-
-    reply = await agent.ask(
-        "Use run_subtasks with parallel=True to ask three things at once: "
-        "(1) what is 2+2, (2) what is 5+5, (3) what is 10+10. "
-        "Then list all three results.",
-        stream=stream,
-    )
-
-    assert reply.body is not None
-    body = reply.body
-    assert "4" in body
-    assert "10" in body
-    assert "20" in body
-    # 3 subtasks must have started
-    assert len(starts) >= 3, f"expected ≥3 TaskStarted events, got {len(starts)}"
-    times = sorted(s.created_at for s in starts[:3])
-    spread = times[-1] - times[0]
-    # Parallel dispatch happens within one event-loop iteration → spread is
-    # typically sub-millisecond; sequential would be ≥1s per LLM call.
-    assert spread < 0.5, f"subtasks were not dispatched in parallel; spread={spread:.3f}s"
 
 
 async def test_retry_middleware_happy_path(provider_config) -> None:

@@ -12,11 +12,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ag2 import Agent, Context, TaskConfig
+from ag2 import Agent, Context
 from ag2.events import (
     HumanInputRequest,
     HumanMessage,
-    TaskFailed,
     ToolCallEvent,
     ToolCallsEvent,
     ToolResultsEvent,
@@ -408,37 +407,6 @@ async def test_a_delegated_question_nobody_can_answer_ends_the_parent_turn() -> 
         await parent.ask("Hi!")
 
     executed.assert_not_called()
-
-
-@pytest.mark.asyncio()
-@pytest.mark.parametrize("parallel", [True, False], ids=["parallel", "sequential"])
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
-async def test_an_unanswerable_subtask_ends_the_parent_turn(parallel: bool) -> None:
-    """``run_subtasks`` fans out; the fan-out must not swallow the failure.
-
-    ``subagent_tool`` and ``run_subtasks`` reach ``run_task`` by different
-    routes: the parallel branch collects exceptions with
-    ``return_exceptions=True`` and the sequential one catches them per task, and
-    both used to render whatever came back as text. Either way the parent's
-    model would read an unaskable question as a subtask that merely failed.
-    """
-    ask_human, executed = _asking_tool()
-    parent = Agent(
-        "parent",
-        config=_lenient(
-            "run_subtasks",
-            f'{{"tasks": ["a", "b"], "parallel": {str(parallel).lower()}}}',
-        ),
-        tools=[ask_human],
-        tasks=TaskConfig(config=_lenient("ask_human")),
-    )
-    stream = MemoryStream()
-
-    with pytest.raises(HumanInputNotProvidedError):
-        await parent.ask("Hi!", stream=stream)
-
-    executed.assert_not_called()
-    assert any(isinstance(event.source_event, TaskFailed) for event in await stream.history.get_events())
 
 
 @pytest.mark.asyncio()

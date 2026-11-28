@@ -52,9 +52,7 @@ def served_capabilities(agent: Agent, *, client_tools: bool, state_snapshots: bo
         transport=TransportCapabilities(streaming=True),
         tools=ToolsCapabilities(supported=True, client_provided=client_tools or None),
         state=StateCapabilities(snapshots=True) if state_snapshots else None,
-        multi_agent=MultiAgentCapabilities(supported=True, delegation=True, subagents=subagents or None)
-        if agent.tasks is not None or subagents
-        else None,
+        multi_agent=MultiAgentCapabilities(supported=True, delegation=True, subagents=subagents) if subagents else None,
         reasoning=ReasoningCapabilities(encrypted=provider_of(agent.config) in GEMINI_FAMILY),
         multimodal=MultimodalCapabilities(input=MultimodalInputCapabilities(**modalities)) if modalities else None,
         # A question the agent's own hook answers never reaches the client.

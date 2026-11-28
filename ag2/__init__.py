@@ -4,7 +4,7 @@
 
 from fast_depends import Depends
 
-from .agent import Agent, AgentReply, AgentRun, TaskConfig
+from .agent import Agent, AgentReply, AgentRun
 from .annotations import Context, Inject, Variable
 from .events import (
     AudioInput,
@@ -52,7 +52,6 @@ __all__ = (
     "ScopeError",
     "ScopedValue",
     "Task",
-    "TaskConfig",
     "TaskInject",
     "TaskSpec",
     "TextInput",
