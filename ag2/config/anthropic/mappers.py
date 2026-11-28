@@ -836,7 +836,7 @@ def convert_messages(
 
 
 def _turn(role: Literal["user", "assistant"], content: str | Iterable[ContentBlockParam]) -> MessageParam:
-    """Build a message turn; `anthropic` 1.x and 2.x name the per-role param types differently."""
+    """Build a message turn typed as the SDK's `MessageParam`."""
     return cast(MessageParam, {"role": role, "content": content})
 
 
