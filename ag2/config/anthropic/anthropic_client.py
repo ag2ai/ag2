@@ -188,7 +188,7 @@ class AnthropicClient(LLMClient):
             betas.add("files-api-2025-04-14")
 
         if betas:
-            # `anthropic` 1.x matches header names case-insensitively, so this
+            # The `anthropic` SDK matches header names case-insensitively, so this
             # per-request header *replaces* a same-named default rather than being
             # sent alongside it. Fold in the betas the user set as defaults, or
             # asking for one of ours would silently drop theirs.
