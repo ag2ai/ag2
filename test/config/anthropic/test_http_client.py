@@ -5,7 +5,7 @@
 """`http_client` reaches the SDK untouched, and the SDK decides what it takes.
 
 ag2 forwards the client and adds no policy of its own. The public parameter is
-typed `httpx2.AsyncClient` because that is how `anthropic>=1` types it, and the
+typed `httpx2.AsyncClient` because that is how the `anthropic` SDK types it, and the
 type is the whole of ag2's opinion: a static checker rejects a legacy `httpx`
 client here for the same reason it rejects one at `AsyncAnthropic(...)`.
 

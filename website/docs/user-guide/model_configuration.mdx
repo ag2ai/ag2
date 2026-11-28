@@ -87,7 +87,7 @@ config = AnthropicConfig(
 )
 ```
 
-`ag2[anthropic]` requires `anthropic>=1.15.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why it has no `temperature`, `top_p` or `top_k`.
+`ag2[anthropic]` requires `anthropic>=2.0.0,<3`. See [Anthropic Configuration](#anthropic-configuration) for the `httpx2` HTTP client and why it has no `temperature`, `top_p` or `top_k`.
   </Tab>
 
   <Tab title="Gemini">
@@ -280,7 +280,7 @@ Cache writes are reported on `ModelResponse.usage.cache_creation_input_tokens`. 
 
 ### Anthropic Configuration
 
-`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=1.15.0,<3`.
+`AnthropicConfig` connects to the [Claude API](https://platform.claude.com/docs/en/build-with-claude/overview){.external-link target="_blank"} through the official `anthropic` SDK. Install the optional dependency with `pip install "ag2[anthropic]"`, which requires `anthropic>=2.0.0,<3`.
 
 If `api_key` is not passed explicitly, it is resolved from the `ANTHROPIC_API_KEY` environment variable.
 
@@ -336,7 +336,7 @@ Caller-supplied beta headers are preserved when AG2 adds its own tool-related be
 
 #### Custom HTTP Client
 
-`anthropic>=1` is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`:
+The `anthropic` SDK is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`:
 
 ```python linenums="1" hl_lines="7"
 import httpx2
@@ -355,11 +355,11 @@ config = AnthropicConfig(
 
 #### Sampling Parameters
 
-`AnthropicConfig` has no `temperature`, `top_p` or `top_k`; they were removed in 1.4.0. The Messages API version that `anthropic` 2.x sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included.
+`AnthropicConfig` has no `temperature`, `top_p` or `top_k`; they were removed in 1.4.0. The Messages API version that the `anthropic` SDK sends (`2026-10-21`) no longer accepts them: a request carrying any of them is answered with HTTP 400 `Extra inputs are not permitted`, on every model, Claude Haiku 4.5 included.
 
 !!! note "`extra_body`"
 
-    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it. With `anthropic` 1.x, whose API version still reads the sampling keys, `#!python extra_body={"temperature": 0}` sends one; with `anthropic` 2.x the API answers 400 to it.
+    Pass `extra_body` to forward provider-specific keys that have no dedicated field. AG2 does not interpret it, so `#!python extra_body={"temperature": 0}` reaches the API and is answered with 400.
 
 ### Amazon Bedrock Authentication
 
