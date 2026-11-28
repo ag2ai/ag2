@@ -323,7 +323,7 @@ requires-dist = [
     { name = "elevenlabs", marker = "extra == 'elevenlabs'", specifier = ">=2.73.0,<3" },
     { name = "fast-depends", extras = ["pydantic"], specifier = ">=3.0.8,<4.0.0" },
     { name = "google-auth", marker = "extra == 'gemini'" },
-    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.68.0,<4" },
+    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=3.2,<4" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "httpx2", marker = "extra == 'gemini'", specifier = ">=2.0.0,<3" },
     { name = "jsonschema", marker = "extra == 'a2ui'", specifier = ">=4.18.0,<5" },

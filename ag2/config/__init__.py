@@ -42,9 +42,10 @@ except ImportError as e:
     DashScopeConfig = missing_optional_dependency("DashScopeConfig", "dashscope", e)  # type: ignore[misc]
 
 try:
-    from .gemini import GeminiConfig, VertexAIConfig
+    from .gemini import GeminiConfig, GeminiDecisionsConfig, VertexAIConfig
 except ImportError as e:
     GeminiConfig = missing_optional_dependency("GeminiConfig", "gemini", e)  # type: ignore[misc]
+    GeminiDecisionsConfig = missing_optional_dependency("GeminiDecisionsConfig", "gemini", e)  # type: ignore[misc]
     VertexAIConfig = missing_optional_dependency("VertexAIConfig", "gemini", e)  # type: ignore[misc]
 
 try:
@@ -80,6 +81,7 @@ __all__ = (
     "DashScopeConfig",
     "ExpiresAfter",
     "GeminiConfig",
+    "GeminiDecisionsConfig",
     "LLMClient",
     "MistralConfig",
     "ModelConfig",

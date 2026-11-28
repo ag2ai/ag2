@@ -88,19 +88,6 @@ class TestNormalizeUsage:
         result = normalize_usage(_make_metadata(thoughts=0))
         assert result.thinking_tokens is None
 
-    def test_handles_metadata_without_thoughts_field(self):
-        """Older google-genai versions may not expose ``thoughts_token_count``."""
-        m = MagicMock(
-            spec=["prompt_token_count", "candidates_token_count", "total_token_count", "cached_content_token_count"]
-        )
-        m.prompt_token_count = 100
-        m.candidates_token_count = 20
-        m.total_token_count = 120
-        m.cached_content_token_count = None
-
-        result = normalize_usage(m)
-        assert result == Usage(prompt_tokens=100, completion_tokens=20, total_tokens=120)
-
 
 @pytest.mark.parametrize(
     ("candidates", "thoughts", "completion"),

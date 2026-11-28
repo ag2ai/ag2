@@ -108,7 +108,8 @@ class DecisionSpec:
         error: type[NotADecisionError],
         subject: str = "`response_schema`",
     ) -> "DecisionSpec":
-        values = node.get("enum")
+        # An ``Enum`` alias repeats its member's value; it is the same option.
+        values = list(dict.fromkeys(node["enum"])) if node.get("enum") else None
         _check_option_keys(markers, values or [])
 
         is_bool = node.get("type") == "boolean" and (values is None or set(values) == {True, False})

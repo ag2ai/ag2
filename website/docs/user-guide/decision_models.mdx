@@ -5,7 +5,7 @@ sidebarTitle: Decision Models
 
 # Decision Models
 
-A decision model answers **typed questions** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports two of them, [OpenAI's Decisions API](/docs/user-guide/model_configuration#openai-decisions-configuration) and [TypeSafe's Jev](/docs/user-guide/model_configuration#typesafe-jev-configuration). This page collects recipes for the everyday jobs they are built for.
+A decision model answers **typed questions** instead of generating text: is this true, which of these options, or where does it sit on a rubric. AG2 supports three of them: [OpenAI's Decisions API](/docs/user-guide/model_configuration#openai-decisions-configuration), [Gemini's Decisions API](/docs/user-guide/model_configuration#gemini-decisions-configuration) and [TypeSafe's Jev](/docs/user-guide/model_configuration#typesafe-jev-configuration). The recipes below show OpenAI and TypeSafe. To run one on Gemini, swap in `GeminiDecisionsConfig()`, read the yes/no probability from `metadata["noul"]` (see the table below), pass option descriptions as `descriptions=` (TypeSafe's recipes call it `criteria=`), and keep `question_instructions` to text. This page collects recipes for the everyday jobs they are built for.
 
 On a decision model the agent's `response_schema` is not a format hint, it **is** the question. The prompt and the schema's description become the question text, and the answer comes back as a value of that schema together with the probabilities behind it.
 
@@ -27,7 +27,7 @@ Anything else (`str`, a nested or optional field, a list) is rejected with `Unsu
 
 ## Set up
 
-Both providers ship as optional extras and read their key from the environment.
+Each provider ships as an optional extra and reads its key from the environment.
 
 <Tabs>
   <Tab title="OpenAI Decisions">
@@ -40,6 +40,19 @@ export OPENAI_API_KEY="..."
 from ag2.config import OpenAIDecisionsConfig
 
 config = OpenAIDecisionsConfig()  # model="gpt-6-luna"
+```
+  </Tab>
+
+  <Tab title="Gemini Decisions">
+```bash
+pip install "ag2[gemini]"
+export GEMINI_API_KEY="..."
+```
+
+```python linenums="1"
+from ag2.config import GeminiDecisionsConfig
+
+config = GeminiDecisionsConfig()  # model="gemini-decision-1"
 ```
   </Tab>
 
@@ -57,16 +70,16 @@ config = TypeSafeConfig()  # model="jev-latest"
   </Tab>
 </Tabs>
 
-The answer is on `#!python await reply.content()`. Everything else the model returned is on `reply.response.metadata`, and the two providers name a few fields differently:
+The answer is on `#!python await reply.content()`. Everything else the model returned is on `reply.response.metadata`, and the providers name a few fields differently:
 
-| Metadata | OpenAI Decisions | TypeSafe |
-| :--- | :--- | :--- |
-| Yes/no probability | `metadata["probability"]` | `metadata["noul"]` |
-| Choice probabilities | `metadata["probabilities"]`, a list of `{"value": ..., "probability": ...}` | `metadata["probabilities"]`, a `{label: probability}` dict |
-| Confidence (choice and score) | `metadata["confidence"]` | `metadata["confidence"]` |
-| Expected score, before snapping to a level | `metadata["score"]` | `metadata["score"]` |
-| Option descriptions on the config | `descriptions={...}` | `criteria={...}` |
-| Question and options beside the type | `Annotated[T, Question(...)]` | `Annotated[T, Question(...)]` |
+| Metadata | OpenAI Decisions | Gemini Decisions | TypeSafe |
+| :--- | :--- | :--- | :--- |
+| Yes/no probability | `metadata["probability"]` | `metadata["noul"]` | `metadata["noul"]` |
+| Choice probabilities | `metadata["probabilities"]`, a list of `{"value": ..., "probability": ...}` | `metadata["probabilities"]`, a `{value: probability}` dict | `metadata["probabilities"]`, a `{label: probability}` dict |
+| Confidence | `metadata["confidence"]` (choice and score) | `metadata["confidence"]` (every type) | `metadata["confidence"]` (choice and score) |
+| Expected score, before snapping to a level | `metadata["score"]` | `metadata["score"]` | `metadata["score"]` |
+| Option descriptions on the config | `descriptions={...}` | `descriptions={...}` | `criteria={...}` |
+| Question and options beside the type | `Annotated[T, Question(...)]` | `Annotated[T, Question(...)]` | `Annotated[T, Question(...)]` |
 
 ## Classification
 

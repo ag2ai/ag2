@@ -420,15 +420,12 @@ def normalize_usage(metadata: types.GenerateContentResponseUsageMetadata) -> Usa
     """Build usage from Gemini UsageMetadata, normalizing to standard keys."""
 
     cache_read = _to_float(metadata.cached_content_token_count) or None
-    # Read through getattr although the annotation declares the field: test_gemini_usage pins
-    # the behaviour for a google-genai below the declared floor, where it is absent.
-    thinking = _to_float(getattr(metadata, "thoughts_token_count", None)) or None
+    thinking = _to_float(metadata.thoughts_token_count) or None
     # Tokens a tool's output put into the prompt (grounding, code execution) are
     # billed as prompt but counted apart, and the total counts them: leaving
-    # them out would put prompt plus completion below it. Absent before
-    # google-genai added the field, like `thoughts_token_count`.
+    # them out would put prompt plus completion below it.
     prompt = _to_float(metadata.prompt_token_count)
-    tool_use_prompt = _to_float(getattr(metadata, "tool_use_prompt_token_count", None))
+    tool_use_prompt = _to_float(metadata.tool_use_prompt_token_count)
     if tool_use_prompt is not None:
         prompt = (prompt or 0.0) + tool_use_prompt
     completion = _to_float(metadata.candidates_token_count)

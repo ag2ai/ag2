@@ -18,6 +18,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
+| **[Gemini Decisions](https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/)** | `GeminiDecisionsConfig` | `pip install "ag2[gemini]"` |
 | **[Gemini on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)** | `VertexAIConfig` | `pip install "ag2[gemini]"` |
 | **[Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)** | `BedrockConfig` | `pip install "ag2[bedrock]"` |
 | **[Ollama](https://docs.ollama.com/api/introduction)** | `OllamaConfig` | `pip install "ag2[ollama]"` |
@@ -102,7 +103,7 @@ config = GeminiConfig(
 )
 ```
 
-`ag2[gemini]` requires `google-genai>=1.68.0,<4`; 1.4.0 will require `google-genai>=3`. See [Gemini API Version and HTTP Client](#gemini-api-version-and-http-client) for what changed in `google-genai` 3.x.
+`ag2[gemini]` requires `google-genai>=3.2,<4`. See [Gemini API Version and HTTP Client](#gemini-api-version-and-http-client) for the defaults that came with `google-genai` 3.x.
   </Tab>
   <Tab title="Amazon Bedrock">
 ```python linenums="1"
@@ -527,7 +528,7 @@ The number of thinking tokens consumed is reported on `ModelResponse.usage.think
 
 ### Gemini Responses Cut at the Token Limit
 
-With [long decode](https://ai.google.dev/gemini-api/docs/generate-content/long-decode){.external-link target="_blank"} (Gemini 4 Argon, with `max_output_tokens` above the 64K per-request cap), Gemini stops a long response at that cap before the answer is complete, with the finish reason `CONTINUATION` and a token to resume from. From `google-genai` 2.30, the SDK resumes such a response automatically, request after request, until the model finishes. AG2 then returns the joined answer, and `ModelResponse.usage` is the sum of all those requests, since each one is billed on its own.
+With [long decode](https://ai.google.dev/gemini-api/docs/generate-content/long-decode){.external-link target="_blank"} (Gemini 4 Argon, with `max_output_tokens` above the 64K per-request cap), Gemini stops a long response at that cap before the answer is complete, with the finish reason `CONTINUATION` and a token to resume from. The SDK resumes such a response automatically, request after request, until the model finishes. AG2 then returns the joined answer, and `ModelResponse.usage` is the sum of all those requests, since each one is billed on its own.
 
 Set `automatic_continuation=False` on `GeminiConfig` or `VertexAIConfig` to turn the resumption off, for example to cap the cost of a single call:
 
@@ -540,17 +541,13 @@ config = GeminiConfig(
 )
 ```
 
-A response cut short then reports `#!python response.finish_reason == "continuation"`, so it can be told apart from a finished one. With `google-genai` 2.29, which knows the finish reason but cannot resume, every cut response reports it this way.
+A response cut short then reports `#!python response.finish_reason == "continuation"`, so it can be told apart from a finished one.
 
 ### Gemini API Version and HTTP Client
 
-`ag2[gemini]` accepts `google-genai` 2.x and 3.x. Two defaults change with 3.x.
+`ag2[gemini]` requires `google-genai>=3.2`, which changed two defaults from 2.x.
 
-!!! warning "google-genai 2.x support is removed in 1.4.0"
-
-    With `google-genai` 2.x installed, `config.create()` and `config.create_files_client()` on `GeminiConfig` and `VertexAIConfig` emit a `#!python DeprecationWarning`. 1.4.0 requires `google-genai>=3`; upgrade with `pip install -U "google-genai>=3,<4"`.
-
-**API version.** `google-genai` 3.x sends Developer API requests to `v1`; 2.x sent them to `v1beta`. AG2 follows the installed SDK. The `-latest` aliases (such as `gemini-flash-latest`) and some `-preview` models exist only on `v1beta`, so with 3.x a request for one of them fails until you set `api_version`:
+**API version.** `google-genai` 3.x sends Developer API requests to `v1`; 2.x sent them to `v1beta`. The `-latest` aliases (such as `gemini-flash-latest`) and some `-preview` models exist only on `v1beta`, so a request for one of them fails until you set `api_version`:
 
 ```python linenums="1" hl_lines="5"
 from ag2.config import GeminiConfig
@@ -561,9 +558,9 @@ config = GeminiConfig(
 )
 ```
 
-`GeminiConfig` takes `"v1"` or `"v1beta"`; `VertexAIConfig` takes `"v1"` or `"v1beta1"`, and Vertex AI keeps `v1beta1` as its default on both SDK majors. With `api_version` left unset, `google-genai` 3.x also reads the `GOOGLE_GENAI_API_VERSION` environment variable.
+`GeminiConfig` takes `"v1"` or `"v1beta"`; `VertexAIConfig` takes `"v1"` or `"v1beta1"`, and Vertex AI defaults to `v1beta1`. With `api_version` left unset, `google-genai` also reads the `GOOGLE_GENAI_API_VERSION` environment variable.
 
-**HTTP client.** `google-genai` 3.x is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`, like `AnthropicConfig`. An `#!python httpx.AsyncClient` keeps working with both SDK majors:
+**HTTP client.** `google-genai` 3.x is built on [`httpx2`](https://pypi.org/project/httpx2/){.external-link target="_blank"}, so `http_client` takes an `#!python httpx2.AsyncClient`, like `AnthropicConfig`. An `#!python httpx.AsyncClient` keeps working too:
 
 ```python linenums="1" hl_lines="6"
 import httpx2
@@ -574,8 +571,6 @@ config = GeminiConfig(
     http_client=httpx2.AsyncClient(proxy="http://proxy.example.com:8080"),
 )
 ```
-
-With `google-genai` 2.x, an `httpx2` client raises `#!python TypeError` when `config.create()` builds the client.
 
 ### Ollama Configuration
 
@@ -867,6 +862,46 @@ Images that every question should carry, such as a reference photo, go in `quest
 `safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
 
 For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models).
+
+### Gemini Decisions Configuration
+
+`GeminiDecisionsConfig` connects to Gemini's Decisions API (`POST /v1beta/decisions`) on the Gemini Developer API; it is not available on Vertex AI yet. It ships with the `gemini` extra. Like `GeminiConfig`, it reads `GEMINI_API_KEY` when `api_key` is not passed. `model` defaults to `gemini-decision-1`.
+
+It follows the same contract as [OpenAI Decisions](#openai-decisions-configuration): the agent's `response_schema` is the question, a flat class is one question per field sent in one request, and anything that is not a decision type raises `UnsupportedResponseSchemaError` (from `ag2.config.gemini`) before a request.
+
+```python linenums="1"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import GeminiDecisionsConfig
+
+class Department(Enum):
+    """Which department should handle this complaint?"""
+
+    BILLING = "billing"
+    """Payments, invoices, and refunds."""
+    TECHNICAL = "technical"
+    """Problems using the product."""
+
+router = Agent("router", config=GeminiDecisionsConfig(), response_schema=Department)
+
+reply = await router.ask("I was charged twice for my order.")
+await reply.content()                     # Department.BILLING
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # {"billing": 0.95, "technical": 0.05}
+```
+
+Where it differs from OpenAI Decisions:
+
+- **Yes/no questions** (`bool`) are Gemini's `noul` type; the probability of `true` is `metadata["noul"]`, and every answer type carries `metadata["confidence"]`.
+- **Score levels** are sent as one rubric line per level: the member name as a label, then its docstring (`Workaround available: A task fails, but another way works.`).
+- **Inputs** are one flat list of blocks with no roles, so earlier assistant replies and tool results are text tagged `[Assistant]` / `[Tool result]`, separated by blank lines. Images, audio, video and documents are sent inline from `BinaryInput` (`ImageInput(path=...)`, `ImageInput(data=..., media_type=...)`, with a real media type, not `application/octet-stream`), by URI from an HTTPS `UrlInput` whose file extension is one the API supports for that kind (for example `.png`, `.heic`, `.wav`, `.webm`, `.mp4`, `.pdf`), or as a file uploaded with Gemini's Files API: `FileIdInput(file.name, filename="call.wav")`, typed by the `filename` extension. `gs://` and YouTube URLs, other binaries, and files uploaded through another provider raise `UnsupportedInputError`. A conversation with no non-blank input raises `ValueError`, as does a `boolean_threshold` outside `0..1`.
+- **Limits** are checked before the request: question keys (field names) are 1 to 64 ASCII letters, digits, `_` or `-`; a choice or score has 2 to 255 options; a choice value is 1 to 128 characters with no leading or trailing spaces. Anything else raises `UnsupportedResponseSchemaError`.
+- **`question_instructions`** is text only, joined after the agent prompt.
+- **Blocked input.** When Gemini's input filters block the request (an HTTP 400 with code `safety`, `prohibited_content`, `blocklist`, `image_safety` or `content_blocked`), no question is answered and `DecisionBlockedError` (from `ag2.config.gemini`) is raised with that code as `reason`. There is no per-question refusal.
+- **Options outside the schema.** An answer that names a choice the schema does not list raises `ValueError` instead of returning it.
+
+Tools raise `UnsupportedToolError`, there is no streaming, and `create_files_client()` raises `NotImplementedError`. `api_version` defaults to `v1beta`, the version that serves the endpoint; `http_client` takes an `httpx2.AsyncClient`, and `extra_body` is merged into the request. Usage lands on `ModelResponse.usage`; decisions bill input tokens only.
 
 ### TypeSafe (Jev) Configuration
 
