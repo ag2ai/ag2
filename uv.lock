@@ -165,6 +165,7 @@ dev = [
     { name = "jinja2" },
     { name = "mcp" },
     { name = "mdx-include" },
+    { name = "membase-ai" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
     { name = "mkdocs-glightbox" },
     { name = "mkdocs-literate-nav" },
@@ -213,6 +214,7 @@ docs = [
     { name = "jinja2" },
     { name = "mcp" },
     { name = "mdx-include" },
+    { name = "membase-ai" },
     { name = "mkdocs-git-revision-date-localized-plugin" },
     { name = "mkdocs-glightbox" },
     { name = "mkdocs-literate-nav" },
@@ -248,6 +250,7 @@ optionals = [
     { name = "e2b" },
     { name = "exa-py" },
     { name = "firecrawl-py" },
+    { name = "membase-ai" },
     { name = "mistralai", extra = ["realtime"] },
     { name = "safetensors" },
     { name = "tenki" },
@@ -290,6 +293,7 @@ types = [
     { name = "exa-py" },
     { name = "freezegun" },
     { name = "httpx2" },
+    { name = "membase-ai" },
     { name = "mypy" },
     { name = "nlip-sdk" },
     { name = "nlip-server" },
@@ -384,6 +388,7 @@ dev = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
     { name = "mkdocs-literate-nav", specifier = "==0.6.3" },
@@ -444,6 +449,7 @@ docs = [
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "mcp", specifier = ">=2.3.0,<3" },
     { name = "mdx-include", specifier = "==1.4.2" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = "==1.6.0" },
     { name = "mkdocs-glightbox", specifier = "==0.5.2" },
     { name = "mkdocs-literate-nav", specifier = "==0.6.3" },
@@ -499,6 +505,7 @@ optionals = [
     { name = "e2b", specifier = ">=2.0.0,<3" },
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "firecrawl-py", specifier = ">=4.53,<5" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mistralai", extras = ["realtime"], specifier = ">=3.9.0,<4" },
     { name = "safetensors", specifier = ">=0.4.3,<1" },
     { name = "tenki", specifier = ">=1.4.0,<2" },
@@ -546,6 +553,7 @@ types = [
     { name = "exa-py", specifier = ">=2.12.1,<3" },
     { name = "freezegun", specifier = ">=1.5,<2" },
     { name = "httpx2", specifier = ">=2.10.0,<3" },
+    { name = "membase-ai", specifier = ">=0.4.1,<0.5" },
     { name = "mypy", specifier = "==2.4.0" },
     { name = "nlip-sdk", specifier = ">=0.1.0,<1" },
     { name = "nlip-server", specifier = ">=0.1.3,<1" },
@@ -3343,6 +3351,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bf/f0/f395a9cf164471d3c7bbe58cbd64d74289575a8b85a962b49a804ab7ed34/mdx_include-1.4.2.tar.gz", hash = "sha256:992f9fbc492b5cf43f7d8cb4b90b52a4e4c5fdd7fd04570290a83eea5c84f297", size = 15051, upload-time = "2022-07-26T05:46:14.129Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/40/6844997dee251103c5a4c4eb0d1d2f2162b7c29ffc4e86de3cd68d269be2/mdx_include-1.4.2-py3-none-any.whl", hash = "sha256:cfbeadd59985f27a9b70cb7ab0a3d209892fe1bb1aa342df055e0b135b3c9f34", size = 11591, upload-time = "2022-07-26T05:46:11.518Z" },
+]
+
+[[package]]
+name = "membase-ai"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/c4/b70203c1f1c01c002da11afe203ddc3e5739b939648221ad2b90e1f20ada/membase_ai-0.4.1.tar.gz", hash = "sha256:4a102289eca6f9392815b3df7763d14de56b1841355f20c77d2aafb5a5229588", size = 41102, upload-time = "2026-11-22T15:44:26.744Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/e2/71a3bdd93c684571feadf1dd09c9a0445d4522c71ed73a0db33d60f28e30/membase_ai-0.4.1-py3-none-any.whl", hash = "sha256:5cb22c0220b4c4e1718c0af7c30712b5ab4be2dd3b47e0428aa821769567b10d", size = 51372, upload-time = "2026-11-22T15:44:25.553Z" },
 ]
 
 [[package]]
