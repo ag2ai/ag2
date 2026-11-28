@@ -33,7 +33,13 @@ class ModelConfig(Protocol):
         raise NotImplementedError
 
     @property
-    def model(self) -> str:
+    def model(self) -> str | None:
+        """The model this config asks for, or ``None`` when the backend picks its own.
+
+        An ACP agent with no ``model`` set runs on the agent's default, which the
+        config cannot name. A config that has no notion of a model at all raises
+        ``NotImplementedError`` instead.
+        """
         raise NotImplementedError
 
     def copy(self) -> Self: ...

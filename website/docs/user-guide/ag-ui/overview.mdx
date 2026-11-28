@@ -586,6 +586,42 @@ splits across the two exchanges exactly as above — `toolCallId` names the
 `TOOL_CALL_START` the first exchange already emitted, so a client has something
 to attach the prompt to.
 
+#### Offering more than yes or no
+
+An approval can offer its own choices through `ToolApprovalRequest.choices`, as
+a permission request from an
+[ACP agent](/docs/user-guide/acp/client#choosing-one-of-the-agents-options) does
+with the agent's options. The interrupt's `responseSchema` then gains an object
+branch with one titled constant per choice, so a client can draw a button for
+each:
+
+```json
+{"title": "Approval",
+ "anyOf": [{"type": ["string", "boolean"]},
+           {"type": "object", "title": "Choice", "required": ["choice"], "additionalProperties": false,
+            "properties": {"choice": {"type": "string",
+                                      "oneOf": [{"const": "proceed_always", "title": "Allow for this session"},
+                                                {"const": "proceed_once", "title": "Allow"},
+                                                {"const": "cancel", "title": "Reject"}]}}}]}
+```
+
+Resume with the picked value under `choice`:
+
+```json
+{"threadId": "thread-1", "runId": "run-2", "messages": [],
+ "resume": [{"interruptId": "9236...", "status": "resolved", "payload": {"choice": "proceed_once"},
+             "metadata": {"ag2": {"proof": "g7Qk..."}}}]}
+```
+
+A pick has its own shape on the wire and is never inferred from a string:
+
+- `{"choice": <value>}` reaches the asker as an `ApprovalChoiceMessage` and
+  selects exactly that choice. A value that was not offered is refused with
+  `PAYLOAD_REFUSED`.
+- `true`, `false` and strings mean what they mean without choices, even a
+  string equal to a choice's value. A client that only draws approve and refuse
+  buttons, or answers in words, works unchanged.
+
 ### With a hook, nothing changes
 
 Supplying a human-input hook (`Agent(..., hitl_hook=...)`, or `hitl_hook=` on
@@ -679,6 +715,8 @@ To keep the browser talking to the AG2 endpoint directly, with no runtime proces
 
 The same endpoint can also power a bot in Slack and other messaging platforms — see [Channels](/docs/user-guide/ag-ui/channels).
 
+It can also run as an AI coworker in [OpenBot](https://open.bot){.external-link target="_blank"}, an open-source, self-hostable agent workspace: create a Bot in OpenBot, choose to bring your own agent, select AG2 as the framework, and enter the endpoint's address.
+
 ## AG-UI Dojo
 
 For protocol-level testing and event inspection, use the AG2 Dojo profile:
@@ -691,3 +729,4 @@ For protocol-level testing and event inspection, use the AG2 Dojo profile:
 2. Follow the [CopilotKit UI quickstart](/docs/user-guide/ag-ui/copilotkit-quickstart) or the [assistant-ui quickstart](/docs/user-guide/ag-ui/assistant-ui-quickstart) to connect a React/Next.js client.
 3. Validate runtime behavior with the [AG2 Dojo - agentic_chat](https://dojo.ag-ui.com/ag2/feature/agentic_chat){.external-link target="_blank"}.
 4. Run the same endpoint as a bot in Slack and other messaging platforms with [Channels](/docs/user-guide/ag-ui/channels).
+5. Register the same endpoint as a Bot in [OpenBot](https://open.bot){.external-link target="_blank"}.

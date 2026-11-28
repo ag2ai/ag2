@@ -18,6 +18,7 @@ Claude Code, Codex, OpenCode and Kilo Code ACP adapters respectively.
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar, Literal, Self
 
+from ag2.config.config import ModelConfig, ModelProvider
 from ag2.hitl import ElicitationPolicy
 
 from .stdio import StdioConnection
@@ -54,7 +55,7 @@ PermissionPolicy = Literal["ask", "auto", "deny"]
 
 
 @dataclass(slots=True)
-class ACPConfig:
+class ACPConfig(ModelConfig):
     """Drive a CLI coding agent over ACP, launching it as a local subprocess.
 
     Also the base every other ACP config extends:
@@ -89,7 +90,8 @@ class ACPConfig:
             ``None`` keeps the agent's default. When the agent has no model
             option the value is response metadata only.
         permission_policy: How to answer ``session/request_permission``:
-            ``"ask"`` routes to the agent's ``hitl_hook``/``context.input``,
+            ``"ask"`` routes an ``ACPPermissionRequest`` to the agent's
+            ``hitl_hook``, answered with the ``option_id`` to select,
             ``"auto"`` allows, ``"deny"`` rejects.
         elicitation_policy: How to answer ``elicitation/create`` — the agent
             asking the *user* a question (a form, or a URL to complete an
@@ -179,6 +181,10 @@ class ACPConfig:
         needs and nothing a remote one can reach.
         """
         return GatewayAddress()
+
+    @property
+    def provider(self) -> ModelProvider:
+        raise NotImplementedError("An ACP agent has no AG2 provider.")
 
     def copy(self, /, **overrides: object) -> Self:
         # dataclasses.replace can't statically check dynamic **overrides against

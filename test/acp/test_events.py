@@ -6,10 +6,13 @@ from ag2.acp.events import (
     ACPAvailableCommands,
     ACPElicitation,
     ACPModeChange,
+    ACPPermissionOption,
+    ACPPermissionRequest,
     ACPPlan,
     ACPPlanEntry,
+    ACPToolLocation,
 )
-from ag2.events import BaseEvent
+from ag2.events import ApprovalChoice, BaseEvent
 
 
 def test_acp_plan_holds_entries() -> None:
@@ -33,3 +36,20 @@ def test_elicitation_carries_the_question() -> None:
 
     form = ACPElicitation("Which strategy?", "form", fields=["strategy"])
     assert (form.url, form.fields) == (None, ["strategy"])
+
+
+def test_permission_request_round_trips_through_serialization() -> None:
+    request = ACPPermissionRequest(
+        "git status",
+        tool_call_id="tc1",
+        options=[ACPPermissionOption("opt-a", "Allow", "allow_once")],
+        kind="execute",
+        locations=[ACPToolLocation("/repo/a.py", 3)],
+        raw_input={"command": "git status"},
+        choices=[ApprovalChoice("opt-a", "Allow")],
+    )
+
+    restored = ACPPermissionRequest.from_dict(request.to_dict())
+
+    assert restored == request
+    assert restored.tool_call_id == "tc1"

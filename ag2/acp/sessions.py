@@ -198,6 +198,9 @@ class AgentSession:
     additional_directories: list[str] = field(default_factory=list)
     mcp_servers: list[McpServer] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
+    # The Client's ``systemPrompt`` text, appended to the agent's own instructions
+    # every turn. Empty unless ``ACPAgent(accept_system_prompt=True)``.
+    system_prompt: list[str] = field(default_factory=list)
     max_queued: int = 8
 
     # This conversation's context variables. Seeded from the agent's defaults at

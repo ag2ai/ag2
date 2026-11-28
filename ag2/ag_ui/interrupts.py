@@ -14,11 +14,11 @@ import logging
 import re
 import secrets
 import time
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from math import inf
-from typing import Any, assert_never
+from typing import Any, TypeAlias, TypeGuard, TypedDict, assert_never
 
 from ag_ui.core import (
     PROTOCOL_VERSION,
@@ -55,8 +55,15 @@ from anyio import BrokenResourceError, ClosedResourceError, create_memory_object
 from anyio.streams.memory import MemoryObjectSendStream
 
 from ag2.annotations import Context
+from ag2.events import (
+    ApprovalChoice,
+    ApprovalChoiceMessage,
+    HumanInputRequest,
+    HumanMessage,
+    ToolApprovalRequest,
+    UsageEvent,
+)
 from ag2.events import BaseEvent as AG2Event
-from ag2.events import HumanInputRequest, HumanMessage, ToolApprovalRequest, UsageEvent
 from ag2.exceptions import AG2Error, HumanInputTimeoutError
 
 from .run_input import strip_unrecognised
@@ -88,6 +95,74 @@ APPROVAL_SCHEMA: dict[str, Any] = {
     "title": "Approval",
     "description": "true to let the tool call go ahead, false to refuse it.",
 }
+
+
+# A resume payload as it arrives from the client: any JSON value.
+ResumePayload: TypeAlias = str | int | float | bool | None | list["ResumePayload"] | dict[str, "ResumePayload"]
+
+
+class ChoicePayload(TypedDict):
+    """The resume payload that picks one of an approval's choices: `{"choice": value}`.
+
+    A pick has this shape of its own on the wire, so it is never inferred from
+    a string: a string or a boolean answers the approval in words or with a
+    button, even when it equals a choice's value.
+    """
+
+    choice: str
+
+
+def _is_choice_payload(payload: ResumePayload) -> TypeGuard[ChoicePayload]:
+    """Whether `payload` is exactly a `ChoicePayload`: one `choice` key holding a string."""
+    return isinstance(payload, dict) and payload.keys() == {"choice"} and isinstance(payload["choice"], str)
+
+
+# What a resume hands the waiting call: words, a button, or a picked choice.
+ResumeAnswer = str | bool | ChoicePayload
+
+
+def approval_schema(choices: Sequence[ApprovalChoice]) -> dict[str, Any]:
+    """The response schema for a tool approval offering `choices`.
+
+    With none it is `APPROVAL_SCHEMA`. With some, a third branch is added: an
+    object whose `choice` is one titled constant per choice, so a client can
+    draw a button each and resume with `{"choice": value}`. A pick has its own
+    shape on the wire, so it is never inferred from a string: the string and
+    boolean branches keep the meaning they had, and a client that answers in
+    words or with two buttons still works unchanged.
+    """
+    if not choices:
+        return APPROVAL_SCHEMA
+    # The JSON schema of `ChoicePayload`, its value narrowed to the offered choices.
+    pick = {
+        "type": "object",
+        "title": "Choice",
+        "description": "Picks one of the approval's choices by its value.",
+        "properties": {
+            "choice": {"type": "string", "oneOf": [{"const": c.value, "title": c.label} for c in choices]},
+        },
+        "required": ["choice"],
+        "additionalProperties": False,
+    }
+    return {
+        "title": "Approval",
+        "description": (
+            'true to let the tool call go ahead, false to refuse it, or {"choice": <value>} to pick one of the choices.'
+        ),
+        "anyOf": [
+            {"type": ["string", "boolean"]},
+            pick,
+        ],
+    }
+
+
+def _offered_choices(interrupt: Interrupt) -> set[str]:
+    """The choice values `approval_schema` put in `interrupt`'s response schema."""
+    for branch in (interrupt.response_schema or {}).get("anyOf", ()):
+        if branch.get("type") == "object":
+            return {c["const"] for c in branch["properties"]["choice"]["oneOf"]}
+    return set()
+
 
 # Codes on the `RUN_ERROR` a refused resume produces, so a client can branch
 # without parsing prose.
@@ -455,7 +530,7 @@ class ServedTurn:
         """Taken by `ServedTurns.ask` for the question being put."""
         self._task: asyncio.Task[None] | None = None
         self._outstanding: Interrupt | None = None
-        self._answer: asyncio.Future[str] | None = None
+        self._answer: asyncio.Future[ResumeAnswer] | None = None
 
     @property
     def thread_id(self) -> str:
@@ -491,7 +566,7 @@ class ServedTurn:
             self.release()
             raise
 
-    def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[str]") -> None:
+    def suspend(self, interrupt: Interrupt, answer: "asyncio.Future[ResumeAnswer]") -> None:
         """Park the turn on `interrupt` until `answer` is resolved.
 
         Called by `ServedTurns.ask` under `asking`: one question is outstanding per turn.
@@ -505,8 +580,8 @@ class ServedTurn:
         self._outstanding = None
         self._answer = None
 
-    def deliver(self, payload: str) -> None:
-        """Hand `payload` to the waiting call."""
+    def deliver(self, payload: ResumeAnswer) -> None:
+        """Hand `payload` to the waiting call; see `answer_from` for what it may be."""
         assert self._answer is not None, "deliver() on a turn that is not waiting"
         # Forgotten synchronously, not in the waiting coroutine's own cleanup:
         # that coroutine does not resume until the loop next runs it, and until
@@ -560,7 +635,7 @@ class ServedTurns:
         self._live.add(turn)
         task.add_done_callback(_Discard(self, turn))
 
-    async def ask(self, turn: ServedTurn, interrupt_for: "Callable[[datetime], Interrupt]") -> str:
+    async def ask(self, turn: ServedTurn, interrupt_for: "Callable[[datetime], Interrupt]") -> ResumeAnswer:
         """Put a question to the client, hold `turn`, and return the answer.
 
         Concurrent askers on one turn — parallel tool calls, parallel subtasks —
@@ -573,8 +648,8 @@ class ServedTurns:
         async with turn.asking:
             return await self._put(turn, interrupt_for(since))
 
-    async def _put(self, turn: ServedTurn, interrupt: Interrupt) -> str:
-        answer: asyncio.Future[str] = asyncio.get_running_loop().create_future()
+    async def _put(self, turn: ServedTurn, interrupt: Interrupt) -> ResumeAnswer:
+        answer: asyncio.Future[ResumeAnswer] = asyncio.get_running_loop().create_future()
         turn.suspend(interrupt, answer)
         # Held before the question is emitted, never after: the exchange ends on
         # that very event, so a resume can be in flight the moment it lands, and
@@ -769,7 +844,7 @@ class ClientInterrupter:
 
     async def __call__(self, event: HumanInputRequest, context: Context) -> "AG2Event | None":
         answer = await self._turns.ask(self._turn, functools.partial(self.interrupt_for, event))
-        await context.send(HumanMessage.ensure_message(answer, parent_id=event.id))
+        await context.send(reply_for(event, answer))
         return None
 
     def interrupt_for(self, event: HumanInputRequest, since: datetime | None = None) -> Interrupt:
@@ -789,7 +864,7 @@ class ClientInterrupter:
             reason=INPUT_REQUIRED_REASON if approval is None else TOOL_CALL_REASON,
             message=event.content,
             tool_call_id=None if approval is None else approval.tool_call_id,
-            response_schema=ANSWER_SCHEMA if approval is None else APPROVAL_SCHEMA,
+            response_schema=ANSWER_SCHEMA if approval is None else approval_schema(approval.choices),
             expires_at=self._turns.deadline(event.timeout, since=since).isoformat(),
             metadata={AG2_METADATA_KEY: {PROOF_KEY: issue_proof()}},
         )
@@ -843,23 +918,50 @@ def resume_entry(incoming: RunAgentInput) -> "list[ResumeEntry]":
     return list(incoming.resume or ())
 
 
-def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> str:
-    """The answer `entry` carries, as the string the waiting call will read.
+def answer_from(entry: ResumeEntry, interrupt: Interrupt) -> ResumeAnswer:
+    """The answer `entry` carries, for the waiting call to turn into a reply.
 
-    A `bool` is accepted for an approval and only for an approval; anything else
-    raises `ResumeRefusedError` under `PAYLOAD_REFUSED`.
+    A string is an answer in words, whatever it says. A `bool` is accepted for
+    an approval and only for an approval. `{"choice": value}` is accepted only
+    for an approval that offered `value` among its choices, and is handed on as
+    a `ChoicePayload`. Anything else, a malformed pick included, raises
+    `ResumeRefusedError` under `PAYLOAD_REFUSED`.
     """
-    # The client drew two buttons and has a bool; the approval middleware reads
-    # words. Translating here beats teaching either side the other's vocabulary.
-    if isinstance(entry.payload, bool):
-        if interrupt.reason == TOOL_CALL_REASON:
-            return "y" if entry.payload else "n"
-    elif isinstance(entry.payload, str):
-        return entry.payload
+    payload: ResumePayload = entry.payload
+    if isinstance(payload, str):
+        return payload
+    if interrupt.reason == TOOL_CALL_REASON:
+        if isinstance(payload, bool):
+            return payload
+        if _is_choice_payload(payload):
+            if payload["choice"] in _offered_choices(interrupt):
+                return payload
+            raise ResumeRefusedError(
+                PAYLOAD_REFUSED, f"interrupt {interrupt.id} offered no choice {payload['choice']!r}"
+            )
     raise ResumeRefusedError(
         PAYLOAD_REFUSED,
-        f"interrupt {interrupt.id} asked for a string answer, got {type(entry.payload).__name__}",
+        f"interrupt {interrupt.id} asked for a string answer, got {type(payload).__name__}",
     )
+
+
+def reply_for(event: HumanInputRequest, answer: ResumeAnswer) -> HumanMessage:
+    """The reply to `event` that `answer` makes, keeping the kind of answer the client gave.
+
+    The approve and refuse buttons are a yes or no: `true` and `false` reach the
+    asker as the words `"y"` and `"n"` the approval middleware reads. A picked
+    choice is an `ApprovalChoiceMessage`, so the asker never reads it as a
+    word. A string is an answer in words, even when it equals a choice's value.
+    """
+    if isinstance(answer, dict):
+        reply: HumanMessage = ApprovalChoiceMessage(answer["choice"])
+    elif isinstance(answer, bool):
+        # The client drew two buttons and has a bool; the approval middleware reads
+        # words. Translating here beats teaching either side the other's vocabulary.
+        reply = HumanMessage("y" if answer else "n")
+    else:
+        reply = HumanMessage(answer)
+    return HumanMessage.ensure_message(reply, parent_id=event.id)
 
 
 @dataclass(frozen=True, slots=True)

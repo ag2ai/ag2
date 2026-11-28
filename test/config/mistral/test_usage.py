@@ -2,20 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import dataclass
-
-from mistralai.client.models import UsageInfo
+from mistralai.client.models import PromptTokensDetails, UsageInfo
 
 from ag2.config.mistral.mappers import normalize_usage
 from ag2.events import Usage
 from test.config.mistral._helpers import make_usage
-
-
-@dataclass
-class ObjectDetails:
-    """``prompt_tokens_details`` as an object rather than the dict a JSON body yields."""
-
-    cached_tokens: int
 
 
 def test_none_usage() -> None:
@@ -44,16 +35,26 @@ def test_cached_tokens_from_dict_details() -> None:
     assert usage.cache_read_input_tokens == 6
 
 
-def test_cached_tokens_from_object_details() -> None:
-    """Being an extra, the field is stored unconverted — an object survives as an object."""
-    raw = UsageInfo.model_validate({
-        "prompt_tokens": 10,
-        "completion_tokens": 5,
-        "total_tokens": 15,
-        "prompt_tokens_details": ObjectDetails(cached_tokens=2),
-    })
+def test_cached_tokens_from_model_details() -> None:
+    raw = UsageInfo(
+        prompt_tokens=10,
+        completion_tokens=5,
+        total_tokens=15,
+        prompt_tokens_details=PromptTokensDetails(cached_tokens=2),
+    )
 
     assert normalize_usage(raw).cache_read_input_tokens == 2
+
+
+def test_null_details_leaves_cache_unset() -> None:
+    raw = UsageInfo.model_validate({
+        "prompt_tokens": 1,
+        "completion_tokens": 1,
+        "total_tokens": 2,
+        "prompt_tokens_details": None,
+    })
+
+    assert normalize_usage(raw).cache_read_input_tokens is None
 
 
 def test_missing_details_leaves_cache_unset() -> None:

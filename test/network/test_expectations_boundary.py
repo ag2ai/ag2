@@ -27,6 +27,7 @@ don't explicitly exercise:
 from datetime import datetime
 
 import pytest
+from dirty_equals import HasAttributes, IsPartialDict
 
 from ag2.knowledge import MemoryKnowledgeStore
 from ag2.network import (
@@ -48,7 +49,6 @@ from ag2.network.channel import (
 from ag2.network.hub import (
     AUDIT_KIND_EXPECTATION_VIOLATED,
     AcksWithinEvaluator,
-    AuditLog,
     ExpectationContext,
     MaxSilenceEvaluator,
     ReplyWithinEvaluator,
@@ -84,6 +84,9 @@ class _NoOpAdapter:
 
     def on_accepted(self, _meta: ChannelMetadata, _envelope: Envelope, _state: dict) -> AdapterResult:
         return AdapterResult()
+
+    def expected_next(self, _meta: ChannelMetadata, _state: dict) -> None:
+        return None
 
     def default_view_policy(self, _meta: ChannelMetadata, _participant_id: str) -> FullTranscript:
         return FullTranscript()
@@ -374,9 +377,10 @@ async def test_unknown_evaluator_name_silently_ignored() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_handler_name_silently_ignored() -> None:
+async def test_unknown_handler_name_is_audited_without_action() -> None:
     """If the evaluator fires but the named handler isn't registered,
-    no record is written but the sweeper continues."""
+    the violation is audited once, no action runs, and the sweeper
+    continues."""
     clock = _MockClock()
     hub = await Hub.open(
         MemoryKnowledgeStore(),
@@ -400,12 +404,14 @@ async def test_unknown_handler_name_silently_ignored() -> None:
     _inject_pending_channel(hub, channel_id="s-ghost", adapter_key=("ghost", 1), clock=clock)
 
     clock.advance(1)
-    # Must not raise. Audit log should also stay empty since no
-    # handler was found to record anything.
     await hub._expectation_tick()
-    audit = AuditLog(hub._store)
-    records = await audit.read_all()
-    violation_records = [r for r in records if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED]
-    assert violation_records == []
+    clock.advance(1)
+    await hub._expectation_tick()
+
+    records = await hub.audit_log.read_all()
+    assert [r for r in records if r["kind"] == AUDIT_KIND_EXPECTATION_VIOLATED] == [
+        IsPartialDict({"channel_id": "s-ghost", "on_violation": "ghost_handler"})
+    ]
+    assert await hub.get_channel("s-ghost") == HasAttributes(state=ChannelState.PENDING)
 
     await hub.close()

@@ -267,15 +267,33 @@ class HumanInputRequest(BaseEvent):
     """
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovalChoice:
+    """One answer a tool approval offers beyond a plain yes or no.
+
+    Attributes:
+        value: The answer to give to pick this choice.
+        label: What to show for it.
+    """
+
+    value: str
+    label: str
+
+
 class ToolApprovalRequest(HumanInputRequest):
     """A human-input request asking whether one tool call may go ahead.
 
     A :class:`HumanInputRequest` carrying the call it is about, so a transport
     rendering the question can name it rather than making the human read it out
     of the prose.
+
+    ``choices`` lists answers the asker accepts besides a plain yes or no, so a
+    transport can offer one button per choice instead of two. Empty means yes
+    or no is the whole of it.
     """
 
     tool_call_id: str = Field(compare=False)
+    choices: list[ApprovalChoice] = Field(default_factory=list)
 
 
 class HumanMessage(BaseEvent):
@@ -291,3 +309,14 @@ class HumanMessage(BaseEvent):
             # Set parent_id after creation to hide this option from public API
             msg.parent_id = parent_id
         return msg
+
+
+class ApprovalChoiceMessage(HumanMessage):
+    """A human's answer to a :class:`ToolApprovalRequest` that picks one of its ``choices``.
+
+    ``content`` is the picked :attr:`ApprovalChoice.value`, exactly as offered.
+    A plain :class:`HumanMessage` is a yes or no in words; this one is a
+    selection, so the asker matches it against its choices and never reads it
+    as a word. A choice whose value happens to be ``"y"`` or ``"n"`` therefore
+    means that choice, not yes or no.
+    """
