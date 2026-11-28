@@ -8,6 +8,7 @@ import base64
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping
+from pathlib import PurePosixPath
 from typing import Any, NoReturn
 from urllib.parse import urlparse
 
@@ -41,6 +42,7 @@ from ag2.events import (
     BinaryInput,
     BinaryType,
     DataInput,
+    FileIdInput,
     Input,
     ModelRequest,
     ModelResponse,
@@ -50,12 +52,12 @@ from ag2.events import (
     Usage,
 )
 from ag2.exceptions import UnsupportedInputError, UnsupportedToolError
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import DecisionSet, DecisionSpec, ResponseProto
 from ag2.response.decision import ANSWER_KEY, DecisionValue
 from ag2.tools.schemas import ToolSchema
 
 from .decisions_errors import DecisionBlockedError, UnsupportedResponseSchemaError
-from .mappers import _mime_from_url
 
 PROVIDER = "gemini-decisions"
 
@@ -73,6 +75,47 @@ _TEXT_SEPARATOR = "\n\n"
 
 _GENERIC_MIME = "application/octet-stream"
 _UNSUPPORTED_HOSTS = ("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
+_FILES_API_BASE = "https://generativelanguage.googleapis.com/v1beta/"
+
+# The MIME type the API takes for each file extension, by block kind.
+_MIME_BY_KIND: dict[BinaryType, dict[str, str]] = {
+    BinaryType.IMAGE: {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".heic": "image/heic",
+        ".heif": "image/heif",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+    },
+    BinaryType.AUDIO: {
+        ".wav": "audio/wav",
+        ".mp3": "audio/mpeg",
+        ".aif": "audio/aiff",
+        ".aiff": "audio/aiff",
+        ".aac": "audio/aac",
+        ".ogg": "audio/ogg",
+        ".flac": "audio/flac",
+        ".m4a": "audio/m4a",
+        ".opus": "audio/opus",
+        ".webm": "audio/webm",
+    },
+    BinaryType.VIDEO: {
+        ".mp4": "video/mp4",
+        ".mpeg": "video/mpeg",
+        ".mpg": "video/mpeg",
+        ".mov": "video/mov",
+        ".avi": "video/avi",
+        ".webm": "video/webm",
+        ".wmv": "video/wmv",
+        ".flv": "video/x-flv",
+        ".3gp": "video/3gpp",
+    },
+    BinaryType.DOCUMENT: {".pdf": "application/pdf"},
+}
 
 
 def tool_to_api(t: ToolSchema) -> NoReturn:
@@ -108,9 +151,14 @@ def convert_input(messages: Iterable[BaseEvent], serializer: SerializerProto) ->
 
 
 def _separate_text(blocks: list[DecisionInputContentParam]) -> list[DecisionInputContentParam]:
-    """Start each text block that follows another with a separator, so the two do not run together."""
+    """Drop empty text, and start each text block that follows another with a separator.
+
+    The API concatenates adjacent text blocks, so without one they would run together.
+    """
     result: list[DecisionInputContentParam] = []
     for block in blocks:
+        if block["type"] == "text" and not block["text"].strip():
+            continue
         if block["type"] == "text" and result and result[-1]["type"] == "text":
             block = _text(_TEXT_SEPARATOR + block["text"])
         result.append(block)
@@ -137,7 +185,38 @@ def _part(part: Input, serializer: SerializerProto) -> DecisionInputContentParam
     if isinstance(part, UrlInput):
         return _url_media(part)
 
+    if isinstance(part, FileIdInput):
+        return _file_media(part)
+
     raise UnsupportedInputError(type(part).__name__, PROVIDER)
+
+
+def _mime_type(kind: BinaryType | str, path: str) -> str | None:
+    """The MIME type the API takes for a ``kind`` block whose file is named ``path``."""
+    by_extension = _MIME_BY_KIND.get(kind) if isinstance(kind, BinaryType) else None
+    return (by_extension or {}).get(PurePosixPath(path).suffix.lower())
+
+
+def _file_media(part: FileIdInput) -> DecisionInputContentParam:
+    """A media block for a file uploaded with Gemini's Files API, typed by its ``filename``."""
+    if isinstance(part, UploadedFile) and part.provider is not None and part.provider is not FileProvider.GEMINI:
+        raise UnsupportedInputError(f"file uploaded via '{part.provider.value}'", PROVIDER)
+    kind = _kind_of(part.filename or "")
+    if kind is None or (mime_type := _mime_type(kind, part.filename or "")) is None:
+        raise UnsupportedInputError("FileIdInput without a supported `filename` extension", PROVIDER)
+    uri = part.file_id if part.file_id.startswith("https://") else _FILES_API_BASE + part.file_id
+    if (block := _block(kind, uri=uri, mime_type=mime_type)) is None:
+        raise UnsupportedInputError(f"FileIdInput({kind.value})", PROVIDER)
+    return block
+
+
+def _kind_of(filename: str) -> BinaryType | None:
+    """The block kind a file extension names; ``.webm`` is taken as video."""
+    suffix = PurePosixPath(filename).suffix.lower()
+    for kind in (BinaryType.IMAGE, BinaryType.VIDEO, BinaryType.AUDIO, BinaryType.DOCUMENT):
+        if suffix in _MIME_BY_KIND[kind]:
+            return kind
+    return None
 
 
 def _url_media(part: UrlInput) -> DecisionInputContentParam:
@@ -146,14 +225,22 @@ def _url_media(part: UrlInput) -> DecisionInputContentParam:
     if url.scheme != "https" or url.hostname in _UNSUPPORTED_HOSTS:
         # The API takes HTTPS and Files API URIs, not `gs://` or YouTube.
         raise UnsupportedInputError(f"UrlInput({url.scheme}://{url.hostname or ''})", PROVIDER)
-    if (mime_type := _mime_from_url(part.url)) is None:
-        raise UnsupportedInputError("UrlInput without a known file extension; pass the bytes instead", PROVIDER)
+    if (mime_type := _mime_type(part.kind, url.path)) is None:
+        raise UnsupportedInputError(
+            "UrlInput without a file extension the API supports for its kind; pass the bytes instead", PROVIDER
+        )
     return _media(part, uri=part.url, mime_type=mime_type)
 
 
 def _media(part: BinaryInput | UrlInput, **fields: str) -> DecisionInputContentParam:
     """An image, audio, video or document block; the API has no block for other binaries."""
-    kind = part.kind
+    if (block := _block(part.kind, **fields)) is not None:
+        return block
+    label = part.kind.value if isinstance(part.kind, BinaryType) else str(part.kind)
+    raise UnsupportedInputError(f"{type(part).__name__}({label})", PROVIDER)
+
+
+def _block(kind: BinaryType | str, **fields: str) -> DecisionInputContentParam | None:
     if kind == BinaryType.IMAGE:
         image: ImageContentParam = {"type": "image", **fields}  # type: ignore[typeddict-item]
         return image
@@ -166,8 +253,7 @@ def _media(part: BinaryInput | UrlInput, **fields: str) -> DecisionInputContentP
     if kind == BinaryType.DOCUMENT:
         document: DocumentContentParam = {"type": "document", **fields}  # type: ignore[typeddict-item]
         return document
-    label = kind.value if isinstance(kind, BinaryType) else str(kind)
-    raise UnsupportedInputError(f"{type(part).__name__}({label})", PROVIDER)
+    return None
 
 
 def question_instructions(instructions: str | None, prompt: str) -> str | None:

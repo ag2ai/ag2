@@ -20,10 +20,11 @@ from enum import Enum, IntEnum
 from typing import Annotated
 
 import pytest
+from google import genai
 
 from ag2 import Agent, ImageInput, ResponseSchema
 from ag2.config import GeminiDecisionsConfig
-from ag2.events import BinaryInput, BinaryType
+from ag2.events import BinaryInput, BinaryType, FileIdInput
 from ag2.response import Question
 
 pytestmark = [pytest.mark.gemini, pytest.mark.asyncio]
@@ -235,3 +236,22 @@ async def test_class_mixes_question_types(decisions_config: GeminiDecisionsConfi
 
     assert await reply.content() == TicketTriage(is_refund=True, is_angry=True, severity=Severity.FULLY_BLOCKED)
     assert reply.response.usage.completion_tokens == 0
+
+
+async def test_files_api_upload(decisions_config: GeminiDecisionsConfig) -> None:
+    # Keep the client referenced: it closes its HTTP connection when collected.
+    client = genai.Client(api_key=decisions_config.api_key)
+    uploaded = await client.aio.files.upload(file=io.BytesIO(_invoice_pdf()), config={"mime_type": "application/pdf"})
+    assert uploaded.name
+    try:
+        checker = Agent(
+            "checker",
+            config=decisions_config,
+            response_schema=ResponseSchema(bool, description="Does this invoice say it has been paid?"),
+        )
+
+        reply = await checker.ask(FileIdInput(uploaded.name, filename="invoice.pdf"))
+
+        assert await reply.content() is True
+    finally:
+        await client.aio.files.delete(name=uploaded.name)

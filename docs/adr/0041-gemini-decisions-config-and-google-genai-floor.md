@@ -40,8 +40,9 @@ Two options were weighed:
    - Score levels are a list of rubric strings, `"Label: description"`.
    - Input is one flat list of content blocks. History is tagged as text, and adjacent
      text blocks are separated, because the API joins them with nothing in between.
-   - Images, audio, video and documents are accepted, inline or by HTTPS URI with a
-     known MIME type.
+   - Images, audio, video and documents are accepted inline, by HTTPS URI, or as a
+     Files API upload (`FileIdInput`). The MIME type for a URI or upload comes from its
+     file extension, using the types the API lists for that block kind.
    - The API's limits are checked before the request: 1 to 1,000 questions, keys
      matching `[A-Za-z0-9_-]{1,64}`, 2 to 255 options, and valid option IDs.
    - A blocked request (HTTP 400 with `error.code` `safety`, `prohibited_content`,

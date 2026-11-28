@@ -43,6 +43,8 @@ class GeminiDecisionsClient(LLMClient):
         question_instructions: str | None = None,
         extra_body: Mapping[str, Any] | None = None,
     ) -> None:
+        if not 0 <= boolean_threshold <= 1:
+            raise ValueError(f"`boolean_threshold` must be between 0 and 1, got {boolean_threshold!r}.")
         self._client = genai.Client(
             vertexai=False,
             api_key=api_key,

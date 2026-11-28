@@ -9,12 +9,14 @@ from typing import Annotated, Any
 
 import httpx2
 import pytest
+from dirty_equals import IsPartialDict
 
 from ag2 import Agent, ImageInput, ResponseSchema
 from ag2.config import GeminiDecisionsConfig
 from ag2.config.gemini import DecisionBlockedError, GeminiDecisionsClient, UnsupportedResponseSchemaError
-from ag2.events import BinaryInput, Usage
+from ag2.events import AudioInput, BinaryInput, FileIdInput, Usage
 from ag2.exceptions import FilesAPIUnsupportedError, UnsupportedInputError, UnsupportedToolError
+from ag2.files.types import FileProvider, UploadedFile
 from ag2.response import Question
 from ag2.tools import tool
 
@@ -370,3 +372,117 @@ async def test_unsupported_binaries_are_rejected(media_type: str, match: str) ->
     with pytest.raises(UnsupportedInputError, match=match):
         await agent.ask(BinaryInput(b"x", media_type=media_type))
     assert requests == []
+
+
+class Tier(Enum):
+    """Which tier?"""
+
+    BASIC = "basic"
+    LEGACY_BASIC = "basic"
+    PRO = "pro"
+
+
+class Level(IntEnum):
+    LOW = 0
+    MINIMAL = 0
+    HIGH = 1
+
+
+@dataclass
+class Grade:
+    tier: Tier
+    level: Annotated[Level, Question("How high is it?")]
+
+
+@pytest.mark.asyncio
+async def test_enum_aliases_are_one_option() -> None:
+    requests: list[httpx2.Request] = []
+    answers = {
+        "tier": {"type": "choice", "choice": "pro", "confidence": 0.9, "probabilities": {}},
+        "level": {"type": "score", "score": 0.9, "confidence": 0.9, "probabilities": {}, "legend": {}},
+    }
+    agent = Agent(
+        "grader",
+        config=_config(requests, answers),
+        response_schema=Grade,
+    )
+
+    reply = await agent.ask("...")
+
+    assert await reply.content() == Grade(tier=Tier.PRO, level=Level.HIGH)
+    questions = _body(requests[0])["questions"]
+    assert questions["tier"]["criteria"] == {"basic": "", "pro": ""}
+    assert questions["level"]["criteria"] == ["Low", "High"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("part", "block"),
+    [
+        (AudioInput("https://example.com/call.webm"), {"type": "audio", "mime_type": "audio/webm"}),
+        (ImageInput("https://example.com/photo.HEIC"), {"type": "image", "mime_type": "image/heic"}),
+        (
+            FileIdInput("files/abc123", filename="call.wav"),
+            {
+                "type": "audio",
+                "uri": "https://generativelanguage.googleapis.com/v1beta/files/abc123",
+                "mime_type": "audio/wav",
+            },
+        ),
+        (
+            UploadedFile("files/doc9", filename="report.pdf", provider=FileProvider.GEMINI),
+            {
+                "type": "document",
+                "uri": "https://generativelanguage.googleapis.com/v1beta/files/doc9",
+                "mime_type": "application/pdf",
+            },
+        ),
+    ],
+    ids=["webm-audio", "heic-image", "files-api-audio", "files-api-pdf"],
+)
+async def test_mime_type_follows_the_block_kind(part: Any, block: dict[str, str]) -> None:
+    requests: list[httpx2.Request] = []
+    guard = Agent(
+        "guard",
+        config=_config(requests, {"answer": {"type": "noul", "noul": 0.9, "confidence": 0.9}}),
+        response_schema=ResponseSchema(bool, description="Is this fine?"),
+    )
+
+    await guard.ask(part)
+
+    assert _body(requests[0])["input"] == [IsPartialDict(block)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "part",
+    [
+        FileIdInput("files/abc123"),
+        FileIdInput("files/abc123", filename="notes.docx"),
+        UploadedFile("file-abc", filename="report.pdf", provider=FileProvider.OPENAI),
+    ],
+    ids=["no-filename", "unsupported-extension", "other-provider"],
+)
+async def test_unusable_file_ids_are_rejected_before_a_request(part: FileIdInput) -> None:
+    requests: list[httpx2.Request] = []
+    agent = Agent("guard", config=_config(requests, {}), response_schema=ResponseSchema(bool, description="Fine?"))
+
+    with pytest.raises(UnsupportedInputError):
+        await agent.ask(part)
+    assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_blank_text_is_not_input() -> None:
+    requests: list[httpx2.Request] = []
+    agent = Agent("guard", config=_config(requests, {}), response_schema=ResponseSchema(bool, description="Fine?"))
+
+    with pytest.raises(ValueError, match="needs input"):
+        await agent.ask("  ")
+    assert requests == []
+
+
+@pytest.mark.parametrize("threshold", [float("nan"), -0.1, 1.5])
+def test_threshold_outside_zero_to_one_is_rejected(threshold: float) -> None:
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        GeminiDecisionsConfig(boolean_threshold=threshold).create()
