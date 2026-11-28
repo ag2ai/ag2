@@ -404,6 +404,13 @@ class TestNameDescription:
 
         assert schema.description == "Custom description"
 
+    @pytest.mark.parametrize("type_", [int, bool, list[str], dict[str, int], int | str, Annotated[int, "note"]])
+    def test_standard_library_type_docstring_is_not_a_description(self, type_: ClassInfo) -> None:
+        assert ResponseSchema(type_).description is None
+
+    def test_explicit_description_for_standard_library_type(self) -> None:
+        assert ResponseSchema(int, description="A count").description == "A count"
+
     def test_metadata_popped_from_schema(self) -> None:
         class MyModel(BaseModel):
             """Some description."""

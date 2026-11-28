@@ -60,10 +60,10 @@ def test_primitive_type(
             }),
             "name": name,
             "strict": True,
-            # built-in types have docstrings -> description is included
-            "description": type_.__doc__,
         }),
     }
+    # a built-in type's docstring describes the type, not the response
+    assert "description" not in result["json_schema"]
 
 
 class TestDataclassSchemas:

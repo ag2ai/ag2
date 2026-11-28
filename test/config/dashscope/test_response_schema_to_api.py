@@ -58,9 +58,10 @@ def test_primitive_schemas_primitive_type(
                 "title": "ResponseSchema",
             }),
             "name": name,
-            "description": type_.__doc__,
         }),
     }
+    # a built-in type's docstring describes the type, not the response
+    assert "description" not in result["json_schema"]
 
 
 class TestDataclassSchemas:

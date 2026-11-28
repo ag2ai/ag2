@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 import warnings
 from dataclasses import is_dataclass
 from types import UnionType
@@ -64,7 +65,7 @@ class ResponseSchema(ResponseProto[T]):
         if not description:
             if schema_description := (schema or {}).pop("description", None):
                 self.description = schema_description
-            elif (docstring := getattr(strip_annotated(types), "__doc__", None)) and "PEP" not in docstring:
+            elif (docstring := _own_docstring(types)) and "PEP" not in docstring:
                 self.description = docstring
             else:
                 self.description = None
@@ -219,6 +220,21 @@ def make_adapter(types: "TypeForm[Any] | ClassInfo", *, embed: bool = True) -> t
         )
 
     return TypeAdapter(final_type), embedded_type
+
+
+def _own_docstring(types: "TypeForm[Any] | ClassInfo") -> str | None:
+    """The docstring of a type the caller wrote.
+
+    A standard-library type's docstring describes the type, not the response: ``int``, ``list[str]``
+    and ``int | str`` would otherwise send ``int([x]) -> integer ...`` or ``Represent a union type``
+    to the provider as the schema description.
+    """
+    bare = strip_annotated(types)
+    origin = get_origin(bare) or bare
+    module = getattr(origin, "__module__", None)
+    if isinstance(module, str) and module.partition(".")[0] in sys.stdlib_module_names:
+        return None
+    return getattr(bare, "__doc__", None)
 
 
 def strip_annotated(types: "TypeForm[Any] | ClassInfo") -> "TypeForm[Any] | ClassInfo":
