@@ -37,6 +37,7 @@ class FunctionDefinition:
     parameters: FunctionParameters = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        self.parameters = self.parameters.copy()
         self.parameters.pop("title", None)
 
 
