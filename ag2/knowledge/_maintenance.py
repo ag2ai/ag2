@@ -192,11 +192,9 @@ class _CompactionMiddlewareFactory:
         self,
         strategy: "CompactStrategy",
         trigger: "CompactTrigger",
-        legacy_store: KnowledgeStore | None = None,
     ) -> None:
         self._strategy = strategy
         self._trigger = trigger
-        self._legacy_store = legacy_store
 
     def __call__(self, event: BaseEvent, context: Context) -> _CompactionMiddleware:
         return _CompactionMiddleware(
@@ -204,7 +202,7 @@ class _CompactionMiddlewareFactory:
             context,
             actor_name=context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name,
             strategy=self._strategy,
-            store=_effective_store(self._legacy_store, context),
+            store=_effective_store(context),
             trigger=self._trigger,
         )
 
@@ -318,11 +316,9 @@ class _AggregationMiddlewareFactory:
         self,
         strategy: "AggregateStrategy",
         trigger: "AggregateTrigger",
-        legacy_store: KnowledgeStore | None = None,
     ) -> None:
         self._strategy = strategy
         self._trigger = trigger
-        self._legacy_store = legacy_store
 
     def __call__(self, event: BaseEvent, context: Context) -> _AggregationMiddleware:
         return _AggregationMiddleware(
@@ -330,14 +326,12 @@ class _AggregationMiddlewareFactory:
             context,
             actor_name=context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name,
             strategy=self._strategy,
-            store=_effective_store(self._legacy_store, context),
+            store=_effective_store(context),
             trigger=self._trigger,
         )
 
 
-def _effective_store(bound: KnowledgeStore | None, context: Context) -> KnowledgeStore:
-    """The legacy-bound store, or the invocation's effective ``KnowledgeStore`` dependency."""
-    if bound is not None:
-        return bound
+def _effective_store(context: Context) -> KnowledgeStore:
+    """The invocation's effective ``KnowledgeStore`` dependency."""
     store: KnowledgeStore = context.dependencies[KnowledgeStore]
     return store

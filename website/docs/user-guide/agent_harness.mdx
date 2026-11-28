@@ -26,7 +26,7 @@ Agent(
 )
 ```
 
-The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `knowledge=` and `tasks=` remain available during their deprecation period.
+The loop-related parameters (`config`, `tools`, `middleware`, `observers`, `prompt`, …) are covered in [Agent Communication](/docs/user-guide/agents) and the parameter-specific guides. Context policies use `middleware=`; persistent knowledge is configured through `plugins=[KnowledgePlugin(...)]`. Legacy `tasks=` remains available during its deprecation period.
 
 ## Context policies through `middleware=`
 
@@ -124,8 +124,7 @@ Provide each strategy together with its trigger. Omit compaction or aggregation 
 
 ### Migrating from `knowledge=`
 
-`Agent(knowledge=...)` emits one `DeprecationWarning` at construction in 1.3
-and will be removed in **1.4.0**. Move the same settings into a plugin:
+`Agent(knowledge=...)` was removed in **1.4.0**. Move the same settings into a plugin:
 
 ```python linenums="1"
 from ag2 import Agent
@@ -141,9 +140,7 @@ agent = Agent(
 
 Move `expose_tool`, `write_event_log`, `bootstrap`, `compact`, `compact_trigger`,
 `aggregate`, and `aggregate_trigger` unchanged into `KnowledgePlugin`.
-`KnowledgeConfig` and its current imports remain available; only the Agent
-parameter is deprecated. Supplying both configurations raises `ValueError`
-before bootstrap. For policy-only memory, use
+`KnowledgeConfig` and its current imports remain available. For policy-only memory, use
 `KnowledgePlugin(store, expose_tool=False)`. Custom `StoreBootstrap`,
 `CompactStrategy`, and `AggregateStrategy` implementations keep their protocols.
 
@@ -159,8 +156,7 @@ and skips logging, as before migration.
 
 The store is a plugin dependency default. Explicit Agent or invocation
 `dependencies={KnowledgeStore: other_store}` overrides it for policies, tools,
-bootstrap, and maintenance together. Legacy `knowledge=` retains its previous
-precedence during the compatibility period. An invocation-only plugin is
+bootstrap, and maintenance together. An invocation-only plugin is
 removed after that invocation, including its tools and dependency default.
 A worker needs its own plugin; delegation does not inherit the parent's tools.
 

@@ -6,14 +6,12 @@ import asyncio
 import gc
 import json
 import warnings
-from pathlib import Path
 from weakref import ref
 
 import pytest
 from dirty_equals import AnyThing, IsPartialDataclass, IsPartialDict
 
-from ag2 import Agent, Context, KnowledgeConfig, MemoryStream, observer, tool
-from ag2.agent import TaskConfig
+from ag2 import Agent, Context, MemoryStream, observer, tool
 from ag2.aggregate import AggregateTrigger
 from ag2.compact import CompactTrigger, TailWindowCompact
 from ag2.events import (
@@ -154,39 +152,6 @@ async def test_aggregation_sees_history_before_compaction_and_log_includes_obser
     assert any(isinstance(e, ModelMessage) and e.content == "observer finished" for e in log)
 
 
-@pytest.mark.asyncio
-async def test_legacy_warning_reports_constructor_callsite_once() -> None:
-    store = MemoryKnowledgeStore()
-    with pytest.warns(DeprecationWarning) as records:
-        agent = Agent("legacy", config=TestConfig("ok", "again"), knowledge=KnowledgeConfig(store))
-    [record] = records
-    assert Path(record.filename) == Path(__file__)
-    assert all(text in str(record.message) for text in ("Agent(knowledge=...)", "KnowledgePlugin", "plugins", "1.4.0"))
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        reply = await agent.ask("one")
-        assert (await reply.ask("two")).body == "again"
-    assert await store.exists("/.initialized")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("invocation", [False, True])
-async def test_mixed_legacy_and_plugin_rejected_before_store_io(invocation: bool) -> None:
-    legacy = MemoryKnowledgeStore()
-    new = MemoryKnowledgeStore()
-    plugin = KnowledgePlugin(new)
-    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="knowledge.*KnowledgePlugin"):
-        agent = Agent(
-            "mixed",
-            config=TestConfig("ok"),
-            knowledge=KnowledgeConfig(legacy),
-            plugins=[] if invocation else [plugin],
-        )
-        await agent.ask("hello", plugins=[plugin])
-    assert await legacy.list("/") == []
-    assert await new.list("/") == []
-
-
 async def write_during_prompt(ctx: Context) -> str:
     await ctx.dependencies[KnowledgeStore].write("/before-rejection", "unexpected")
     return "prompt"
@@ -194,17 +159,16 @@ async def write_during_prompt(ctx: Context) -> str:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("invocation_prompt", [False, True])
-async def test_mixed_configuration_rejected_before_dynamic_prompts(invocation_prompt: bool) -> None:
-    legacy = MemoryKnowledgeStore()
-    new = MemoryKnowledgeStore()
-    plugin = KnowledgePlugin(new)
-    with pytest.warns(DeprecationWarning):
-        agent = Agent("mixed", config=TestConfig("unreachable"), knowledge=KnowledgeConfig(legacy))
+async def test_second_plugin_rejected_before_dynamic_prompts(invocation_prompt: bool) -> None:
+    first = MemoryKnowledgeStore()
+    second = MemoryKnowledgeStore()
+    plugin = KnowledgePlugin(second)
+    agent = Agent("doubled", config=TestConfig("unreachable"), plugins=[KnowledgePlugin(first)])
     (plugin if invocation_prompt else agent).prompt(write_during_prompt)
-    with pytest.raises(ValueError, match="knowledge.*KnowledgePlugin"):
+    with pytest.raises(ValueError, match="Only one KnowledgePlugin"):
         await agent.ask("hello", plugins=[plugin])
-    assert await legacy.list("/") == []
-    assert await new.list("/") == []
+    assert await first.list("/") == []
+    assert await second.list("/") == []
 
 
 @pytest.mark.asyncio
@@ -212,19 +176,6 @@ async def test_mixed_configuration_rejected_before_dynamic_prompts(invocation_pr
 async def test_agent_without_knowledge_gets_no_store_or_tool() -> None:
     config = TrackingConfig(TestConfig("ok"))
     agent = Agent("bare", config=config)
-
-    await agent.ask("hi")
-
-    [call] = config.calls
-    assert call == IsPartialDataclass(tools=())
-    assert KnowledgeStore not in call.dependencies
-
-
-@pytest.mark.asyncio
-@pytest.mark.filterwarnings("error::DeprecationWarning")
-async def test_knowledge_none_does_not_warn_or_add_store() -> None:
-    config = TrackingConfig(TestConfig("ok"))
-    agent = Agent("bare", config=config, knowledge=None)
 
     await agent.ask("hi")
 
@@ -421,51 +372,6 @@ async def test_failed_run_still_writes_event_log() -> None:
             await run.result()
 
     assert await store.read(f"/log/{stream.id}.jsonl") is not None
-
-
-@pytest.mark.asyncio
-@pytest.mark.filterwarnings(r"ignore:Agent\(knowledge=:DeprecationWarning")
-async def test_legacy_knowledge_failed_run_still_writes_event_log() -> None:
-    store = MemoryKnowledgeStore()
-    stream = MemoryStream()
-    agent = Agent("failing", config=TestConfig(RuntimeError("failed")), knowledge=KnowledgeConfig(store))
-
-    with pytest.raises(RuntimeError, match="failed"):
-        async with agent.run("failed attempt", stream=stream) as run:
-            await run.result()
-
-    assert await store.read(f"/log/{stream.id}.jsonl") is not None
-
-
-@pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore:TaskConfig, Agent:DeprecationWarning")
-async def test_legacy_precedence_and_hidden_tool_are_preserved() -> None:
-    configured = MemoryKnowledgeStore()
-    constructor_override = MemoryKnowledgeStore()
-    invocation_override = MemoryKnowledgeStore()
-    worker_config = TrackingConfig(TestConfig("worker done"))
-    config = TrackingConfig(
-        TestConfig(
-            ToolCallEvent(name="knowledge", arguments='{"action":"write","path":"/note","content":"legacy"}'),
-            ToolCallEvent(name="run_subtask", arguments='{"task":"work"}'),
-            "done",
-        )
-    )
-    with pytest.warns(DeprecationWarning, match=r"Agent\(knowledge="):
-        agent = Agent(
-            "legacy",
-            config=config,
-            knowledge=KnowledgeConfig(configured),
-            dependencies={KnowledgeStore: constructor_override},
-            tasks=TaskConfig(config=worker_config),
-        )
-    assert agent.dependencies == IsPartialDict({KnowledgeStore: configured})
-    await agent.ask("use legacy", dependencies={KnowledgeStore: invocation_override})
-    assert config.calls[0] == IsPartialDataclass(dependencies=IsPartialDict({KnowledgeStore: invocation_override}))
-    assert await configured.read("/note") == "legacy"
-    assert await constructor_override.list("/") == []
-    assert await invocation_override.list("/") == []
-    assert worker_config.calls[0] == IsPartialDataclass(tools=())
 
 
 async def broken_approval(request: object) -> str:

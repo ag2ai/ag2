@@ -13,10 +13,10 @@ from .bootstrap import StoreBootstrap
 
 @dataclass(slots=True)
 class KnowledgeConfig:
-    """Compatibility configuration for the deprecated Agent ``knowledge=`` parameter.
+    """The settings a ``KnowledgePlugin`` is built from.
 
-    New applications use ``ag2.knowledge.KnowledgePlugin`` in ``plugins=``.
-    The Agent parameter is removed in 1.4.0; this class remains available.
+    Applications attach knowledge with ``ag2.knowledge.KnowledgePlugin`` in
+    ``plugins=``, which takes the same settings as keyword arguments.
 
     The ``store`` is registered into ``context.dependencies[KnowledgeStore]``
     so policies (e.g. ``WorkingMemoryPolicy``, ``EpisodicMemoryPolicy``) can

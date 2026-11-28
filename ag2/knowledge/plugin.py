@@ -25,9 +25,6 @@ from .log import EventLogWriter
 
 
 class _KnowledgeTool:
-    def __init__(self, store: KnowledgeStore | None = None) -> None:
-        self.store = store
-
     async def execute(self, action: str, ctx: Context, path: str = "/", content: str = "") -> str:
         """Manage your knowledge store.
 
@@ -37,7 +34,7 @@ class _KnowledgeTool:
             list   - List entries at path.
             delete - Delete file at path.
         """
-        store = _effective_store(self.store, ctx)
+        store = _effective_store(ctx)
         if action == "read":
             result = await store.read(path)
             return result if result is not None else f"Not found: {path}"
@@ -62,9 +59,8 @@ class _KnowledgeTool:
 
 
 class _KnowledgeMiddlewareFactory:
-    def __init__(self, config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None) -> None:
+    def __init__(self, config: KnowledgeConfig) -> None:
         self.config = config
-        self._legacy_store = legacy_store
         # Active callers own the locks; custom stores need no weakref/hash support.
         self._locks: WeakValueDictionary[int, asyncio.Lock] = WeakValueDictionary()
         self._configured_store_initialized = False
@@ -74,7 +70,7 @@ class _KnowledgeMiddlewareFactory:
 
     @asynccontextmanager
     async def scope(self, event: BaseEvent, context: Context) -> AsyncGenerator[None]:
-        store = _effective_store(self._legacy_store, context)
+        store = _effective_store(context)
         actor = context.dependencies[AGENT_CONTEXT_DEPENDENCY_KEY].name
         configured_store = self.config.store
         uses_configured_store = store is configured_store
@@ -157,20 +153,18 @@ class KnowledgePlugin(Plugin):
         )
 
 
-def _knowledge_middleware(
-    config: KnowledgeConfig, legacy_store: KnowledgeStore | None = None
-) -> list[MiddlewareFactory]:
-    factories: list[MiddlewareFactory] = [_KnowledgeMiddlewareFactory(config, legacy_store)]
+def _knowledge_middleware(config: KnowledgeConfig) -> list[MiddlewareFactory]:
+    factories: list[MiddlewareFactory] = [_KnowledgeMiddlewareFactory(config)]
     if config.compact is not None:
         if config.compact_trigger is None:
             raise ValueError("Knowledge compaction requires compact_trigger alongside compact.")
-        factories.append(_CompactionMiddlewareFactory(config.compact, config.compact_trigger, legacy_store))
+        factories.append(_CompactionMiddlewareFactory(config.compact, config.compact_trigger))
     if (trigger := config.aggregate_trigger) and (
         trigger.every_n_turns > 0 or trigger.every_n_events > 0 or trigger.on_end
     ):
         if config.aggregate is None:
             raise ValueError("Knowledge aggregate_trigger requires an aggregate strategy.")
-        factories.append(_AggregationMiddlewareFactory(config.aggregate, trigger, legacy_store))
+        factories.append(_AggregationMiddlewareFactory(config.aggregate, trigger))
     return factories
 
 
@@ -183,8 +177,6 @@ def validate_knowledge_middleware(factories: Iterable[MiddlewareFactory]) -> Non
     knowledge = [f for f in factories if isinstance(f, _KnowledgeMiddlewareFactory)]
     if len(knowledge) < 2:
         return
-    if any(f._legacy_store is not None for f in knowledge):
-        raise ValueError("Agent(knowledge=...) cannot be combined with KnowledgePlugin; migrate to plugins only.")
     raise ValueError(
         "Only one KnowledgePlugin may apply to an agent invocation; combine stores in one KnowledgeStore instead."
     )
