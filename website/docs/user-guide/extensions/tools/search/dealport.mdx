@@ -1,0 +1,87 @@
+---
+title: Dealport
+sidebarTitle: Dealport
+---
+
+`#!python DealportToolkit` gives AG2 agents structured company, commercial building, `Record`, and verified owner lookup tools backed by [Dealport](https://dealport.com){.external-link target="_blank"} (28M+ US private companies, NYC commercial buildings, and primary public-filing citations).
+
+!!! note
+    Uses AG2's existing `#!python httpx` dependency with no extra packages required. `#!python dealport_preview_companies` works without an API key (`$0.00`). Authenticated tools read `DEALPORT_API_KEY` or `DP_API_KEY` from the environment when `#!python api_key` is omitted (new API Pro accounts start with a `$5.00` free balance on pay-as-you-go; see [Dealport llms.txt](https://app.dealport.com/llms.txt){.external-link target="_blank"}).
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import DealportToolkit
+
+agent = Agent(
+    "researcher",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[DealportToolkit(api_key=os.environ.get("DEALPORT_API_KEY"), limit=5)],
+)
+```
+
+## Tools
+
+Each tool wraps a single Dealport V4 endpoint. Applications control `#!python limit` and `#!python max_characters` so the model cannot raise page size on paid calls.
+
+| Tool / factory | Model inputs | Endpoint and rate |
+| :--- | :--- | :--- |
+| `#!python dealport_preview_companies` / `#!python preview_companies()` | At least one of `#!python state`, `#!python naics`, `#!python q`, revenue/employee bounds | `POST /api/v1/companies/preview` (or keyless `/api/mcp`), `$0.00` |
+| `#!python dealport_search_companies` / `#!python search_companies()` | At least one of `#!python state`, `#!python naics`, `#!python q`, `#!python domain`, revenue bounds, optional `#!python cursor` | `GET /api/v1/companies`, `$0.01` per new `Record` (`$0.00` 30-day repeat) |
+| `#!python dealport_search_buildings` / `#!python search_buildings()` | At least one of `#!python borough` (`MN`, `BK`, `QN`, `BX`, `SI`), `#!python q`, unit bounds, optional `#!python cursor` | `GET /api/v1/buildings`, `$0.01` per new `Record` (`$0.00` 30-day repeat) |
+| `#!python dealport_get_record` / `#!python get_record()` | `#!python record_id` (company UUID or 10-digit NYC BBL) | `GET /api/v1/records/{id}`, `$0.01` (`$0.00` 30-day repeat) |
+| `#!python dealport_find_owner` / `#!python find_owner()` | `#!python company_id` (UUID), optional `#!python person` | `POST /api/v1/owners`, `$0.09` on hit (`$0.00` on miss or 30-day repeat) |
+
+Empty filter sets, malformed UUIDs/BBLs, and path-traversal segments return `#!python {"error": "..."}` before sending any HTTP request.
+
+## Select tools and set application options
+
+Register only the tools your workflow intends to fund by calling individual factory methods:
+
+```python linenums="1"
+from ag2 import Agent, Variable
+from ag2.config import AnthropicConfig
+from ag2.extensions.tools.search import DealportToolkit
+
+toolkit = DealportToolkit()
+
+agent = Agent(
+    "market_sizer",
+    config=AnthropicConfig(model="claude-sonnet-5"),
+    tools=[
+        toolkit.preview_companies(),
+        toolkit.search_companies(limit=Variable("page_size")),
+    ],
+    variables={"page_size": 10},
+)
+```
+
+Every factory method also accepts `#!python name`, `#!python description`, `#!python max_characters`, and `#!python middleware`.
+
+## Results and bounding
+
+Tools return a `#!python DealportResult` dataclass with `#!python endpoint`, `#!python cost_usd`, `#!python matching_count`, `#!python next_cursor`, `#!python data`, and `#!python truncated`. By default `#!python max_characters=10_000` caps serialized `#!python data` and marks cut payloads with `#!python truncated=True` without trimming `#!python cost_usd`, `#!python matching_count`, or `#!python next_cursor`. Pass `#!python max_characters=None` to keep full payloads.
+
+## Full 47-tool MCP server
+
+To access Dealport's complete 47-tool MCP surface (including `lookup_property` across 50-state US parcels, `resolve_llc_owner`, `preview_market_records` and `search_market_records` across filings/manifests/contracts/tax/permits, `find_connection`, `research_company` at `$0.50`, `Project`s, `Playbook`s, and double-opt-in owner introductions via **Avery**, Dealport's AI outreach specialist who always discloses she is an AI), connect [`MCPToolkit`](/docs/user-guide/tools/mcp_servers) directly to `https://app.dealport.com/api/mcp` (`com.dealport/dealport` on the Official MCP Registry):
+
+```python linenums="1"
+import os
+from ag2 import Agent
+from ag2.tools import MCPServerConfig, MCPToolkit
+
+agent = Agent(
+    name="origination_analyst",
+    tools=[
+        MCPToolkit(
+            MCPServerConfig(
+                server_url="https://app.dealport.com/api/mcp",
+                authorization_token=os.environ["DEALPORT_API_KEY"],
+                protocol_mode="auto",
+            )
+        )
+    ],
+)
+```
