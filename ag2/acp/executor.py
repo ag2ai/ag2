@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 import acp
 from acp import schema
 
-from ag2.agent import Agent
+from ag2.agent import Agent, AgentReply
 from ag2.context import ConversationContext
 from ag2.events import (
     BaseEvent,
@@ -215,7 +215,7 @@ class AgentExecutor:
 
     async def _send_final_text(
         self,
-        reply: Any,
+        reply: AgentReply[Any, Any],
         delivered: list[str],
         *,
         client: acp.Client,
@@ -254,7 +254,7 @@ class AgentExecutor:
         for update in updates:
             await self._deliver(update, client=client, session_id=session_id)
 
-    async def _deliver(self, update: Any, *, client: acp.Client, session_id: str) -> None:
+    async def _deliver(self, update: "SessionUpdate", *, client: acp.Client, session_id: str) -> None:
         """Push one ``session/update``, letting a delivery failure fail the turn.
 
         Swallowing this would let a turn answer ``stop_reason="end_turn"`` to a
@@ -278,7 +278,7 @@ class AgentExecutor:
         stream: "MemoryStream",
         session: "AgentSession",
         meta: dict[str, Any] | None,
-    ) -> Any:
+    ) -> AgentReply[Any, Any]:
         agent = self._agent
         if agent.config is None:
             raise RuntimeError(f"Agent {agent.name!r} has no config; cannot serve it over ACP.")
@@ -313,6 +313,9 @@ class AgentExecutor:
         # so a served agent would drop the per-request policy those hooks carry,
         # which the same agent applies under ``ask``.
         client = await agent._prepare_turn(initial_event, context, None)
+        # The Client's ``systemPrompt`` (``append`` mode) goes after the agent's
+        # own instructions, so it adds to them and never displaces them.
+        context.prompt.extend(session.system_prompt)
 
         return await agent._execute(
             initial_event,
