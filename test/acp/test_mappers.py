@@ -99,9 +99,6 @@ def test_incremental_plan_items_update_maps_to_plan() -> None:
     "update",
     [
         schema.AgentPlanContentUpdate(
-            session_update="plan_update", plan=schema.PlanUpdateFile(type="file", plan_id="p1", uri="file:///plan.md")
-        ),
-        schema.AgentPlanContentUpdate(
             session_update="plan_update",
             plan=schema.PlanUpdateMarkdown(type="markdown", plan_id="p1", content="# plan"),
         ),
@@ -113,6 +110,45 @@ def test_plan_updates_without_an_event_are_logged_not_silent(update: SessionUpda
     with caplog.at_level(logging.DEBUG, logger="ag2.acp.mappers"):
         assert map_session_update(update) is None
     assert "no AG2 event for ACP session update" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        schema.SessionUpdatePromptSuggestionsUpdate(
+            session_update="prompt_suggestions_update",
+            suggestions=[schema.PromptSuggestion(prompt=[_text("run the tests")])],
+        ),
+        schema.SessionUpdateCursorUpdate(session_update="cursor_update", cursor_id="c1"),
+        schema.SessionUpdateSubagentUpdate(session_update="subagent_update", session_id="child"),
+        schema.SessionUpdateSessionMessage(session_update="session_message", message_id="m1"),
+        schema.SessionUpdateSessionMessageChunk(
+            session_update="session_message_chunk", message_id="m1", content=_text("hi")
+        ),
+    ],
+)
+def test_capability_gated_updates_are_logged_not_silent(update: SessionUpdate, caplog: Any) -> None:
+    """Sent only to a Client advertising the capability, which AG2 does not — still visible if one arrives."""
+    with caplog.at_level(logging.DEBUG, logger="ag2.acp.mappers"):
+        assert map_session_update(update) is None
+    assert "no AG2 event for ACP session update" in caplog.text
+
+
+def test_tool_progress_skips_a_session_reference() -> None:
+    event = map_session_update(
+        schema.ToolCallProgress(
+            session_update="tool_call_update",
+            tool_call_id="t1",
+            status="completed",
+            content=[
+                schema.ToolCallContentSession(type="session", session_id="child"),
+                schema.ContentToolCallContent(type="content", content=_text("done")),
+            ],
+        )
+    )
+
+    assert isinstance(event, BuiltinToolResultEvent)
+    assert event.result.parts == [TextInput("done")]
 
 
 def test_usage_update_is_not_logged_as_unmapped(caplog: Any) -> None:
