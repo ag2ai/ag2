@@ -29,9 +29,9 @@ class AlertPolicy(AssemblyPolicy):
     Deduplication keys on ``(source, severity, message)`` — the semantic
     content of the alert, not the Python object identity — so dedup
     survives history replay, compaction (which rewrites history into
-    fresh event objects), and serialization round-trips. Observers that
-    need to re-alert with identical wording can vary the ``data`` dict
-    or the ``message`` string.
+    fresh event objects), and serialization round-trips. ``data`` is not
+    part of the key, so an observer that needs a separate delivery must
+    vary the ``message`` string.
 
     For FATAL alerts, emits a HaltEvent on the stream and adds a halt
     note to the prompt.

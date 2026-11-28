@@ -65,6 +65,10 @@ class LoopDetector(BaseObserver):
             tail = list(history)[-self._repeat_threshold :]
             if all(k == key for k in tail) and (origin, *key) not in self._flagged:
                 self._flagged.add((origin, *key))
+                # Delivery dedups on the message and ignores ``data``, so name the subtask here.
+                where = (
+                    f" in subtask {origin} (agent '{envelope.agent_name}')" if isinstance(envelope, ChildEvent) else ""
+                )
                 return ObserverAlert(
                     source=self.name,
                     severity=Severity.WARNING,
@@ -72,7 +76,7 @@ class LoopDetector(BaseObserver):
                     message=(
                         f"Potential loop detected: tool '{event.name}' called "
                         f"{self._repeat_threshold} times consecutively with "
-                        f"identical arguments. Consider a different approach."
+                        f"identical arguments{where}. Consider a different approach."
                     ),
                 )
 
