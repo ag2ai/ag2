@@ -139,7 +139,8 @@ def _tool_call_result(content: list[ToolCallContent] | None, status: "schema.Too
     """A tool call's ``content`` list as a result, one part per content item.
 
     Only ``ContentToolCallContent`` items carry content blocks, and an empty text
-    block carries nothing; the status stands in when no item has content.
+    block carries nothing; the status stands in when no item has content. Diffs,
+    terminals and session references (a subagent's session id) are skipped.
     """
     parts = [
         part
@@ -177,8 +178,13 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
 
     Returns ``None`` for variants with no meaningful AG2 representation
     (``user_message_chunk``, ``usage_update``, ``session_info_update``,
-    ``config_option_update``). ``usage_update`` is handled out-of-band by the
-    client via :func:`map_usage`.
+    ``config_option_update``, a ``markdown`` plan update). ``usage_update`` is
+    handled out-of-band by the client via :func:`map_usage`.
+
+    ``prompt_suggestions_update``, ``cursor_update``, ``subagent_update``,
+    ``session_message`` and ``session_message_chunk`` also return ``None``. An
+    Agent sends them only to a Client that advertised the matching capability,
+    and AG2 advertises none of them.
     """
     if isinstance(update, schema.AgentMessageChunk):
         return ModelMessageChunk(block_text(update.content))
@@ -204,8 +210,8 @@ def map_session_update(update: SessionUpdate) -> BaseEvent | None:
         return _plan(update.entries)
 
     # Incremental plan updates: only the ``items`` payload carries plan entries;
-    # ``file``/``markdown`` reference a plan by URI or raw markdown and have no
-    # ACPPlan equivalent, so they fall through to the debug log below.
+    # ``markdown`` carries the plan as raw markdown and has no ACPPlan
+    # equivalent, so it falls through to the debug log below.
     if isinstance(update, schema.AgentPlanContentUpdate) and isinstance(update.plan, schema.PlanUpdateItems):
         return _plan(update.plan.entries)
 
