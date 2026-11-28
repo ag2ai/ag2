@@ -84,7 +84,7 @@ from .observers import Observer
 from .plugin import Plugin, PluginTarget, PromptType
 from .response import ResponseProto, ResponseSchema
 from .scopes import merge_variables, overlay_variables
-from .stream import MemoryStream, Stream
+from .stream import EventHandler, MemoryStream, Stream
 from .task import CheckpointStore, Task, TaskSpec
 from .tools.builtin.tool_search import ToolSearchToolSchema
 from .tools.final import FunctionTool, Toolkit
@@ -1908,7 +1908,7 @@ class Agent(PluginTarget, Generic[TResult]):
 
             with ExitStack() as stack:
                 stack.enter_context(
-                    context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(_call_client),
+                    context.stream.where(ModelRequest | ToolResultsEvent).sub_scope(EventHandler(_call_client)),
                 )
 
                 hitl_hook_maker = wrap_hitl(hitl_hook) if hitl_hook else self._hitl_hook
@@ -1917,7 +1917,7 @@ class Agent(PluginTarget, Generic[TResult]):
                 if hitl_hook_maker is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
-                            hitl_hook_maker(middleware_instances),
+                            EventHandler(hitl_hook_maker(middleware_instances)),
                             interrupt=True,
                         ),
                     )
@@ -1925,13 +1925,13 @@ class Agent(PluginTarget, Generic[TResult]):
                 elif (delegation := _owned_delegation(context)) is not None:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
-                            delegation.bridge, interrupt=True, sync_to_thread=False
+                            EventHandler(delegation.bridge), interrupt=True, sync_to_thread=False
                         )
                     )
                 else:
                     stack.enter_context(
                         context.stream.where(HumanInputRequest).sub_scope(
-                            default_hitl_hook(middleware_instances),
+                            EventHandler(default_hitl_hook(middleware_instances)),
                         ),
                     )
 

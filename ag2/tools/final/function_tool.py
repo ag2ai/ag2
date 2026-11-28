@@ -22,6 +22,7 @@ from ag2.middleware import (
     ToolMiddleware,
     ToolResultType,
 )
+from ag2.stream import EventHandler
 from ag2.tools.schemas import ToolSchema
 from ag2.tools.tool import Tool
 from ag2.utils import CONTEXT_OPTION_NAME, _validate_timeout, build_model
@@ -141,7 +142,9 @@ class FunctionTool(Tool):
             result = await execution(event.handled_by(self.source), context)
             await context.send(result)
 
-        stack.enter_context(context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(execute))
+        stack.enter_context(
+            context.stream.where(ToolCallEvent.name == self.schema.function.name).sub_scope(EventHandler(execute))
+        )
 
     async def __call__(self, event: "ToolCallEvent", context: "Context") -> "ToolResultEvent":
         # _execute converts the tool's own TimeoutError into a result, so only

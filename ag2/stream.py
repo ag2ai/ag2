@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Generator
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -28,15 +28,22 @@ __all__ = ("MemoryStream", "Stream")
 @dataclass(slots=True)
 class _Subscription:
     condition: Condition | None
-    model: CallModel
+    run: Callable[[BaseEvent, ConversationContext], Awaitable[Any]]
     timeout: float | None
 
     async def __call__(self, event: BaseEvent, context: ConversationContext) -> Any:
         if self.timeout is None:
-            return await self._execute(event, context)
-        return await asyncio.wait_for(self._execute(event, context), timeout=self.timeout)
+            return await self.run(event, context)
+        return await asyncio.wait_for(self.run(event, context), timeout=self.timeout)
 
-    async def _execute(self, event: BaseEvent, context: ConversationContext) -> Any:
+
+@dataclass(slots=True)
+class _InjectedCall:
+    """Run a subscriber through dependency injection."""
+
+    model: CallModel
+
+    async def __call__(self, event: BaseEvent, context: ConversationContext) -> Any:
         # `asolve` annotates each positional as a tuple and each keyword as a dict; the values are arbitrary.
         args: tuple[Any, ...] = (event,)
         options: dict[str, Any] = {CONTEXT_OPTION_NAME: context}
@@ -48,6 +55,28 @@ class _Subscription:
                 dependency_provider=context.dependency_provider,
                 **options,
             )
+
+
+class EventHandler:
+    """A framework handler called as ``func(event, context)``, without dependency injection.
+
+    Internal: agent-loop handlers (tool dispatch, model call, HITL bridge, …) are
+    closures recreated every turn, and their arguments are the event and the
+    context — nothing to resolve or validate. Building a fast_depends model for
+    each of them every turn is pure overhead, so ``MemoryStream`` calls these
+    directly. User subscribers keep going through dependency injection.
+
+    Another ``Stream`` implementation that does not know this type still works:
+    the instance is an ordinary ``(event, context)`` callable.
+    """
+
+    __slots__ = ("func",)
+
+    def __init__(self, func: Callable[[Any, ConversationContext], Awaitable[Any]]) -> None:
+        self.func = func
+
+    async def __call__(self, event: BaseEvent, context: AnnotatedContext) -> Any:
+        return await self.func(event, context)
 
 
 class ABCStream(Stream):
@@ -122,11 +151,11 @@ class ABCStream(Stream):
         # Typed per overload: a class condition yields only instances of it.
         result = asyncio.Future[Any]()
 
-        async def wait_result(event: BaseEvent) -> None:
+        async def wait_result(event: BaseEvent, context: ConversationContext) -> None:
             if not result.done():
                 result.set_result(event)
 
-        with self.where(condition).sub_scope(wait_result):
+        with self.where(condition).sub_scope(EventHandler(wait_result)):
             yield result
 
 
@@ -197,7 +226,7 @@ class MemoryStream(ABCStream):
         else:
             # Default: skip events marked __transient__ (ModelMessageChunk, TaskProgress, etc.)
             # These are real-time streaming artifacts superseded by their final counterparts.
-            self.subscribe(_FilteredStorage(storage).save_event)
+            self.subscribe(EventHandler(_FilteredStorage(storage).save_event))
 
     def enqueue(self, *content: "SendableMessage | Input", origin: RequestOrigin = "service") -> None:
         if not content:
@@ -253,11 +282,16 @@ class MemoryStream(ABCStream):
 
         def sub(s: Callable[..., Any]) -> SubId:
             sub_id = uuid4()
-            model = build_model(s, sync_to_thread=sync_to_thread, serialize_result=False)
-            if interrupt:
-                self._interrupters[sub_id] = _Subscription(condition, model, timeout)
+            run: Callable[[BaseEvent, ConversationContext], Awaitable[Any]]
+            if isinstance(s, EventHandler):
+                run = s.func
             else:
-                self._subscribers[sub_id] = _Subscription(condition, model, timeout)
+                run = _InjectedCall(build_model(s, sync_to_thread=sync_to_thread, serialize_result=False))
+            subscription = _Subscription(condition, run, timeout)
+            if interrupt:
+                self._interrupters[sub_id] = subscription
+            else:
+                self._subscribers[sub_id] = subscription
             return sub_id
 
         if func:

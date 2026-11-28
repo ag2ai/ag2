@@ -28,6 +28,7 @@ from ag2.events import (
 from ag2.exceptions import HumanInputError, ToolNotFoundError
 from ag2.history import FINAL_TURN_SKIPPED_TOOL_RESULT
 from ag2.middleware import BaseMiddleware
+from ag2.stream import EventHandler
 
 from .tool import Tool
 
@@ -45,14 +46,14 @@ class ToolExecutor:
         known_tools: Iterable[str] = (),
         middleware: Iterable["BaseMiddleware"] = (),
     ) -> None:
-        stack.enter_context(context.stream.where(ToolCallsEvent).sub_scope(self.execute_tools))
+        stack.enter_context(context.stream.where(ToolCallsEvent).sub_scope(EventHandler(self.execute_tools)))
 
         for tool in tools:
             tool.register(stack, context, middleware=middleware)
 
         # fallback subscriber to raise NotFound event
         stack.enter_context(
-            context.stream.where(ToolCallEvent).sub_scope(_tool_not_found(known_tools)),
+            context.stream.where(ToolCallEvent).sub_scope(EventHandler(_tool_not_found(known_tools))),
         )
 
     async def execute_tools(self, event: ToolCallsEvent, context: Context) -> None:

@@ -70,9 +70,11 @@ async def _served_agent() -> AsyncGenerator[tuple[int, list[dict[str, str]]], No
         await app(scope, receive, send)
 
     config = uvicorn.Config(recording, host="127.0.0.1", port=0, log_level="warning")
-    # Bound here rather than inside `serve()`: the socket is already listening, so
-    # the port is known and a connection can be made without waiting for start-up.
+    # Bound here rather than inside `serve()` so the port is known up front.
+    # `bind_socket()` only binds; listening now lets the kernel queue a client that
+    # connects before the `serve()` task first runs, instead of refusing it.
     sock = config.bind_socket()
+    sock.listen()
     server = uvicorn.Server(config)
     serving = asyncio.create_task(server.serve(sockets=[sock]))
     try:
