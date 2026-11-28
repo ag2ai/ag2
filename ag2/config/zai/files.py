@@ -120,11 +120,17 @@ class ZAIFilesClient:
         nothing), and "retrieval" additionally needs a ``knowledge_id``. So we query
         each purpose that is listable without extra params and merge the results;
         "retrieval" files are not enumerable here.
+
+        Failed purposes are ignored if any request succeeds, even with an empty
+        result. If all requests fail, raise the first error in purpose order.
         """
         results = await asyncio.gather(
             *(asyncio.to_thread(self._client.files.list, purpose=p) for p in _LISTABLE_PURPOSES),
             return_exceptions=True,
         )
+        errors = [result for result in results if isinstance(result, BaseException)]
+        if len(errors) == len(results):
+            raise errors[0]
         return [
             UploadedFile(
                 file_id=_file_id(f),
