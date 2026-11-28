@@ -18,6 +18,7 @@ AG2 supports multiple LLM providers through dedicated configuration classes. Eac
 | **[OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions)** | `OpenAIDecisionsConfig` | `pip install "ag2[openai]"` |
 | **[Anthropic](https://platform.claude.com/docs/en/build-with-claude/overview)** | `AnthropicConfig` | `pip install "ag2[anthropic]"` |
 | **[Gemini](https://ai.google.dev/gemini-api/docs)** | `GeminiConfig` | `pip install "ag2[gemini]"` |
+| **[Gemini Decisions](https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/)** | `GeminiDecisionsConfig` | `pip install "ag2[gemini]" "google-genai>=3.2"` |
 | **[Gemini on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)** | `VertexAIConfig` | `pip install "ag2[gemini]"` |
 | **[Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)** | `BedrockConfig` | `pip install "ag2[bedrock]"` |
 | **[Ollama](https://docs.ollama.com/api/introduction)** | `OllamaConfig` | `pip install "ag2[ollama]"` |
@@ -867,6 +868,44 @@ Images that every question should carry, such as a reference photo, go in `quest
 `safety_identifier`, `extra_body` and the usual client options (`base_url`, `organization`, `project`, `timeout`, `max_retries`, `default_headers`, `http_client`) are forwarded to the OpenAI SDK. Usage lands on `ModelResponse.usage`. Decisions bill input tokens only.
 
 For recipes covering classification, routing, detection, scoring, ranking, verification, feature extraction and image inspection, see [Decision Models](/docs/user-guide/decision_models).
+
+### Gemini Decisions Configuration
+
+`GeminiDecisionsConfig` connects to Gemini's Decisions API (`POST /v1beta/decisions`) on the Gemini Developer API; it is not available on Vertex AI yet. It needs `google-genai>=3.2`, above the `ag2[gemini]` floor, so install that version alongside the extra; on an older SDK, using the config raises an `ImportError` with the install command. Like `GeminiConfig`, it reads `GEMINI_API_KEY` when `api_key` is not passed. `model` defaults to `gemini-decision-1`.
+
+It follows the same contract as [OpenAI Decisions](#openai-decisions-configuration): the agent's `response_schema` is the question, a flat class is one question per field sent in one request, and anything that is not a decision type raises `UnsupportedResponseSchemaError` (from `ag2.config.gemini`) before a request.
+
+```python linenums="1"
+from enum import Enum
+
+from ag2 import Agent
+from ag2.config import GeminiDecisionsConfig
+
+class Department(Enum):
+    """Which department should handle this complaint?"""
+
+    BILLING = "billing"
+    """Payments, invoices, and refunds."""
+    TECHNICAL = "technical"
+    """Problems using the product."""
+
+router = Agent("router", config=GeminiDecisionsConfig(), response_schema=Department)
+
+reply = await router.ask("I was charged twice for my order.")
+await reply.content()                     # Department.BILLING
+reply.response.metadata["confidence"]     # e.g. 0.93
+reply.response.metadata["probabilities"]  # {"billing": 0.95, "technical": 0.05}
+```
+
+Where it differs from OpenAI Decisions:
+
+- **Yes/no questions** (`bool`) are Gemini's `noul` type; the probability of `true` is `metadata["noul"]`. `descriptions={"true": "...", "false": "..."}` describes the two outcomes.
+- **Score levels** are sent as one rubric line per level: the member name as a label, then its docstring (`Workaround available: A task fails, but another way works.`).
+- **Inputs** are one flat list of blocks with no roles, so earlier assistant replies and tool results are text tagged `[Assistant]` / `[Tool result]`. Images, audio, video and documents are sent inline from `BinaryInput` (`ImageInput(path=...)`, `ImageInput(data=..., media_type=...)`) or by URI from a `UrlInput`. Other binaries and `file_id`s raise `UnsupportedInputError`.
+- **`question_instructions`** is text only, joined after the agent prompt.
+- **Blocked input.** When Gemini's input filters block the request, no question is answered and `DecisionBlockedError` (from `ag2.config.gemini`) is raised, with the filter's `reason`. There is no per-question refusal.
+
+Tools raise `UnsupportedToolError`, there is no streaming, and `create_files_client()` raises `NotImplementedError`. `api_version` defaults to `v1beta`, the version that serves the endpoint; `http_client` takes an `httpx2.AsyncClient`, and `extra_body` is merged into the request. Usage lands on `ModelResponse.usage`; decisions bill input tokens only.
 
 ### TypeSafe (Jev) Configuration
 
