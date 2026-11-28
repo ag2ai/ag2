@@ -18,9 +18,9 @@ The basic catalog covers the common building blocks (surfaces, text, buttons, in
 !!! note
     `#!python "v0.9"` and `#!python "v0.9.1"` share the same basic-catalog id on purpose — the upstream v0.9.1 catalog file declares the v0.9 `#!python $id`. `#!python "v1.0"` has its own. Selecting `#!python protocol_version=` picks the matching catalog automatically.
 
-## Extending With a Custom Catalog
+## Adding a Custom Catalog
 
-To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog` that **extends** the basic catalog. It can be a dict or a path to a JSON file, and must declare a `#!python $id` — that id becomes the active catalog id. Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
+To let the LLM emit components beyond the basic set, pass a `#!python custom_catalog`. It can be a dict or a path to a JSON file, and must declare a `#!python catalogId`, the id surfaces, components and renderers use to name it. A `#!python $id` is optional, but if present must equal the `#!python catalogId` (the spec asks for both, "set to the same URI"). A v1.0 catalog also declares `#!python "protocolVersion": "1.0"`: a catalog without one is a v0.9 catalog, and one written for another version than the agent serves is rejected. It is validated as written: nothing from the basic catalog is merged into it. How it combines with the basic catalog depends on the protocol version (see below). Pair it with `#!python custom_catalog_rules` to tell the LLM how to use the new components. These are flat kwargs on the transport:
 
 ```python linenums="1" hl_lines="6-11 18 19"
 from ag2 import Agent
@@ -29,9 +29,9 @@ from ag2.a2ui.transports import RestTransport
 from ag2.config import AnthropicConfig
 
 custom_catalog = {
-    "$id": "https://example.com/catalogs/charts/catalog.json",
+    "catalogId": "https://example.com/catalogs/charts/catalog.json",
     "components": {
-        # component definitions that extend the basic catalog ...
+        # component definitions ...
     },
 }
 
@@ -45,19 +45,30 @@ server = A2UIServer(
 )
 ```
 
-The custom catalog's rules are appended to the basic catalog's rules in the system prompt, and its component schemas are added to the validation registry — so malformed uses of your components are caught and retried just like the built-ins.
+Malformed uses of your components are caught and retried just like the built-ins.
+
+- **v0.9 and v0.9.1**: as the spec says, a custom catalog is used *in place of* the basic one. Surfaces are created with its `#!python catalogId`, the prompt lists only its components and its rules replace the basic catalog's, and a `#!python createSurface` naming the basic catalog reports `unknown catalog`. To keep basic components, declare them in your catalog, for example `#!python "Text": {"$ref": "basic_catalog.json#/components/Text"}`.
+- **v1.0**: catalogs are mixable. The basic catalog stays the surface default, and the prompt tells the LLM to give each custom component `#!python "@catalogId": "<your catalogId>"` and each call to a custom function `#!python "catalogId": "<your catalogId>"`. A component resolves only against its own `#!python @catalogId` or its surface's `#!python catalogId`: a basic `#!python Column` on a surface created with your catalog's id must name the basic catalog. Your rules are appended to the basic catalog's instructions.
 
 !!! note "v1.0 catalogs"
     A v1.0 catalog may `#!python $ref` only the components, functions and leaf `#!python $defs` it declares (`#!python #/components/...`, `#!python #/functions/...`, `#!python #/$defs/...`) and the standard types the spec lists, written as `#!python common_types.json#/$defs/<Type>` (for example `#!python DynamicString`, `#!python ChildList` or `#!python Action`). A reference into another catalog, the basic one included, is rejected when the catalog is loaded. v1.0 catalogs carry their guidance in an `#!python instructions` field; without `#!python custom_catalog_rules`, the custom catalog's `#!python instructions` are appended instead.
+
+    A v1.0 catalog's names follow the spec's naming rules, checked when the catalog is loaded: each component and function key, and each component property and function argument name, must be a [UAX #31](https://www.unicode.org/reports/tr31/){.external-link target="_blank"} identifier (a letter or `#!python _`, then letters, digits, combining marks or `#!python _`), and no component may be called `#!python Surface`. A key such as `#!python widget/~definition` is rejected. Each component must have a `#!python component` property whose `#!python const` equals the key it is defined under: `#!python components.Gauge` declares `#!python {"const": "Gauge"}`, either directly or in an `#!python allOf` branch beside an imported trait such as `#!python Checkable`. A catalog that leaves `#!python "component"` out of `#!python required` is accepted, and the agent adds it there, as the official SDK does. The whole catalog must then satisfy the spec's [`catalog_definition.json`](https://github.com/a2ui-project/a2ui/blob/6e79b2e20fe2e1543aff3b9928613daa2b37189c/specification/v1_0/json/catalog_definition.json){.external-link target="_blank"}: only its top-level keys, each component and function in the shape it defines (a function names its `#!python returnType` and its `#!python @call` `#!python const`, and one that `#!python requiresUserActivation` is `#!python rendererOnly`), and a `#!python $defs`, if present, with `#!python anyComponent` and `#!python anyFunction` (`#!python {"not": {}}` when there are none). A violation is reported with its JSON pointer, such as `Invalid custom catalog at /functions/lookup/allowedCallers (catalog_definition.json): ...`. Since a v1.0 component has no fallback catalog, the agent's `#!python createSurface` must name one in `#!python catalogId`, or every component must carry its own `#!python @catalogId`.
 
 !!! tip
     Two knobs control prompt size: `#!python include_schema_in_prompt` (the full JSON schema — better validation, more tokens) and `#!python include_rules_in_prompt` (the plain-text catalog rules). Both default to `#!python True`; turn them off to trade strictness for a shorter prompt.
 
 ## Client Capability Negotiation
 
-A client advertises what its renderer supports via `#!python A2UIClientCapabilities` — a list of `#!python supported_catalog_ids` and, optionally, `#!python inline_catalogs` (catalog definitions the client supplies inline). The transport renders this into a per-turn prompt fragment so the LLM targets only components the client can render.
+A client advertises what its renderer supports via `#!python A2UIClientCapabilities`: a list of `#!python supported_catalog_ids` and, optionally, `#!python inline_catalogs` (catalog definitions the client supplies inline). As in the official A2UI SDK, each turn is offered only the agent's catalogs the renderer names:
 
-Negotiation is **advisory**: if the client's supported catalogs don't include the active catalog id, the mismatch is noted in the prompt and logged as a warning — it never blocks output. The A2UI spec frames capabilities as a hint, not a contract.
+- **Some catalogs in common**: the prompt describes only those, the validator accepts surfaces only on those (anything else gets `unknown catalog` and a retry), and a `#!python callAgentFunction` may name only those. With v1.0 and a custom catalog, a renderer that names only your catalog gets it as the surface default.
+- **No catalog in common**: the turn runs **without A2UI**, and a warning is logged. The prompt has no A2UI section, the model's answer reaches the client as text only, and the surface messages of server-side handlers are dropped (the handlers still run). A `#!python callAgentFunction` still gets its `#!python agentFunctionResponse`, which the renderer is waiting for. The call names one of the renderer's own catalogs, so its handler is matched by name alone; only an unregistered name gets `#!python UNKNOWN_FUNCTION`.
+- **No capabilities**: with v1.0, the turn offers no A2UI on every transport, since the specification says "omitting them withdraws A2UI for that turn": nothing A2UI is sent, not even an `#!python agentFunctionResponse`. A v1.0 renderer must send `#!python a2uiRendererCapabilities` with every request. Before v1.0, every catalog the agent serves is offered.
+
+Capabilities that are present but malformed (not an object, `#!python supportedCatalogIds` missing or not an array of strings, an inline catalog without a `#!python catalogId`) count as supporting no catalog: the turn runs without A2UI and a warning is logged, as the official SDK rejects them.
+
+Inline catalogs are never offered: the agent validates only against catalogs it was configured with. So leave `#!python accepts_inline_catalogs` off when building the A2A agent card with `#!python get_a2ui_agent_extension()`.
 
 How capabilities reach the agent depends on the transport:
 
@@ -91,8 +102,12 @@ For v1.0:
   </Tab>
 
   <Tab title="A2A">
-The client puts the same shape on the A2A message `#!python metadata` — under `#!python a2uiClientCapabilities`, or `#!python a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses). The [A2A executor](/docs/user-guide/a2ui/a2a) reads it off the incoming message and folds it into the turn's system prompt automatically.
+The client puts the same shape on the A2A message `#!python metadata` — under `#!python a2uiClientCapabilities`, or `#!python a2uiRendererCapabilities` for v1.0 (the key the upstream v1.0 extension specification uses). The [A2A executor](/docs/user-guide/a2ui/a2a) reads the message's `#!python metadata` first and then each `#!python DataPart`'s. With v1.0 a message must carry them to get any A2UI.
+  </Tab>
+
+  <Tab title="AG-UI">
+AG-UI has no field for them, so the client sends the REST body's keys in `#!python RunAgentInput.forwardedProps`: `#!python a2uiClientCapabilities` / `#!python a2uiRendererCapabilities`, and the data model under `#!python a2uiClientDataModel` / `#!python a2uiRendererDataModel`.
   </Tab>
 </Tabs>
 
-Whatever the transport, the capabilities become a short prompt section listing the supported catalogs (and a summary of any inline catalogs), so the LLM steers toward what the client can render.
+Whatever the transport, the capabilities also become a short prompt section listing the catalogs the renderer supports.

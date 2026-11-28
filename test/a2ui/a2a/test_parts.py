@@ -47,6 +47,7 @@ class TestCreateA2UIParts:
         assert len(parts) == 1
         assert get_a2ui_data(parts[0]) == [SAMPLE_OPS[0]]
 
+    @pytest.mark.filterwarnings("ignore:create_a2ui_parts\\(legacy_split=True\\):DeprecationWarning")
     def test_legacy_split_one_part_per_op(self) -> None:
         parts = create_a2ui_parts(SAMPLE_OPS, legacy_split=True)
         assert len(parts) == 2
@@ -64,6 +65,7 @@ class TestGetA2UIData:
         assert isinstance(decoded, list)
         assert decoded == SAMPLE_OPS
 
+    @pytest.mark.filterwarnings("ignore:create_a2ui_parts\\(legacy_split=True\\):DeprecationWarning")
     def test_roundtrip_dict_payload(self) -> None:
         [part] = create_a2ui_parts(SAMPLE_OPS[0], legacy_split=True)
         decoded = get_a2ui_data(part)
@@ -74,6 +76,7 @@ class TestGetA2UIData:
 class TestUpstreamPeers:
     """Peers on the upstream ``a2ui_a2a`` helpers speak A2A v0.3 and mark parts in ``metadata["mimeType"]``."""
 
+    @pytest.mark.filterwarnings("ignore:create_a2ui_parts\\(legacy_split=True\\):DeprecationWarning")
     def test_an_upstream_peer_recognises_our_parts(self) -> None:
         # An A2A v0.3 DataPart holds an object, so a v0.3 peer gets one part per message.
         [part] = create_a2ui_parts(SAMPLE_OPS[0], legacy_split=True)

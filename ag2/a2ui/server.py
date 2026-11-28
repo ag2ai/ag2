@@ -12,9 +12,9 @@ from starlette.applications import Starlette
 
 from ag2.agent import Agent
 
-from ._runtime import _A2UIRuntime
+from ._runtime import build_runtime
 from ._types import A2UIVersion, JsonSchema
-from .actions import A2UIAction, collect_action_declarations, collect_server_actions
+from .actions import A2UIAction
 from .dispatch import _A2UITurnCore
 from .transports.base import A2UITransport
 
@@ -78,8 +78,10 @@ class A2UIServer:
                 draws with no registered action still works — its click is
                 rewritten into a generic prompt so the agent can react.
             protocol_version: A2UI protocol version: "v0.9" (default), "v0.9.1", or "v1.0".
-            custom_catalog: A custom catalog extending the basic catalog (path or
-                dict). Must include a ``$id`` used as the catalogId.
+            custom_catalog: A custom catalog (path or dict), validated as written.
+                It must declare a ``catalogId`` (a ``$id``, if any, must equal it) and, for
+                v1.0, ``"protocolVersion": "1.0"``. Before v1.0 it replaces
+                the basic catalog; in v1.0 both are served (ADR 0040).
             custom_catalog_rules: Plain-text rules for the custom catalog components.
             include_schema_in_prompt: Include the full JSON schema in the prompt
                 (better validation, more tokens).
@@ -95,10 +97,8 @@ class A2UIServer:
         """
         self._agent = agent
         self._transport = transport
-        action_objs = tuple(actions)
-        self._runtime = _A2UIRuntime(
-            # Buttons are declared to the LLM so it can render them.
-            actions=collect_action_declarations(action_objs),
+        self._runtime = build_runtime(
+            actions,
             protocol_version=protocol_version,
             custom_catalog=custom_catalog,
             custom_catalog_rules=custom_catalog_rules,
@@ -108,13 +108,7 @@ class A2UIServer:
             validation_retries=validation_retries,
             system_message=system_message,
         )
-        # A click on a registered action runs its handler on the server, never
-        # invoking the agent.
-        self._core = _A2UITurnCore(
-            agent,
-            self._runtime,
-            collect_server_actions(action_objs),
-        )
+        self._core = _A2UITurnCore(agent, self._runtime)
         # The instance IS the app (no ``.app``/``build_app()``): build the
         # Starlette app once from the transport's routes and delegate to it.
         # A transport that holds anything of its own — a paused turn waiting on

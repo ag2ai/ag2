@@ -16,15 +16,15 @@ or invoke the agent yourself. Like an agent tool, the function may declare
 
 A button the LLM draws that has **no** registered action still works: its click
 is rewritten into a generic prompt so the agent can react (see
-:func:`~ag2.a2ui.incoming.iter_incoming_prompts`). So "the agent reacts
+:func:`~ag2.a2ui.incoming.incoming_prompts`). So "the agent reacts
 to a click" needs no decorator at all; an action is only for running
 deterministic server logic on click.
 """
 
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, overload
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, overload
 
 from fast_depends.core import CallModel
 from fast_depends.dependencies import Provider
@@ -52,6 +52,21 @@ _TYPE_PLACEHOLDERS: dict[str, JsonValue] = {
 }
 
 
+class A2UIFunctionError(Exception):
+    """Raise from an action to answer a v1.0 ``callAgentFunction`` with this error ``code`` and ``message``.
+
+    Any other exception is answered ``EXECUTION_ERROR`` with a generic message. The spec lets a function report its
+    own code (v1_0 a2ui_protocol.md, ``agentFunctionResponse``, e.g. ``"PROVIDER_NOT_FOUND"``), and the renderer
+    shows ``message``, so put nothing in it the user should not see. A click has no response channel: there the
+    error is only logged.
+    """
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+
+
 @dataclass(slots=True, frozen=True)
 class A2UIEventAction:
     """A server ``event`` action — the declaration behind a clickable button.
@@ -73,10 +88,6 @@ class A2UIEventAction:
     name: str
     description: str = ""
     example_context: dict[str, JsonValue] | None = None
-
-    # Discriminator as a fixed instance field (``init=False`` so callers can't
-    # set it), kept for forward-compatibility with additional action kinds.
-    action_type: Literal["event"] = field(default="event", init=False)
 
 
 def _placeholder_for(prop_schema: JsonValue) -> JsonValue:
@@ -299,6 +310,7 @@ def a2ui_action(
 __all__ = (
     "A2UIAction",
     "A2UIEventAction",
+    "A2UIFunctionError",
     "a2ui_action",
     "collect_action_declarations",
     "collect_server_actions",

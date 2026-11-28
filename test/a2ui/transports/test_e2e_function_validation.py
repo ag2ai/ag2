@@ -9,15 +9,21 @@ import httpx
 import pytest
 
 from ag2 import Agent
-from ag2.a2ui import A2UIServer, a2ui_action
+from ag2.a2ui import A2UIFunctionError, A2UIServer, a2ui_action
 from ag2.a2ui.transports import RestTransport
 from ag2.events import ModelRequest, TextInput
 from ag2.testing import TestConfig, TrackingConfig
 
+from ..seam import BASIC_CATALOG, from_renderer
+
+_BASIC_ID = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+"""Basic components on a custom-catalog surface name their catalog (a2ui_protocol.md L511)."""
+
 
 def _catalog(allowed_callers: str = "agentOnly") -> dict[str, Any]:
     return {
-        "$id": "https://example.com/catalog.json",
+        "catalogId": "https://example.com/catalog.json",
+        "protocolVersion": "1.0",
         "functions": {
             "lookup": {
                 "type": "object",
@@ -31,14 +37,17 @@ def _catalog(allowed_callers: str = "agentOnly") -> dict[str, Any]:
 
 
 async def _post(app: A2UIServer, body: dict[str, Any]) -> list[dict[str, Any]]:
+    """Post ``body`` from a renderer that supports the basic catalog and this module's custom one."""
+    request = from_renderer(body, BASIC_CATALOG["v1.0"], _catalog()["catalogId"])
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
-        response = await client.post("/a2ui", json=body)
+        response = await client.post("/a2ui", json=request)
     assert response.status_code == 200
     return [json.loads(line) for line in response.text.splitlines() if line]
 
 
 @pytest.mark.asyncio
-async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
+async def test_empty_function_name_receives_an_invalid_function_call_reply() -> None:
+    # As the official SDK does: an empty '@call' is a malformed call, not a call to an unknown function.
     tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -66,7 +75,12 @@ async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "UNKNOWN_FUNCTION", "message": "Unknown function ''."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": (
+                        "Malformed callAgentFunction: 'callAgentFunction.callFunction' needs a non-empty string '@call'."
+                    ),
+                },
             },
         }
     ]
@@ -74,14 +88,17 @@ async def test_empty_function_name_receives_an_unknown_function_reply() -> None:
 
 
 @pytest.mark.asyncio
-async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
+async def test_a_function_call_with_an_empty_id_is_refused_without_running_the_handler() -> None:
+    # An empty id cannot be correlated: a2ui-core refuses the call (conformance/agent/agent_functions.yaml).
+    called: list[str] = []
+
     @a2ui_action
     def lookup() -> str:
+        called.append("lookup")
         return "found"
 
-    tracking = TrackingConfig(TestConfig("UNEXPECTED MODEL CALL"))
     app = A2UIServer(
-        Agent("ui", config=tracking),
+        Agent("ui", config=TestConfig("Hi.")),
         actions=[lookup],
         protocol_version="v1.0",
         transport=RestTransport(encoding="jsonl"),
@@ -102,8 +119,8 @@ async def test_empty_function_call_id_is_preserved_in_the_rpc_reply() -> None:
         },
     )
 
-    assert messages == [{"version": "1.0", "agentFunctionResponse": {"functionCallId": "", "value": "found"}}]
-    assert tracking.calls == []
+    assert called == []
+    assert messages == [{"text": "Hi."}]
 
 
 @pytest.mark.asyncio
@@ -179,7 +196,10 @@ async def test_non_object_function_arguments_do_not_execute_handler(args: Any) -
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid arguments for function 'submit'."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": "Malformed callAgentFunction: 'args' of function 'submit' must be an object.",
+                },
             },
         }
     ]
@@ -303,9 +323,16 @@ async def test_omitted_or_empty_function_arguments_use_handler_defaults(include_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "catalog_id", [None, "https://example.com/catalog.json", "https://unrelated.example/catalog.json"]
+    "catalog_id",
+    [
+        None,
+        "https://example.com/catalog.json",
+        "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "https://unrelated.example/catalog.json",
+    ],
 )
-async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str | None) -> None:
+async def test_function_calls_resolve_only_in_a_configured_catalog(catalog_id: str | None) -> None:
+    # The renderer sets catalogId to the catalog the call resolved to (a2ui_protocol.md L1495): any the server has.
     calls: list[str] = []
 
     @a2ui_action
@@ -337,7 +364,7 @@ async def test_function_calls_resolve_only_in_the_active_catalog(catalog_id: str
         },
     )
 
-    if catalog_id is None or catalog_id == "https://example.com/catalog.json":
+    if catalog_id != "https://unrelated.example/catalog.json":
         assert calls == ["default"]
         expected = {"functionCallId": "fc-1", "value": "default"}
     else:
@@ -390,7 +417,10 @@ async def test_invalid_catalog_override_does_not_execute_handler(catalog_id: Any
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "fc-1",
-                "error": {"code": "INVALID_FUNCTION_CALL", "message": "Invalid catalogId for function 'lookup'."},
+                "error": {
+                    "code": "INVALID_FUNCTION_CALL",
+                    "message": "Malformed callAgentFunction: 'catalogId' of function 'lookup' must be a string.",
+                },
             },
         }
     ]
@@ -404,13 +434,22 @@ async def test_agent_only_bindings_trigger_a_corrective_retry(message_key: str, 
     components: list[dict[str, Any]]
     if binding == "action":
         components = [
-            {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-            {"id": "label", "component": "Text", "text": "Lookup"},
+            {
+                "id": "root",
+                "component": "Button",
+                "@catalogId": _BASIC_ID,
+                "child": "label",
+                "action": {"functionCall": call},
+            },
+            {"id": "label", "component": "Text", "@catalogId": _BASIC_ID, "text": "Lookup"},
         ]
     else:
         value = {"@call": "formatString", "args": {"value": call}} if binding == "nested" else call
-        components = [{"id": "root", "component": "Text", "text": value}]
-    operation = {"version": "1.0", message_key: {"surfaceId": "s", "components": components}}
+        components = [{"id": "root", "component": "Text", "@catalogId": _BASIC_ID, "text": value}]
+    payload: dict[str, Any] = {"surfaceId": "s", "components": components}
+    if message_key == "createSurface":
+        payload["catalogId"] = _catalog()["catalogId"]
+    operation = {"version": "1.0", message_key: payload}
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>", "Corrected."))
     app = A2UIServer(
         Agent("ui", config=tracking),
@@ -432,7 +471,8 @@ async def test_renderer_callable_bindings_are_emitted(allowed_callers: str) -> N
         "version": "1.0",
         "createSurface": {
             "surfaceId": "s",
-            "components": [{"id": "root", "component": "Text", "text": {"@call": "lookup"}}],
+            "catalogId": "https://example.com/catalog.json",
+            "components": [{"id": "root", "component": "Text", "@catalogId": _BASIC_ID, "text": {"@call": "lookup"}}],
         },
     }
     tracking = TrackingConfig(TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>"))
@@ -456,14 +496,16 @@ async def test_agent_only_rpc_and_literal_call_objects_are_emitted() -> None:
             "version": "1.0",
             "createSurface": {
                 "surfaceId": "s",
+                "catalogId": "https://example.com/catalog.json",
                 "dataModel": {"literal": {"@call": "lookup"}},
                 "metadata": {"extensions": {"literal": {"@call": "lookup"}}},
                 "components": [
                     {
                         "id": "root",
                         "component": "Text",
+                        "@catalogId": _BASIC_ID,
                         "text": "Lookup",
-                        "metadata": {"extensions": {"literal": {"@call": "lookup"}}},
+                        "@metadata": {"extensions": {"literal": {"@call": "lookup"}}},
                     }
                 ],
             },
@@ -496,7 +538,8 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
     basic_id = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
     custom_id = "https://example.com/catalog.json"
     catalog = {
-        "$id": custom_id,
+        "catalogId": custom_id,
+        "protocolVersion": "1.0",
         "functions": {
             "openUrl": {
                 "type": "object",
@@ -521,8 +564,14 @@ async def test_function_schema_and_callers_follow_the_explicit_catalog(kind: str
                 "surfaceId": "s",
                 "catalogId": custom_id,
                 "components": [
-                    {"id": "root", "component": "Button", "child": "label", "action": {"functionCall": call}},
-                    {"id": "label", "component": "Text", "text": "Open"},
+                    {
+                        "id": "root",
+                        "component": "Button",
+                        "@catalogId": _BASIC_ID,
+                        "child": "label",
+                        "action": {"functionCall": call},
+                    },
+                    {"id": "label", "component": "Text", "@catalogId": _BASIC_ID, "text": "Open"},
                 ],
             },
         }
@@ -568,7 +617,7 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
             "version": "1.0",
             "callRendererFunction": {
                 "functionCallId": "fc-1",
-                "callFunction": {"@call": name, "catalogId": catalog["$id"]},
+                "callFunction": {"@call": name, "catalogId": catalog["catalogId"]},
             },
         }
         agent.config = TestConfig(f"<a2ui-json>{json.dumps(operation)}</a2ui-json>")
@@ -594,3 +643,69 @@ async def test_identical_renderer_call_ids_do_not_mix_function_names_between_cli
     assert "fc-1" in text
     assert "23" in text
     assert "function=otherLookup" not in text
+
+
+def _call(name: str) -> dict[str, Any]:
+    return {
+        "a2ui": [
+            {
+                "version": "1.0",
+                "callAgentFunction": {"surfaceId": "s", "functionCallId": "fc-1", "callFunction": {"@call": name}},
+            }
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_handler_answers_with_its_own_error_code() -> None:
+    # v1_0 a2ui_protocol.md, agentFunctionResponse: a function may report its own code ("PROVIDER_NOT_FOUND");
+    # conformance/agent/agent_functions.yaml expects it passed through as is.
+    @a2ui_action
+    def lookup() -> str:
+        raise A2UIFunctionError("PROVIDER_NOT_FOUND", "No provider for this region.")
+
+    app = A2UIServer(Agent("ui"), actions=[lookup], protocol_version="v1.0", transport=RestTransport(encoding="jsonl"))
+
+    messages = await _post(app, _call("lookup"))
+
+    assert messages == [
+        {
+            "version": "1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "PROVIDER_NOT_FOUND", "message": "No provider for this region."},
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("validate_responses", [True, False])
+async def test_a_call_is_answered_once_even_when_the_handler_returns_a_response(validate_responses: bool) -> None:
+    # Only the server answers a call, exactly once per functionCallId, whatever the validation setting.
+    @a2ui_action
+    def lookup() -> dict[str, Any]:
+        return {
+            "version": "1.0",
+            "agentFunctionResponse": {"functionCallId": "fc-1", "error": {"code": "MINE", "message": "x"}},
+        }
+
+    app = A2UIServer(
+        Agent("ui"),
+        actions=[lookup],
+        protocol_version="v1.0",
+        validate_responses=validate_responses,
+        transport=RestTransport(encoding="jsonl"),
+    )
+
+    messages = await _post(app, _call("lookup"))
+
+    assert messages == [
+        {
+            "version": "1.0",
+            "agentFunctionResponse": {
+                "functionCallId": "fc-1",
+                "error": {"code": "EXECUTION_ERROR", "message": "Function 'lookup' failed."},
+            },
+        }
+    ]

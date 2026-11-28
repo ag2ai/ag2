@@ -24,16 +24,26 @@ from ag2 import Agent, Context
 from ag2.a2a import A2AConfig, A2AServer
 from ag2.a2a.events import A2ATaskStatusUpdate
 from ag2.a2a.testing import make_test_client_factory
-from ag2.a2ui._types import A2UIVersion
+from ag2.a2ui import A2UIVersion
 from ag2.a2ui.a2a import get_a2ui_data, is_a2ui_part
 from ag2.a2ui.a2a.executor import A2UIAgentExecutor
 from ag2.config import LLMClient, ModelConfig
 from ag2.events import BaseEvent, ModelMessage, ModelResponse
 from ag2.stream import MemoryStream
 
+from ..seam import BASIC_CATALOG, served_catalogs
+from ..seam import renderer_capabilities as capabilities_for
+
 # Marker the HITL continuation feeds back so a paused turn can complete instead
 # of pausing forever (see CallRendererFunctionThenComplete).
 FUNCTION_RESULT_MARK = "FUNCTION-RESULT-DELIVERED"
+
+# Pinned A2A extension URIs, written out so a change to them shows up in the tests.
+EXTENSION_URIS: dict[str, str] = {
+    "v0.9": "https://a2ui.org/a2a-extension/a2ui/v0.9",
+    "v0.9.1": "https://a2ui.org/a2a-extension/a2ui/v0.9.1",
+    "v1.0": "https://a2ui.org/a2a-extension/a2ui/v1.0",
+}
 
 
 class CapturingConfig(ModelConfig):
@@ -109,6 +119,9 @@ class CallRendererFunctionThenCompleteClient(LLMClient):
         return ModelResponse(msg)
 
 
+V1_BASIC_CATALOG_ID = BASIC_CATALOG["v1.0"]
+
+
 class MetadataInterceptor(ClientCallInterceptor):
     """Splices ``a2uiClientCapabilities`` (``a2uiRendererCapabilities`` in v1.0) onto the outgoing message metadata.
 
@@ -160,6 +173,8 @@ def client_for(
     protocol_version: A2UIVersion = "v0.9",
     validate_responses: bool = True,
     actions: Sequence[Any] = (),
+    custom_catalog: dict[str, Any] | None = None,
+    renderer_capabilities: bool = True,
 ) -> Agent:
     """A client Agent talking to ``agent`` via the A2UI executor over in-process HTTP.
 
@@ -167,14 +182,22 @@ def client_for(
     validation) lives on the :class:`A2UIAgentExecutor`. Clickable buttons
     (``@a2ui_action`` tools) are declared via ``actions=`` on the executor — the
     same way they are on :class:`A2UIServer` — so the agent stays plain.
+
+    With ``renderer_capabilities`` a v1.0 client advertises every catalog the
+    executor serves on each message, as a v1.0 renderer must for its turn to have
+    A2UI at all. A later ``MetadataInterceptor`` can override it.
     """
     executor = A2UIAgentExecutor(
         agent,
         actions=actions,
         protocol_version=protocol_version,
         validate_responses=validate_responses,
+        custom_catalog=custom_catalog,
     )
     a2a_server = A2AServer(agent, executor=executor)
+    if renderer_capabilities and protocol_version == "v1.0":
+        supported = capabilities_for(*served_catalogs({"custom_catalog": custom_catalog}))
+        interceptors = [MetadataInterceptor(supported), *interceptors]
     factory = make_test_client_factory(a2a_server, url="http://test")
     kwargs: dict[str, Any] = {}
     if hitl_hook is not None:

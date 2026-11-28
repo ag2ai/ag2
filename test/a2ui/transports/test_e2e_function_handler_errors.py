@@ -16,6 +16,8 @@ from ag2.a2ui.transports import RestTransport
 from ag2.events import ToolCallEvent
 from ag2.testing import TestConfig, TrackingConfig
 
+from ..seam import from_renderer
+
 
 class BackendRecord(BaseModel):
     quantity: int
@@ -70,7 +72,7 @@ async def _post_function(app: A2UIServer, quantity: int | str) -> list[dict[str,
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://a2ui.test") as client:
         response = await client.post(
             "/a2ui",
-            json={
+            json=from_renderer({
                 "a2ui": [
                     {
                         "version": "1.0",
@@ -81,7 +83,7 @@ async def _post_function(app: A2UIServer, quantity: int | str) -> list[dict[str,
                         },
                     }
                 ]
-            },
+            }),
         )
     assert response.status_code == 200
     return [json.loads(line) for line in response.text.splitlines() if line]
@@ -100,7 +102,7 @@ async def test_backend_validation_error_is_a_function_failure(
             "version": "1.0",
             "agentFunctionResponse": {
                 "functionCallId": "backend-1",
-                "error": {"code": "FUNCTION_FAILED", "message": "Function 'read_backend' failed."},
+                "error": {"code": "EXECUTION_ERROR", "message": "Function 'read_backend' failed."},
             },
         }
     ]

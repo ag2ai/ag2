@@ -2,22 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal A2UI runtime shared by the transports: holds the schema manager,
-response parser, action declarations, system-prompt section, and validation
-middleware factory built from a transport's flat A2UI kwargs. Not exported.
-"""
+"""The A2UI configuration a transport serves with, built once from the flat A2UI kwargs, and the offers it
+negotiates per turn (``A2UIOffer``). Not exported; ``_turn`` applies an offer to one turn."""
 
+import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from enum import Enum
 
-from ag2.middleware.base import MiddlewareFactory
+from ag2.middleware.base import Middleware
 
-from ._types import A2UIVersion, A2UIWireVersion, JsonSchema
-from .actions import A2UIEventAction
-from .capabilities import A2UIClientCapabilities, capabilities_to_prompt
+from ._types import A2UIVersion, JsonSchema, ServerToClientMessage
+from ._versions import A2UIProtocol
+from .actions import A2UIAction, A2UIEventAction, collect_action_declarations, collect_server_actions
+from .capabilities import A2UIClientCapabilities
 from .middleware import A2UIExtractionMiddleware, A2UIValidationMiddleware
 from .parser import A2UIResponseParser
 from .schema_manager import A2UISchemaManager
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SYSTEM_MESSAGE = (
     "You are a helpful AI assistant that can generate rich user interfaces "
@@ -27,92 +31,214 @@ DEFAULT_SYSTEM_MESSAGE = (
 )
 
 
-class _A2UIRuntime:
-    """Carries A2UI configuration and per-turn injection for a plain ``Agent``.
+class A2UIDelivery(Enum):
+    """Which A2UI messages a turn may send the renderer."""
 
-    Built once per :class:`A2UIServer` from its A2UI kwargs and the declared
-    ``actions``. Exposes the read-only bits the transports need
-    (``protocol_version``, ``catalog_id``, ``version_string``, ``get_action``),
-    the prompt section to prepend, the validation middleware factories to inject,
-    and a capabilities-prompt helper.
+    UI = "ui"
+    """Every A2UI message: the renderer shares at least one catalog with the agent."""
+    FUNCTION_RESPONSES = "function_responses"
+    """Only ``agentFunctionResponse``: the renderer shares no catalog with the agent, but a ``callAgentFunction``
+    still gets the answer the agent "MUST return" (v1_0 a2ui_protocol.md, "callAgentFunction")."""
+    NOTHING = "nothing"
+    """No A2UI message: the renderer withdrew A2UI by omitting its capabilities (v1.0)."""
+
+
+@dataclass(frozen=True, slots=True)
+class A2UIOffer:
+    """What the agent offers one renderer on one turn: the catalogs both sides have, and what follows from them.
+
+    A renderer that advertises ``supportedCatalogIds`` gets only the agent's catalogs it names, as the official
+    SDK's ``resolve_catalogs`` does. With none in common, or (v1.0) no capabilities at all, the turn offers no
+    A2UI: :attr:`sends_ui` is false, the prompt has no A2UI section, and the transport sends no A2UI surfaces.
     """
 
-    def __init__(
-        self,
-        *,
-        actions: Sequence[A2UIEventAction] = (),
-        protocol_version: A2UIVersion = "v0.9",
-        custom_catalog: "str | os.PathLike[str] | JsonSchema | None" = None,
-        custom_catalog_rules: str | None = None,
-        include_schema_in_prompt: bool = True,
-        include_rules_in_prompt: bool = True,
-        validate_responses: bool = True,
-        validation_retries: int = 1,
-        system_message: str | None = None,
-    ) -> None:
-        self.schema_manager = A2UISchemaManager(
-            protocol_version=protocol_version,
-            custom_catalog=custom_catalog,
-            custom_catalog_rules=custom_catalog_rules,
-        )
-        self._validate_responses = validate_responses
-        self.parser = A2UIResponseParser(
-            version_string=self.schema_manager.version_string,
-            server_to_client_schema=(self.schema_manager.server_to_client_schema if validate_responses else None),
-            schema_registry=(self.schema_manager.build_schema_registry() if validate_responses else None),
-        )
-        # Clickable buttons are declared on ``A2UIServer(actions=[...])``; the
-        # server passes their action declarations here for prompt + click routing.
-        self.actions: tuple[A2UIEventAction, ...] = tuple(actions)
-
-        prompt_section = self.schema_manager.generate_prompt_section(
-            include_schema=include_schema_in_prompt,
-            include_rules=include_rules_in_prompt,
-            actions=list(self.actions),
-        )
-        base_prompt = system_message if system_message is not None else DEFAULT_SYSTEM_MESSAGE
-        self.system_prompt_section = f"{base_prompt}\n\n{prompt_section}"
-
-        # A2UI extraction (parse → publish events → strip the block from prose)
-        # always runs so the wire stays spec-compliant: prose and UI messages
-        # travel as separate channels, never raw JSON in the text. Validation
-        # (schema check + corrective retry) is the optional layer on top.
-        self._middleware: MiddlewareFactory = (
-            A2UIValidationMiddleware(self.parser, validation_retries)
-            if validate_responses
-            else A2UIExtractionMiddleware(self.parser)
-        )
+    delivery: A2UIDelivery
+    catalog_id: str | None
+    """The catalog the prompt's ``createSurface`` names; ``None`` without A2UI."""
+    catalog_ids: tuple[str, ...]
+    """Every catalog a surface or function call may name this turn."""
+    system_prompt_section: str
+    middleware: Middleware
+    """Extracts the A2UI block from each response, and validates it unless validation is off."""
+    message_validator: A2UIResponseParser | None
+    """Checks the messages server-side handlers return; ``None`` when validation is off or there is no A2UI."""
 
     @property
-    def protocol_version(self) -> A2UIVersion:
-        """The A2UI protocol version this runtime targets."""
-        return self.schema_manager.protocol_version
+    def sends_ui(self) -> bool:
+        return self.delivery is A2UIDelivery.UI
+
+    def answers_function_catalog(self, catalog_id: str | None) -> bool:
+        """Whether a ``callAgentFunction`` naming ``catalog_id`` may select a local handler by its ``@call`` name.
+
+        A call naming another catalog than the turn offers does not select a handler merely because its name
+        matches; it is answered ``UNKNOWN_FUNCTION``. With no catalog in common the renderer can only name its own
+        catalog and waits for the answer (v1_0 a2ui_protocol.md, "callAgentFunction": "The renderer MUST set
+        `catalogId`"), and a handler belongs to no catalog (ADR 0040), so any catalog is accepted. A turn that
+        withdrew A2UI offers no catalog, so only a call that names none is accepted.
+        """
+        if self.delivery is A2UIDelivery.FUNCTION_RESPONSES:
+            return True
+        return catalog_id is None or catalog_id in self.catalog_ids
+
+    def deliverable(self, messages: list[ServerToClientMessage], *, source: str) -> list[ServerToClientMessage]:
+        """The ``messages`` from ``source`` this turn may send; the rest are dropped with a warning."""
+        if self.sends_ui or not messages:
+            return messages
+        kept = [
+            message
+            for message in messages
+            if self.delivery is A2UIDelivery.FUNCTION_RESPONSES
+            and isinstance(message, dict)
+            and "agentFunctionResponse" in message
+        ]
+        if dropped := len(messages) - len(kept):
+            logger.warning(
+                "The renderer offers no A2UI this turn; dropping %d A2UI message(s) from %s.", dropped, source
+            )
+        return kept
+
+
+@dataclass(frozen=True, slots=True)
+class _A2UIRuntime:
+    """What every turn of an A2UI deployment shares."""
+
+    protocol: A2UIProtocol
+    actions: tuple[A2UIEventAction, ...]
+    """Declared to the LLM so it can render the buttons."""
+    server_actions: Mapping[str, A2UIAction]
+    """Run on the server when clicked, without invoking the agent."""
+    full_offer: A2UIOffer
+    """The offer to a renderer that names no catalogs: every catalog the agent serves."""
+    no_ui_offer: A2UIOffer
+    """The offer to a renderer with no catalog in common with the agent."""
+    withdrawn_offer: A2UIOffer
+    """The offer to a renderer that sent no capabilities where they are required (v1.0): no A2UI message at all."""
+    _schema_manager: A2UISchemaManager
+    _settings: "_OfferSettings"
+    _offers: dict[frozenset[str], A2UIOffer] = field(default_factory=dict)
+    """Offers built for a renderer's catalog subset, by the catalogs they serve; at most one per subset."""
 
     @property
-    def catalog_id(self) -> str:
-        """The A2UI catalog ID in use."""
-        return self.schema_manager.catalog_id
-
-    @property
-    def version_string(self) -> A2UIWireVersion:
-        """The wire ``version`` string stamped on messages (e.g. ``"v0.9.1"``)."""
-        return self.schema_manager.version_string
+    def catalog_ids(self) -> tuple[str, ...]:
+        """Every catalog the agent serves."""
+        return self.full_offer.catalog_ids
 
     def get_action(self, name: str) -> A2UIEventAction | None:
-        """Look up a registered server action by name (used to route incoming clicks)."""
-        for action in self.actions:
-            if action.name == name:
-                return action
-        return None
+        """The declared action ``name``, which an incoming click is routed to."""
+        return next((action for action in self.actions if action.name == name), None)
 
-    def middleware_factories(self) -> list[MiddlewareFactory]:
-        """A2UI middleware to inject for the turn.
+    def offer_for(self, caps: A2UIClientCapabilities | None) -> A2UIOffer:
+        """What this turn offers a renderer with capabilities ``caps`` (``None`` when it sent none).
 
-        Always one factory: extraction-only when ``validate_responses=False``,
-        otherwise the validation middleware (which also extracts).
+        In v1.0 a request without capabilities offers no A2UI ("omitting them withdraws A2UI for that turn",
+        a2ui_protocol.md, "Renderer capabilities"); before v1.0 every catalog is offered, as the SDK does.
         """
-        return [self._middleware]
+        if caps is None:
+            return self.withdrawn_offer if self.protocol.turn_scoped_capabilities else self.full_offer
+        restricted = self._schema_manager.restricted_to(caps.supported_catalog_ids)
+        if restricted is None:
+            logger.warning(
+                "A2UI renderer supports none of the agent's catalogs %r (it supports %r); this turn sends no A2UI.",
+                list(self.catalog_ids),
+                caps.supported_catalog_ids,
+            )
+            return self.no_ui_offer
+        if restricted is self._schema_manager:
+            return self.full_offer
+        served = frozenset(restricted.catalog_ids)
+        if served not in self._offers:
+            self._offers[served] = _build_offer(restricted, self.actions, self._settings)
+        return self._offers[served]
 
-    def capabilities_prompt(self, caps: A2UIClientCapabilities | None) -> str:
-        """Render negotiated client capabilities as a per-turn prompt fragment."""
-        return capabilities_to_prompt(caps, catalog_id=self.catalog_id)
+
+@dataclass(frozen=True, slots=True)
+class _OfferSettings:
+    """The deployment's prompt and validation settings, which every offer is built with."""
+
+    include_schema_in_prompt: bool
+    include_rules_in_prompt: bool
+    validate_responses: bool
+    validation_retries: int
+    base_prompt: str
+
+
+def _build_offer(
+    schema_manager: A2UISchemaManager, declarations: Sequence[A2UIEventAction], settings: _OfferSettings
+) -> A2UIOffer:
+    prompt_section = schema_manager.generate_prompt_section(
+        include_schema=settings.include_schema_in_prompt,
+        include_rules=settings.include_rules_in_prompt,
+        actions=list(declarations),
+    )
+    middleware: Middleware
+    validator: A2UIResponseParser | None = None
+    if settings.validate_responses:
+        parser = A2UIResponseParser.validating(schema_manager.protocol, schema_manager.validation_schemas())
+        middleware = Middleware(A2UIValidationMiddleware, parser=parser, max_retries=settings.validation_retries)
+        validator = parser
+    else:
+        # Extraction always runs, so prose and UI travel as separate channels, never raw JSON in the text.
+        middleware = Middleware(A2UIExtractionMiddleware, parser=A2UIResponseParser(protocol=schema_manager.protocol))
+    return A2UIOffer(
+        delivery=A2UIDelivery.UI,
+        catalog_id=schema_manager.catalog_id,
+        catalog_ids=schema_manager.catalog_ids,
+        system_prompt_section=f"{settings.base_prompt}\n\n{prompt_section}",
+        middleware=middleware,
+        message_validator=validator,
+    )
+
+
+def build_runtime(
+    actions: Sequence[A2UIAction],
+    *,
+    protocol_version: A2UIVersion,
+    custom_catalog: "str | os.PathLike[str] | JsonSchema | None",
+    custom_catalog_rules: str | None,
+    include_schema_in_prompt: bool,
+    include_rules_in_prompt: bool,
+    validate_responses: bool,
+    validation_retries: int,
+    system_message: str | None,
+) -> _A2UIRuntime:
+    """Build the runtime for ``A2UIServer`` and ``A2UIAgentExecutor`` from their shared kwargs."""
+    if validate_responses and validation_retries < 0:
+        raise ValueError(f"validation_retries must be >= 0, got {validation_retries}")
+    schema_manager = A2UISchemaManager(
+        protocol_version=protocol_version,
+        custom_catalog=custom_catalog,
+        custom_catalog_rules=custom_catalog_rules,
+    )
+    declarations = tuple(collect_action_declarations(actions))
+    settings = _OfferSettings(
+        include_schema_in_prompt=include_schema_in_prompt,
+        include_rules_in_prompt=include_rules_in_prompt,
+        validate_responses=validate_responses,
+        validation_retries=validation_retries,
+        base_prompt=system_message if system_message is not None else DEFAULT_SYSTEM_MESSAGE,
+    )
+    protocol = schema_manager.protocol
+    return _A2UIRuntime(
+        protocol=protocol,
+        actions=declarations,
+        server_actions=collect_server_actions(actions),
+        full_offer=_build_offer(schema_manager, declarations, settings),
+        no_ui_offer=_offer_without_ui(protocol, system_message, A2UIDelivery.FUNCTION_RESPONSES),
+        withdrawn_offer=_offer_without_ui(protocol, system_message, A2UIDelivery.NOTHING),
+        _schema_manager=schema_manager,
+        _settings=settings,
+    )
+
+
+def _offer_without_ui(protocol: A2UIProtocol, system_message: str | None, delivery: A2UIDelivery) -> A2UIOffer:
+    """An offer that sends no surfaces: one that answers function calls only, or one that sends nothing."""
+    return A2UIOffer(
+        delivery=delivery,
+        catalog_id=None,
+        catalog_ids=(),
+        # The default system message is about A2UI; a user's own one still applies.
+        system_prompt_section=system_message or "",
+        # Extraction still runs, so a stray A2UI block never reaches the prose; the transport drops its messages.
+        middleware=Middleware(A2UIExtractionMiddleware, parser=A2UIResponseParser(protocol=protocol)),
+        message_validator=None,
+    )

@@ -1,0 +1,8091 @@
+{
+ "catalogs": {
+  "widget_v09": {
+   "catalogId": "https://example.com/cat.json",
+   "components": {
+    "MyWidget": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "MyWidget"
+      },
+      "foo": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "foo"
+     ]
+    }
+   }
+  },
+  "widget_v10": {
+   "catalogId": "https://example.com/cat.json",
+   "protocolVersion": "1.0",
+   "components": {
+    "MyWidget": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "MyWidget"
+      },
+      "foo": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "foo"
+     ]
+    }
+   }
+  },
+  "text_override_v10": {
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
+   "components": {
+    "Text": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Text"
+      },
+      "customText": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "customText"
+     ]
+    }
+   }
+  },
+  "agent_fn_v10": {
+   "catalogId": "https://mycompany.com/cat.json",
+   "protocolVersion": "1.0",
+   "functions": {
+    "lookup": {
+     "type": "object",
+     "returnType": "string",
+     "allowedCallers": "agentOnly",
+     "properties": {
+      "@call": {
+       "const": "lookup"
+      }
+     },
+     "required": [
+      "@call"
+     ]
+    }
+   }
+  },
+  "escaped_component": {
+   "catalogId": "https://example.com/catalog.json",
+   "components": {
+    "widget/~definition": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Widget"
+      }
+     },
+     "required": [
+      "component"
+     ]
+    }
+   }
+  },
+  "ref_local_v10": {
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
+   "$defs": {
+    "Local": {
+     "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
+    }
+   },
+   "components": {
+    "Label": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Label"
+      },
+      "text": {
+       "$ref": "#/$defs/Local"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   }
+  },
+  "ref_common_types_v10": {
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
+   "$defs": {
+    "Local": {
+     "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
+    }
+   },
+   "components": {
+    "Label": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Label"
+      },
+      "text": {
+       "$ref": "common_types.json#/$defs/DynamicString"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   }
+  },
+  "ref_own_definitions_v10": {
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
+   "$defs": {
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "oneOf": [
+      {
+       "$ref": "#/functions/isSet"
+      }
+     ]
+    }
+   },
+   "components": {
+    "Label": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Label"
+      },
+      "text": {
+       "$ref": "common_types.json#/$defs/DynamicString"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   },
+   "functions": {
+    "isSet": {
+     "type": "object",
+     "returnType": "boolean",
+     "properties": {
+      "@call": {
+       "const": "isSet"
+      },
+      "args": {
+       "type": "object"
+      }
+     },
+     "required": [
+      "@call",
+      "args"
+     ]
+    }
+   }
+  },
+  "ref_in_annotations_v10": {
+   "catalogId": "https://example.com/catalog.json",
+   "protocolVersion": "1.0",
+   "$defs": {
+    "Local": {
+     "type": "string"
+    },
+    "anyComponent": {
+     "oneOf": [
+      {
+       "$ref": "#/components/Label"
+      }
+     ]
+    },
+    "anyFunction": {
+     "not": {}
+    }
+   },
+   "components": {
+    "Label": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Label"
+      },
+      "text": {
+       "$ref": "common_types.json#/$defs/DynamicString"
+      },
+      "hintExamples": {
+       "examples": [
+        {
+         "$ref": "other_catalog.json#/$defs/Shared"
+        }
+       ]
+      },
+      "hintDefault": {
+       "default": {
+        "$ref": "other_catalog.json#/$defs/Shared"
+       }
+      },
+      "hintConst": {
+       "const": {
+        "$ref": "other_catalog.json#/$defs/Shared"
+       }
+      },
+      "hintEnum": {
+       "enum": [
+        {
+         "$ref": "other_catalog.json#/$defs/Shared"
+        }
+       ]
+      },
+      "hintMetadata": {
+       "metadata": {
+        "$ref": "other_catalog.json#/$defs/Shared"
+       }
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   }
+  },
+  "cross_catalog_ref_v09": {
+   "catalogId": "https://example.com/catalog.json",
+   "$defs": {
+    "Local": {
+     "type": "string"
+    }
+   },
+   "components": {
+    "Label": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Label"
+      },
+      "text": {
+       "$ref": "basic_catalog.json#/components/Text"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    }
+   }
+  },
+  "renderer_fn_v10": {
+   "catalogId": "https://mycompany.com/cat.json",
+   "protocolVersion": "1.0",
+   "functions": {
+    "localCheck": {
+     "type": "object",
+     "returnType": "boolean",
+     "allowedCallers": "rendererOnly",
+     "properties": {
+      "@call": {
+       "const": "localCheck"
+      }
+     },
+     "required": [
+      "@call"
+     ]
+    }
+   }
+  },
+  "composition_v10": {
+   "catalogId": "https://example.com/composition.json",
+   "protocolVersion": "1.0",
+   "components": {
+    "Text": {
+     "type": "object",
+     "allowedParents": [
+      "Column"
+     ],
+     "properties": {
+      "component": {
+       "const": "Text"
+      },
+      "text": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "text"
+     ]
+    },
+    "Column": {
+     "type": "object",
+     "allowedParents": [
+      "Surface",
+      "Column"
+     ],
+     "allowedChildren": [
+      "Text",
+      "Column"
+     ],
+     "properties": {
+      "component": {
+       "const": "Column"
+      },
+      "children": {
+       "$ref": "common_types.json#/$defs/ChildList"
+      }
+     },
+     "required": [
+      "component",
+      "children"
+     ]
+    },
+    "Badge": {
+     "type": "object",
+     "properties": {
+      "component": {
+       "const": "Badge"
+      },
+      "label": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "component",
+      "label"
+     ]
+    }
+   }
+  }
+ },
+ "cases": [
+  {
+   "id": "v0.9:prompt_example",
+   "version": "v0.9",
+   "note": "vendored prompt_example.json",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s1",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s1",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "layout1"
+       },
+       {
+        "id": "layout1",
+        "component": "Column",
+        "children": [
+         "text1",
+         "btn1"
+        ]
+       },
+       {
+        "id": "text1",
+        "component": "Text",
+        "text": "Hello World"
+       },
+       {
+        "id": "btn1",
+        "component": "Button",
+        "child": "btn1_text",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "btn1_text",
+        "component": "Text",
+        "text": "Click Me"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:create_only",
+   "version": "v0.9",
+   "note": "createSurface alone",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:delete_only",
+   "version": "v0.9",
+   "note": "deleteSurface alone (surface from earlier response)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:udm_path_value",
+   "version": "v0.9",
+   "note": "updateDataModel path+value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:udm_root_object",
+   "version": "v0.9",
+   "note": "updateDataModel whole model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/",
+      "value": {
+       "name": "Ann"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_only_with_root",
+   "version": "v0.9",
+   "note": "updateComponents on earlier surface, has root",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:layout_all_basic",
+   "version": "v0.9",
+   "note": "Card/Column/Row/Text/Image/Icon/Divider/Button",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "row",
+         "img",
+         "div",
+         "btn"
+        ]
+       },
+       {
+        "id": "row",
+        "component": "Row",
+        "children": [
+         "t1",
+         "ic"
+        ]
+       },
+       {
+        "id": "t1",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "ic",
+        "component": "Icon",
+        "name": "home"
+       },
+       {
+        "id": "img",
+        "component": "Image",
+        "url": "https://example.com/a.png"
+       },
+       {
+        "id": "div",
+        "component": "Divider"
+       },
+       {
+        "id": "btn",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Go"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:binding_text",
+   "version": "v0.9",
+   "note": "Text bound to data model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "path": "/name"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:textfield_bound",
+   "version": "v0.9",
+   "note": "TextField label+bound value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "TextField",
+        "label": "Name",
+        "value": {
+         "path": "/name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:checkbox_bound",
+   "version": "v0.9",
+   "note": "CheckBox bound",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "CheckBox",
+        "label": "OK",
+        "value": {
+         "path": "/ok"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:slider",
+   "version": "v0.9",
+   "note": "Slider",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Slider",
+        "min": 0,
+        "max": 10,
+        "value": {
+         "path": "/n"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:list_template",
+   "version": "v0.9",
+   "note": "List with template children",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        }
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:list_style_ordered",
+   "version": "v0.9",
+   "note": "List listStyle 'ordered' (a2ui-project/a2ui#3956)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "ordered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:list_style_numbered",
+   "version": "v0.9",
+   "note": "List listStyle 'numbered' (a2ui-project/a2ui#3956)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "numbered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (List): 'numbered' is not one of ['ordered', 'unordered', 'none']"
+  },
+  {
+   "id": "v0.9.1:list_style_ordered",
+   "version": "v0.9.1",
+   "note": "List listStyle 'ordered' (a2ui-project/a2ui#3956)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "ordered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:list_style_numbered",
+   "version": "v0.9.1",
+   "note": "List listStyle 'numbered' (a2ui-project/a2ui#3956)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        },
+        "listStyle": "numbered"
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (List): 'numbered' is not one of ['ordered', 'unordered', 'none']"
+  },
+  {
+   "id": "v0.9:fn_formatString",
+   "version": "v0.9",
+   "note": "Text from formatString call",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "formatString",
+         "args": {
+          "value": "Hi ${/name}"
+         },
+         "returnType": "string"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:button_fn_openUrl",
+   "version": "v0.9",
+   "note": "Button action functionCall openUrl",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "https://example.com"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:choicepicker",
+   "version": "v0.9",
+   "note": "ChoicePicker",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "ChoicePicker",
+        "options": [
+         {
+          "label": "A",
+          "value": "a"
+         }
+        ],
+        "value": {
+         "path": "/c"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:full_flow",
+   "version": "v0.9",
+   "note": "create + data + components + delete other",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/x",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:missing_version",
+   "version": "v0.9",
+   "note": "no version",
+   "expect": "retry",
+   "error": "Operation 0: 'version' is a required property",
+   "messages": [
+    {
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:version_v0_8",
+   "version": "v0.9",
+   "note": "version v0.8",
+   "expect": "retry",
+   "error": "Operation 0: 'v0.9' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v0.8",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:version_other_major",
+   "version": "v0.9",
+   "note": "v1.0 wire on v0.9 / v0.9 wire on v1.0",
+   "expect": "retry",
+   "error": "Operation 0: 'v0.9' was expected (at /version)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:version_v1_0_prefixed",
+   "version": "v0.9",
+   "note": "'v1.0' (prefixed) as version",
+   "expect": "retry",
+   "error": "Operation 0: 'v0.9' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:create_missing_catalogId",
+   "version": "v0.9",
+   "note": "createSurface without catalogId (optional from v1.0)",
+   "expect": "retry",
+   "error": "Operation 0: 'catalogId' is a required property (at /createSurface)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:uc_missing_surfaceId",
+   "version": "v0.9",
+   "note": "updateComponents without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /updateComponents)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_top_level_key",
+   "version": "v0.9",
+   "note": "extra top-level key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('extra' was unexpected)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     },
+     "extra": 1
+    }
+   ]
+  },
+  {
+   "id": "v0.9:two_payload_keys",
+   "version": "v0.9",
+   "note": "createSurface + deleteSurface in one object",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     },
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_message_type",
+   "version": "v0.9",
+   "note": "updateSurface",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_key_in_payload",
+   "version": "v0.9",
+   "note": "createSurface with extra key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('foo' was unexpected) (at /createSurface)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "foo": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:sendDataModel_not_bool",
+   "version": "v0.9",
+   "note": "sendDataModel='yes'",
+   "expect": "retry",
+   "error": "Operation 0: 'yes' is not of type 'boolean' (at /createSurface/sendDataModel)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "sendDataModel": "yes"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_component",
+   "version": "v0.9",
+   "note": "Carousel",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Carousel): unknown component 'Carousel'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Carousel",
+        "items": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_component_prop",
+   "version": "v0.9",
+   "note": "Text.fontSize",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): Unevaluated properties are not allowed ('fontSize' was unexpected)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "fontSize": 3
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:wrong_prop_type",
+   "version": "v0.9",
+   "note": "Text.text=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 5 is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:button_missing_child",
+   "version": "v0.9",
+   "note": "Button w/o child",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'child' is a required property",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:button_missing_action",
+   "version": "v0.9",
+   "note": "Button w/o action",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'action' is a required property",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt"
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:children_not_array",
+   "version": "v0.9",
+   "note": "Column.children='a'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Column): 'a' is not of type 'array'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": "a"
+       },
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:binding_bad_key",
+   "version": "v0.9",
+   "note": "binding {pathx:...}",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'pathx': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "pathx": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:binding_non_string",
+   "version": "v0.9",
+   "note": "binding path=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'path': 5} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "path": 5
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:binding_other_version_key",
+   "version": "v0.9",
+   "note": "binding key of the other version",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'@path': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@path": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:variant_enum_bad",
+   "version": "v0.9",
+   "note": "Text.variant='huge'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 'huge' is not one of ['h1', 'h2', 'h3', 'h4', 'h5', 'caption', 'body']",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "variant": "huge"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:component_missing_id",
+   "version": "v0.9",
+   "note": "component without id",
+   "expect": "retry",
+   "error": "Operation 1: Component '?' (Text): 'id' is a required property",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "component": "Text",
+        "text": "a"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:component_missing_type",
+   "version": "v0.9",
+   "note": "component without 'component'",
+   "expect": "retry",
+   "error": "Operation 1: 'component' is a required property (at /updateComponents/components/0)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:unknown_function",
+   "version": "v0.9",
+   "note": "Text from unknown function",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): unknown function 'nosuch'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "nosuch",
+         "args": {},
+         "returnType": "string"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:no_root_new_surface",
+   "version": "v0.9",
+   "note": "components but no id root",
+   "expect": "retry",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:no_root_update_only",
+   "version": "v0.9",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:dangling_child",
+   "version": "v0.9",
+   "note": "Card child references missing id",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' references missing component 'nope'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "nope"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:orphan_component",
+   "version": "v0.9",
+   "note": "component unreachable from root",
+   "expect": "retry",
+   "error": "Surface 's': component 'orphan' is not reachable from 'root'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "orphan",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:cycle",
+   "version": "v0.9",
+   "note": "root -> col -> root",
+   "expect": "retry",
+   "error": "Surface 's': components form a cycle: root -> col -> root",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "root"
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:duplicate_ids",
+   "version": "v0.9",
+   "note": "two components id root",
+   "expect": "retry",
+   "error": "Surface 's': duplicate component id 'root'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "again"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:udm_relative_path",
+   "version": "v0.9",
+   "note": "updateDataModel path 'a/b'",
+   "expect": "retry",
+   "error": "Operation 0: 'a/b' is not a JSON Pointer (at /updateDataModel/path)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "a/b",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:udm_missing_value",
+   "version": "v0.9",
+   "note": "updateDataModel no value (v0.9 = delete; v1.0 requires value)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:create_unknown_catalog",
+   "version": "v0.9",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/nope.json"
+     }
+    }
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'"
+  },
+  {
+   "id": "v0.9:create_twice",
+   "version": "v0.9",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again, or use a new surfaceId"
+  },
+  {
+   "id": "v0.9:update_before_create",
+   "version": "v0.9",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:data_model_before_create",
+   "version": "v0.9",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_after_delete",
+   "version": "v0.9",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:delete_then_create",
+   "version": "v0.9",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_earlier_surface_then_recreate",
+   "version": "v0.9",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:update_unknown_surface_noseed",
+   "version": "v0.9",
+   "note": "update-only, surface never created (no seeding in SDK)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:theme_ok",
+   "version": "v0.9",
+   "note": "v0.9 theme primaryColor",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "theme": {
+       "primaryColor": "#00ff00"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:theme_bad",
+   "version": "v0.9",
+   "note": "v0.9 theme unknown key",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "theme": {
+       "nope": 1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:fn_missing_returnType",
+   "version": "v0.9",
+   "note": "formatString without returnType (default boolean)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "formatString",
+         "args": {
+          "value": "x"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:wire_v091_on_v09",
+   "version": "v0.9",
+   "note": "'v0.9.1' wire on v0.9",
+   "expect": "retry",
+   "error": "Operation 0: 'v0.9' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:prompt_example",
+   "version": "v0.9.1",
+   "note": "vendored prompt_example.json",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s1",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s1",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "layout1"
+       },
+       {
+        "id": "layout1",
+        "component": "Column",
+        "children": [
+         "text1",
+         "btn1"
+        ]
+       },
+       {
+        "id": "text1",
+        "component": "Text",
+        "text": "Hello World"
+       },
+       {
+        "id": "btn1",
+        "component": "Button",
+        "child": "btn1_text",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "btn1_text",
+        "component": "Text",
+        "text": "Click Me"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:create_only",
+   "version": "v0.9.1",
+   "note": "createSurface alone",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:delete_only",
+   "version": "v0.9.1",
+   "note": "deleteSurface alone (surface from earlier response)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:udm_path_value",
+   "version": "v0.9.1",
+   "note": "updateDataModel path+value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:udm_root_object",
+   "version": "v0.9.1",
+   "note": "updateDataModel whole model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/",
+      "value": {
+       "name": "Ann"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_only_with_root",
+   "version": "v0.9.1",
+   "note": "updateComponents on earlier surface, has root",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:layout_all_basic",
+   "version": "v0.9.1",
+   "note": "Card/Column/Row/Text/Image/Icon/Divider/Button",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "row",
+         "img",
+         "div",
+         "btn"
+        ]
+       },
+       {
+        "id": "row",
+        "component": "Row",
+        "children": [
+         "t1",
+         "ic"
+        ]
+       },
+       {
+        "id": "t1",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "ic",
+        "component": "Icon",
+        "name": "home"
+       },
+       {
+        "id": "img",
+        "component": "Image",
+        "url": "https://example.com/a.png"
+       },
+       {
+        "id": "div",
+        "component": "Divider"
+       },
+       {
+        "id": "btn",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Go"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:binding_text",
+   "version": "v0.9.1",
+   "note": "Text bound to data model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "path": "/name"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:textfield_bound",
+   "version": "v0.9.1",
+   "note": "TextField label+bound value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "TextField",
+        "label": "Name",
+        "value": {
+         "path": "/name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:checkbox_bound",
+   "version": "v0.9.1",
+   "note": "CheckBox bound",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "CheckBox",
+        "label": "OK",
+        "value": {
+         "path": "/ok"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:slider",
+   "version": "v0.9.1",
+   "note": "Slider",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Slider",
+        "min": 0,
+        "max": 10,
+        "value": {
+         "path": "/n"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:list_template",
+   "version": "v0.9.1",
+   "note": "List with template children",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        }
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:fn_formatString",
+   "version": "v0.9.1",
+   "note": "Text from formatString call",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "formatString",
+         "args": {
+          "value": "Hi ${/name}"
+         },
+         "returnType": "string"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:button_fn_openUrl",
+   "version": "v0.9.1",
+   "note": "Button action functionCall openUrl",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "https://example.com"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:choicepicker",
+   "version": "v0.9.1",
+   "note": "ChoicePicker",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "ChoicePicker",
+        "options": [
+         {
+          "label": "A",
+          "value": "a"
+         }
+        ],
+        "value": {
+         "path": "/c"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:full_flow",
+   "version": "v0.9.1",
+   "note": "create + data + components + delete other",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/x",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:missing_version",
+   "version": "v0.9.1",
+   "note": "no version",
+   "expect": "retry",
+   "error": "Operation 0: 'version' is a required property",
+   "messages": [
+    {
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:version_v0_8",
+   "version": "v0.9.1",
+   "note": "version v0.8",
+   "expect": "retry",
+   "error": "Operation 0: 'v0.8' is not one of ['v0.9', 'v0.9.1'] (at /version)",
+   "messages": [
+    {
+     "version": "v0.8",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:version_other_major",
+   "version": "v0.9.1",
+   "note": "v1.0 wire on v0.9 / v0.9 wire on v1.0",
+   "expect": "retry",
+   "error": "Operation 0: '1.0' is not one of ['v0.9', 'v0.9.1'] (at /version)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:version_v1_0_prefixed",
+   "version": "v0.9.1",
+   "note": "'v1.0' (prefixed) as version",
+   "expect": "retry",
+   "error": "Operation 0: 'v1.0' is not one of ['v0.9', 'v0.9.1'] (at /version)",
+   "messages": [
+    {
+     "version": "v1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:create_missing_catalogId",
+   "version": "v0.9.1",
+   "note": "createSurface without catalogId (optional from v1.0)",
+   "expect": "retry",
+   "error": "Operation 0: 'catalogId' is a required property (at /createSurface)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:uc_missing_surfaceId",
+   "version": "v0.9.1",
+   "note": "updateComponents without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /updateComponents)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_top_level_key",
+   "version": "v0.9.1",
+   "note": "extra top-level key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('extra' was unexpected)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     },
+     "extra": 1
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:two_payload_keys",
+   "version": "v0.9.1",
+   "note": "createSurface + deleteSurface in one object",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     },
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_message_type",
+   "version": "v0.9.1",
+   "note": "updateSurface",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_key_in_payload",
+   "version": "v0.9.1",
+   "note": "createSurface with extra key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('foo' was unexpected) (at /createSurface)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "foo": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:sendDataModel_not_bool",
+   "version": "v0.9.1",
+   "note": "sendDataModel='yes'",
+   "expect": "retry",
+   "error": "Operation 0: 'yes' is not of type 'boolean' (at /createSurface/sendDataModel)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "sendDataModel": "yes"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_component",
+   "version": "v0.9.1",
+   "note": "Carousel",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Carousel): unknown component 'Carousel'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Carousel",
+        "items": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_component_prop",
+   "version": "v0.9.1",
+   "note": "Text.fontSize",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): Unevaluated properties are not allowed ('fontSize' was unexpected)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "fontSize": 3
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:wrong_prop_type",
+   "version": "v0.9.1",
+   "note": "Text.text=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 5 is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:button_missing_child",
+   "version": "v0.9.1",
+   "note": "Button w/o child",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'child' is a required property",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:button_missing_action",
+   "version": "v0.9.1",
+   "note": "Button w/o action",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'action' is a required property",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt"
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:children_not_array",
+   "version": "v0.9.1",
+   "note": "Column.children='a'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Column): 'a' is not of type 'array'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": "a"
+       },
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:binding_bad_key",
+   "version": "v0.9.1",
+   "note": "binding {pathx:...}",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'pathx': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "pathx": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:binding_non_string",
+   "version": "v0.9.1",
+   "note": "binding path=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'path': 5} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "path": 5
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:binding_other_version_key",
+   "version": "v0.9.1",
+   "note": "binding key of the other version",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'@path': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@path": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:variant_enum_bad",
+   "version": "v0.9.1",
+   "note": "Text.variant='huge'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 'huge' is not one of ['h1', 'h2', 'h3', 'h4', 'h5', 'caption', 'body']",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "variant": "huge"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:component_missing_id",
+   "version": "v0.9.1",
+   "note": "component without id",
+   "expect": "retry",
+   "error": "Operation 1: Component '?' (Text): 'id' is a required property",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "component": "Text",
+        "text": "a"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:component_missing_type",
+   "version": "v0.9.1",
+   "note": "component without 'component'",
+   "expect": "retry",
+   "error": "Operation 1: 'component' is a required property (at /updateComponents/components/0)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:unknown_function",
+   "version": "v0.9.1",
+   "note": "Text from unknown function",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): unknown function 'nosuch'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "nosuch",
+         "args": {},
+         "returnType": "string"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:no_root_new_surface",
+   "version": "v0.9.1",
+   "note": "components but no id root",
+   "expect": "retry",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:no_root_update_only",
+   "version": "v0.9.1",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:dangling_child",
+   "version": "v0.9.1",
+   "note": "Card child references missing id",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' references missing component 'nope'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "nope"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:orphan_component",
+   "version": "v0.9.1",
+   "note": "component unreachable from root",
+   "expect": "retry",
+   "error": "Surface 's': component 'orphan' is not reachable from 'root'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "orphan",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:cycle",
+   "version": "v0.9.1",
+   "note": "root -> col -> root",
+   "expect": "retry",
+   "error": "Surface 's': components form a cycle: root -> col -> root",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "root"
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:duplicate_ids",
+   "version": "v0.9.1",
+   "note": "two components id root",
+   "expect": "retry",
+   "error": "Surface 's': duplicate component id 'root'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "again"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:udm_relative_path",
+   "version": "v0.9.1",
+   "note": "updateDataModel path 'a/b'",
+   "expect": "retry",
+   "error": "Operation 0: 'a/b' is not a JSON Pointer (at /updateDataModel/path)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "a/b",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:udm_missing_value",
+   "version": "v0.9.1",
+   "note": "updateDataModel no value (v0.9 = delete; v1.0 requires value)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:create_unknown_catalog",
+   "version": "v0.9.1",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/nope.json"
+     }
+    }
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json'"
+  },
+  {
+   "id": "v0.9.1:create_twice",
+   "version": "v0.9.1",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again"
+  },
+  {
+   "id": "v0.9.1:update_before_create",
+   "version": "v0.9.1",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:data_model_before_create",
+   "version": "v0.9.1",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_after_delete",
+   "version": "v0.9.1",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:delete_then_create",
+   "version": "v0.9.1",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_earlier_surface_then_recreate",
+   "version": "v0.9.1",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:update_unknown_surface_noseed",
+   "version": "v0.9.1",
+   "note": "update-only, surface never created (no seeding in SDK)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:theme_ok",
+   "version": "v0.9.1",
+   "note": "v0.9 theme primaryColor",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "theme": {
+       "primaryColor": "#00ff00"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:theme_bad",
+   "version": "v0.9.1",
+   "note": "v0.9 theme unknown key",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json",
+      "theme": {
+       "nope": 1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:fn_missing_returnType",
+   "version": "v0.9.1",
+   "note": "formatString without returnType (default boolean)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "call": "formatString",
+         "args": {
+          "value": "x"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:wire_v0_9_on_v091",
+   "version": "v0.9.1",
+   "note": "'v0.9' wire accepted by v0.9.1",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:prompt_example",
+   "version": "v1.0",
+   "note": "vendored prompt_example.json",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s1",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s1",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "layout1"
+       },
+       {
+        "id": "layout1",
+        "component": "Column",
+        "children": [
+         "text1",
+         "btn1"
+        ]
+       },
+       {
+        "id": "text1",
+        "component": "Text",
+        "text": "Hello World"
+       },
+       {
+        "id": "btn1",
+        "component": "Button",
+        "child": "btn1_text",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "btn1_text",
+        "component": "Text",
+        "text": "Click Me"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_only",
+   "version": "v1.0",
+   "note": "createSurface alone",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:delete_only",
+   "version": "v1.0",
+   "note": "deleteSurface alone (surface from earlier response)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:udm_path_value",
+   "version": "v1.0",
+   "note": "updateDataModel path+value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:udm_root_object",
+   "version": "v1.0",
+   "note": "updateDataModel whole model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/",
+      "value": {
+       "name": "Ann"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_only_with_root",
+   "version": "v1.0",
+   "note": "updateComponents on earlier surface, has root",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:layout_all_basic",
+   "version": "v1.0",
+   "note": "Card/Column/Row/Text/Image/Icon/Divider/Button",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "row",
+         "img",
+         "div",
+         "btn"
+        ]
+       },
+       {
+        "id": "row",
+        "component": "Row",
+        "children": [
+         "t1",
+         "ic"
+        ]
+       },
+       {
+        "id": "t1",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "ic",
+        "component": "Icon",
+        "name": "home"
+       },
+       {
+        "id": "img",
+        "component": "Image",
+        "url": "https://example.com/a.png"
+       },
+       {
+        "id": "div",
+        "component": "Divider"
+       },
+       {
+        "id": "btn",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Go"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:binding_text",
+   "version": "v1.0",
+   "note": "Text bound to data model",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@path": "/name"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/name",
+      "value": "Ann"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:textfield_bound",
+   "version": "v1.0",
+   "note": "TextField label+bound value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "TextField",
+        "label": "Name",
+        "value": {
+         "@path": "/name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:checkbox_bound",
+   "version": "v1.0",
+   "note": "CheckBox bound",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "CheckBox",
+        "label": "OK",
+        "value": {
+         "@path": "/ok"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:slider",
+   "version": "v1.0",
+   "note": "Slider",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Slider",
+        "min": 0,
+        "max": 10,
+        "value": {
+         "@path": "/n"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:list_template",
+   "version": "v1.0",
+   "note": "List with template children",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "List",
+        "children": {
+         "componentId": "item",
+         "path": "/items"
+        }
+       },
+       {
+        "id": "item",
+        "component": "Text",
+        "text": {
+         "@path": "name"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:fn_formatString",
+   "version": "v1.0",
+   "note": "Text from formatString call",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@call": "formatString",
+         "args": {
+          "value": "Hi ${/name}"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:button_fn_openUrl",
+   "version": "v1.0",
+   "note": "Button action functionCall openUrl",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "@call": "openUrl",
+          "args": {
+           "url": "https://example.com"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:choicepicker",
+   "version": "v1.0",
+   "note": "ChoicePicker",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "ChoicePicker",
+        "options": [
+         {
+          "label": "A",
+          "value": "a"
+         }
+        ],
+        "value": {
+         "@path": "/c"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:full_flow",
+   "version": "v1.0",
+   "note": "create + data + components + delete other",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/x",
+      "value": 1
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:missing_version",
+   "version": "v1.0",
+   "note": "no version",
+   "expect": "retry",
+   "error": "Operation 0: 'version' is a required property",
+   "messages": [
+    {
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:version_v0_8",
+   "version": "v1.0",
+   "note": "version v0.8",
+   "expect": "retry",
+   "error": "Operation 0: '1.0' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v0.8",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:version_other_major",
+   "version": "v1.0",
+   "note": "v1.0 wire on v0.9 / v0.9 wire on v1.0",
+   "expect": "retry",
+   "error": "Operation 0: '1.0' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:version_v1_0_prefixed",
+   "version": "v1.0",
+   "note": "'v1.0' (prefixed) as version",
+   "expect": "retry",
+   "error": "Operation 0: '1.0' was expected (at /version)",
+   "messages": [
+    {
+     "version": "v1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_missing_catalogId",
+   "version": "v1.0",
+   "note": "createSurface without catalogId (optional from v1.0)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:uc_missing_surfaceId",
+   "version": "v1.0",
+   "note": "updateComponents without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /updateComponents)",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_top_level_key",
+   "version": "v1.0",
+   "note": "extra top-level key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('extra' was unexpected)",
+   "messages": [
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     },
+     "extra": 1
+    }
+   ]
+  },
+  {
+   "id": "v1.0:two_payload_keys",
+   "version": "v1.0",
+   "note": "createSurface + deleteSurface in one object",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     },
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_message_type",
+   "version": "v1.0",
+   "note": "updateSurface",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_key_in_payload",
+   "version": "v1.0",
+   "note": "createSurface with extra key",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('foo' was unexpected) (at /createSurface)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "foo": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:sendDataModel_not_bool",
+   "version": "v1.0",
+   "note": "sendDataModel='yes'",
+   "expect": "retry",
+   "error": "Operation 0: 'yes' is not of type 'boolean' (at /createSurface/sendDataModel)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "sendDataModel": "yes"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_component",
+   "version": "v1.0",
+   "note": "Carousel",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Carousel): unknown component 'Carousel'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Carousel",
+        "items": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_component_prop",
+   "version": "v1.0",
+   "note": "Text.fontSize",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): Unevaluated properties are not allowed ('fontSize' was unexpected)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "fontSize": 3
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:wrong_prop_type",
+   "version": "v1.0",
+   "note": "Text.text=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 5 is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:button_missing_child",
+   "version": "v1.0",
+   "note": "Button w/o child",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'child' is a required property",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "action": {
+         "event": {
+          "name": "click"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:button_missing_action",
+   "version": "v1.0",
+   "note": "Button w/o action",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'action' is a required property",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt"
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:children_not_array",
+   "version": "v1.0",
+   "note": "Column.children='a'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Column): 'a' is not of type 'array'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": "a"
+       },
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:binding_bad_key",
+   "version": "v1.0",
+   "note": "binding {pathx:...}",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'pathx': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "pathx": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:binding_non_string",
+   "version": "v1.0",
+   "note": "binding path=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'@path': 5} is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@path": 5
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:binding_other_version_key",
+   "version": "v1.0",
+   "note": "binding key of the other version",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'path': '/a'} is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "path": "/a"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:variant_enum_bad",
+   "version": "v1.0",
+   "note": "Text.variant='huge'",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 'huge' is not one of ['caption', 'body']",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a",
+        "variant": "huge"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_missing_id",
+   "version": "v1.0",
+   "note": "component without id",
+   "expect": "retry",
+   "error": "Operation 1: Component '?' (Text): 'id' is a required property",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "component": "Text",
+        "text": "a"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_missing_type",
+   "version": "v1.0",
+   "note": "component without 'component'",
+   "expect": "retry",
+   "error": "Operation 1: 'component' is a required property (at /updateComponents/components/0)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:unknown_function",
+   "version": "v1.0",
+   "note": "Text from unknown function",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): unknown function 'nosuch'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@call": "nosuch",
+         "args": {}
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_root_new_surface",
+   "version": "v1.0",
+   "note": "components but no id root",
+   "expect": "retry",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_root_update_only",
+   "version": "v1.0",
+   "note": "partial update to a surface from an earlier turn: the spec needs a 'root' in one of the surface's component lists, not in each",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:dangling_child",
+   "version": "v1.0",
+   "note": "Card child references missing id",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' references missing component 'nope'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "nope"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:orphan_component",
+   "version": "v1.0",
+   "note": "component unreachable from root",
+   "expect": "retry",
+   "error": "Surface 's': component 'orphan' is not reachable from 'root'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "orphan",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:cycle",
+   "version": "v1.0",
+   "note": "root -> col -> root",
+   "expect": "retry",
+   "error": "Surface 's': components form a cycle: root -> col -> root",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "col"
+       },
+       {
+        "id": "col",
+        "component": "Column",
+        "children": [
+         "root"
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:duplicate_ids",
+   "version": "v1.0",
+   "note": "two components id root",
+   "expect": "retry",
+   "error": "Surface 's': duplicate component id 'root'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       },
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "again"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_id_not_an_identifier",
+   "version": "v1.0",
+   "note": "component ids MUST be UAX #31 identifiers (v1_0 a2ui_protocol.md, Catalog Entity Naming Rules)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'user-card' (Text): 'user-card' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_')",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "user-card"
+        ]
+       },
+       {
+        "id": "user-card",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:child_reference_not_an_identifier",
+   "version": "v1.0",
+   "note": "a reference is a ComponentId too",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Card): '1st_item' is not a valid component id: it must be a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_')",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Card",
+        "child": "1st_item"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_id_unicode_identifier",
+   "version": "v1.0",
+   "note": "UAX #31 admits non-ASCII letters",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "ünïcödé_1"
+        ]
+       },
+       {
+        "id": "ünïcödé_1",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:component_id_with_hyphen",
+   "version": "v0.9",
+   "note": "v0.9 sets no naming rule for component ids",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "user-card"
+        ]
+       },
+       {
+        "id": "user-card",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:udm_relative_path",
+   "version": "v1.0",
+   "note": "updateDataModel path 'a/b'",
+   "expect": "retry",
+   "error": "Operation 0: 'a/b' is not a JSON Pointer (at /updateDataModel/path)",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "a/b",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:udm_missing_value",
+   "version": "v1.0",
+   "note": "updateDataModel no value (v0.9 = delete; v1.0 requires value)",
+   "expect": "retry",
+   "error": "Operation 0: 'value' is a required property (at /updateDataModel)",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_unknown_catalog",
+   "version": "v1.0",
+   "note": "createSurface with a catalog the agent does not have: SDK CATALOG_NOT_FOUND",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/nope.json"
+     }
+    }
+   ],
+   "error": "Operation 0: unknown catalog 'https://example.com/nope.json' (at /createSurface/catalogId); use one of: 'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json'"
+  },
+  {
+   "id": "v1.0:create_twice",
+   "version": "v1.0",
+   "note": "same surface created twice: INTEGRITY_ERROR (a2ui_protocol.md, createSurface; SDK rejects)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ],
+   "error": "Operation 1: surface 's' already exists (operation 0 created it); send deleteSurface before creating it again, or use a new surfaceId"
+  },
+  {
+   "id": "v1.0:update_before_create",
+   "version": "v1.0",
+   "note": "a surface must be created before updates are sent to it (a2ui_protocol.md, createSurface)",
+   "expect": "retry",
+   "error": "Operation 0: 'updateComponents' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:data_model_before_create",
+   "version": "v1.0",
+   "note": "updateDataModel before createSurface",
+   "expect": "retry",
+   "error": "Operation 0: 'updateDataModel' targets surface 's' before operation 1 creates it; send createSurface first",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_after_delete",
+   "version": "v1.0",
+   "note": "the surface no longer exists",
+   "expect": "retry",
+   "error": "Operation 3: 'updateDataModel' targets surface 's' after operation 2 deleted it",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateDataModel": {
+      "surfaceId": "s",
+      "path": "/a",
+      "value": 1
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:delete_then_create",
+   "version": "v1.0",
+   "note": "deleting first allows the id again",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_earlier_surface_then_recreate",
+   "version": "v1.0",
+   "note": "update a surface from an earlier turn, delete it, create it anew",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "deleteSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:update_unknown_surface_noseed",
+   "version": "v1.0",
+   "note": "update-only, surface never created (no seeding in SDK)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:theme_removed",
+   "version": "v1.0",
+   "note": "v1.0 removed theme",
+   "expect": "retry",
+   "error": "Operation 0: Additional properties are not allowed ('theme' was unexpected) (at /createSurface)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "theme": {
+       "primaryColor": "#fff"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_inline_components",
+   "version": "v1.0",
+   "note": "createSurface with components + dataModel",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@path": "/g"
+        }
+       }
+      ],
+      "dataModel": {
+       "g": "hi"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_inline_no_root",
+   "version": "v1.0",
+   "note": "inline components without root",
+   "expect": "retry",
+   "error": "No component with id 'root' found on surface 's' — the A2UI spec requires the component tree to have a 'root' node.",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "components": [
+       {
+        "id": "a",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:create_inline_bad_prop",
+   "version": "v1.0",
+   "note": "inline Text.text=5",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (Text): 5 is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_catalog_components_no_catalogId",
+   "version": "v1.0",
+   "note": "surface w/o catalogId, component w/o @catalogId: does not resolve (no fallback; SDK CATALOG_NOT_FOUND)",
+   "expect": "retry",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 0: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)"
+  },
+  {
+   "id": "v1.0:no_catalog_components_with_catalogId",
+   "version": "v1.0",
+   "note": "surface w/o catalogId, component names basic",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_catalogId_basic",
+   "version": "v1.0",
+   "note": "component explicit catalogId",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:component_catalogId_unknown",
+   "version": "v1.0",
+   "note": "component catalogId unknown",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): unknown catalog 'https://example.com/nope.json'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://example.com/nope.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:metadata_ext_ok",
+   "version": "v1.0",
+   "note": "metadata.extensions identifier",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "metadata": {
+       "extensions": {
+        "a2ui_trace": "t-1"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:metadata_ext_bad",
+   "version": "v1.0",
+   "note": "metadata.extensions key '1x'",
+   "expect": "retry",
+   "error": "Operation 0: '1x' is not a UAX #31 identifier (a letter or '_', then letters, digits, marks or '_') (at /createSurface/metadata/extensions)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "metadata": {
+       "extensions": {
+        "1x": {}
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:slider_step_unknown",
+   "version": "v1.0",
+   "note": "Slider.step (spec: steps)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Slider): Unevaluated properties are not allowed ('step' was unexpected)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Slider",
+        "min": 1,
+        "max": 3,
+        "step": 1,
+        "value": {
+         "@path": "/n"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:call_renderer_openUrl",
+   "version": "v1.0",
+   "note": "callRendererFunction openUrl (rendererOnly in basic)",
+   "expect": "retry",
+   "error": "Operation 0: function 'openUrl' cannot be called by agent (allowedCallers is rendererOnly) (at /callRendererFunction/callFunction)",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "functionCallId": "fc-1",
+      "callFunction": {
+       "@call": "openUrl",
+       "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+       "args": {
+        "url": "https://example.com"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:call_renderer_missing_id",
+   "version": "v1.0",
+   "note": "callRendererFunction w/o functionCallId",
+   "expect": "retry",
+   "error": "Operation 0: 'args' is a required property (at /callRendererFunction/callFunction)",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "callFunction": {
+       "@call": "openUrl"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:agent_function_response",
+   "version": "v1.0",
+   "note": "agentFunctionResponse emitted by LLM",
+   "expect": "retry",
+   "error": "Operation 0: 'agentFunctionResponse' is sent by the server in reply to a 'callAgentFunction'; do not emit it.",
+   "messages": [
+    {
+     "version": "1.0",
+     "agentFunctionResponse": {
+      "functionCallId": "fc-1",
+      "value": 42
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:legacy_callFunction",
+   "version": "v1.0",
+   "note": "pre-RC callFunction message",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    {
+     "version": "1.0",
+     "functionCallId": "fc-1",
+     "callFunction": {
+      "call": "openUrl"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:nested_calls_6",
+   "version": "v1.0",
+   "note": "6-deep nested formatString",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@call": "formatString",
+         "args": {
+          "value": {
+           "@call": "formatString",
+           "args": {
+            "value": {
+             "@call": "formatString",
+             "args": {
+              "value": {
+               "@call": "formatString",
+               "args": {
+                "value": {
+                 "@call": "formatString",
+                 "args": {
+                  "value": {
+                   "@call": "formatString",
+                   "args": {
+                    "value": "Hi"
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:fn_args_wrong",
+   "version": "v1.0",
+   "note": "formatNumber value='x' (wrong arg type)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): {'@call': 'formatNumber', 'args': {'value': 'x'}} is not of type 'string'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": {
+         "@call": "formatNumber",
+         "args": {
+          "value": "x"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:uc_existing_missing_type",
+   "version": "v1.0",
+   "note": "update existing component without 'component' (v1.0 required)",
+   "expect": "retry",
+   "error": "Operation 1: 'component' is a required property (at /updateComponents/components/0)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "text": "b"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_widget_ok",
+   "version": "v0.9",
+   "note": "MyWidget on custom surface",
+   "expect": "frames",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_widget_missing_foo",
+   "version": "v0.9",
+   "note": "MyWidget w/o foo",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): 'foo' is a required property",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_widget_foo_int",
+   "version": "v0.9",
+   "note": "MyWidget foo=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): 5 is not of type 'string'",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_widget_extra_prop",
+   "version": "v0.9",
+   "note": "MyWidget extra prop bar",
+   "expect": "frames",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x",
+        "bar": 1
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_basic_on_custom_surface",
+   "version": "v0.9",
+   "note": "v0.9: the custom catalog is used in place of the basic one (a2ui_protocol.md L157)",
+   "expect": "retry",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w",
+         "t"
+        ]
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (Column): unknown component 'Column'"
+  },
+  {
+   "id": "custom:v09_widget_on_basic_surface",
+   "version": "v0.9",
+   "note": "v0.9: with a custom catalog, the basic one is not the agent's",
+   "expect": "retry",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 0: unknown catalog 'https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json' (at /createSurface/catalogId); use one of: 'https://example.com/cat.json'"
+  },
+  {
+   "id": "custom:v10_widget_ok",
+   "version": "v1.0",
+   "note": "MyWidget on custom surface",
+   "expect": "frames",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_widget_missing_foo",
+   "version": "v1.0",
+   "note": "MyWidget w/o foo",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): 'foo' is a required property",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_widget_foo_int",
+   "version": "v1.0",
+   "note": "MyWidget foo=5",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): 5 is not of type 'string'",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": 5
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_widget_extra_prop",
+   "version": "v1.0",
+   "note": "MyWidget extra prop bar",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): Unevaluated properties are not allowed ('bar' was unexpected)",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x",
+        "bar": 1
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_basic_on_custom_surface",
+   "version": "v1.0",
+   "note": "v1.0: a component resolves only against its @catalogId or the surface default, no fallback (L511-522)",
+   "expect": "retry",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w",
+         "t"
+        ]
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (Column): unknown component 'Column'"
+  },
+  {
+   "id": "custom:v10_widget_on_basic_surface",
+   "version": "v1.0",
+   "note": "MyWidget on basic surface",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (MyWidget): unknown component 'MyWidget'",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "MyWidget",
+        "foo": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_basic_with_catalog_id_on_custom_surface",
+   "version": "v1.0",
+   "note": "v1.0: mixable catalogs, a basic component names its catalog",
+   "expect": "frames",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/cat.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w",
+         "t"
+        ],
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_widget_with_catalog_id_on_basic_surface",
+   "version": "v1.0",
+   "note": "v1.0: mixable catalogs, a custom component names its catalog",
+   "expect": "frames",
+   "catalog": "widget_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "w"
+        ]
+       },
+       {
+        "id": "w",
+        "component": "MyWidget",
+        "foo": "x",
+        "@catalogId": "https://example.com/cat.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_override_customText_ok",
+   "version": "v1.0",
+   "note": "custom Text with customText on custom surface",
+   "expect": "frames",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "customText": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_override_text_on_custom",
+   "version": "v1.0",
+   "note": "basic-style Text on custom surface",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 'customText' is a required property",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_no_default_catalog_text",
+   "version": "v1.0",
+   "note": "no catalogId: upstream has no fallback to the agent's catalog (v1_0 a2ui_protocol.md, catalog resolution)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_no_default_catalog_customText",
+   "version": "v1.0",
+   "note": "no catalogId: even a component the agent's catalog accepts does not resolve",
+   "expect": "retry",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "customText": "x"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 1: Component 'root' (Text): names no '@catalogId' and the surface has no default 'catalogId' (set it in createSurface)"
+  },
+  {
+   "id": "v1.0:no_default_catalog_create_only",
+   "version": "v1.0",
+   "note": "createSurface without catalogId and no components: nothing to resolve (SDK accepts)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_explicit_components",
+   "version": "v1.0",
+   "note": "no surface default, every component names its catalog",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "hi",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_function",
+   "version": "v1.0",
+   "note": "no surface default: a function call without catalogId does not resolve",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): function 'formatString' names no 'catalogId' and the surface has no default 'catalogId' (set it in createSurface)",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "text": {
+         "@call": "formatString",
+         "args": {
+          "value": "hi"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:no_default_catalog_function_explicit",
+   "version": "v1.0",
+   "note": "no surface default, the call names its catalog",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+        "text": {
+         "@call": "formatString",
+         "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+         "args": {
+          "value": "hi"
+         }
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_override_explicit_basic",
+   "version": "v1.0",
+   "note": "Text text with catalogId=basic on custom surface",
+   "expect": "frames",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "x",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_override_customText_on_basic",
+   "version": "v1.0",
+   "note": "customText on basic surface",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Text): 'text' is a required property",
+   "catalog": "text_override_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "customText": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_agentfn_call_renderer",
+   "version": "v1.0",
+   "note": "callRendererFunction of agentOnly lookup",
+   "expect": "frames",
+   "catalog": "agent_fn_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "functionCallId": "fc-1",
+      "callFunction": {
+       "@call": "lookup",
+       "catalogId": "https://mycompany.com/cat.json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_agentfn_in_button",
+   "version": "v1.0",
+   "note": "agentOnly function bound in Button action",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (Button): function 'lookup' cannot be called by renderer (allowedCallers is agentOnly)",
+   "catalog": "agent_fn_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://mycompany.com/cat.json",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "t",
+        "action": {
+         "functionCall": {
+          "@call": "lookup",
+          "catalogId": "https://mycompany.com/cat.json"
+         }
+        },
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "x",
+        "@catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_rendererfn_call_renderer",
+   "version": "v1.0",
+   "note": "a custom rendererOnly function exists but the agent may not call it (a2ui_protocol.md, callRendererFunction)",
+   "expect": "retry",
+   "error": "Operation 0: function 'localCheck' cannot be called by agent (allowedCallers is rendererOnly) (at /callRendererFunction/callFunction)",
+   "catalog": "renderer_fn_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "functionCallId": "fc",
+      "callFunction": {
+       "@call": "localCheck",
+       "catalogId": "https://mycompany.com/cat.json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:surface_component",
+   "version": "v1.0",
+   "note": "the Surface container is created by createSurface and cannot be sent in updateComponents",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Surface): component type 'Surface' is reserved for the container createSurface creates and cannot be sent as a component",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Surface",
+        "child": "t"
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:delete_missing_surfaceId",
+   "version": "v0.9",
+   "note": "deleteSurface without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /deleteSurface)",
+   "messages": [
+    {
+     "version": "v0.9",
+     "deleteSurface": {}
+    }
+   ]
+  },
+  {
+   "id": "v0.9:non_object_operation",
+   "version": "v0.9",
+   "note": "an operation that is a list",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    [
+     1
+    ]
+   ]
+  },
+  {
+   "id": "custom:v0.9_escaped_component_name",
+   "version": "v0.9",
+   "note": "component definition named with JSON Pointer characters",
+   "expect": "frames",
+   "catalog": "escaped_component",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Widget"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v0.9_escaped_component_name_is_not_a_type",
+   "version": "v0.9",
+   "note": "the definition name is not a component type",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (widget/~definition): unknown component 'widget/~definition'",
+   "catalog": "escaped_component",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "widget/~definition"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:delete_missing_surfaceId",
+   "version": "v0.9.1",
+   "note": "deleteSurface without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /deleteSurface)",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "deleteSurface": {}
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:non_object_operation",
+   "version": "v0.9.1",
+   "note": "an operation that is a list",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    [
+     1
+    ]
+   ]
+  },
+  {
+   "id": "custom:v0.9.1_escaped_component_name",
+   "version": "v0.9.1",
+   "note": "component definition named with JSON Pointer characters",
+   "expect": "frames",
+   "catalog": "escaped_component",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Widget"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v0.9.1_escaped_component_name_is_not_a_type",
+   "version": "v0.9.1",
+   "note": "the definition name is not a component type",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (widget/~definition): unknown component 'widget/~definition'",
+   "catalog": "escaped_component",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "widget/~definition"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:delete_missing_surfaceId",
+   "version": "v1.0",
+   "note": "deleteSurface without surfaceId",
+   "expect": "retry",
+   "error": "Operation 0: 'surfaceId' is a required property (at /deleteSurface)",
+   "messages": [
+    {
+     "version": "1.0",
+     "deleteSurface": {}
+    }
+   ]
+  },
+  {
+   "id": "v1.0:non_object_operation",
+   "version": "v1.0",
+   "note": "an operation that is a list",
+   "expect": "retry",
+   "error": "Operation 0 is not an A2UI message: expected an object with exactly one of ['agentFunctionResponse', 'callRendererFunction', 'createSurface', 'deleteSurface', 'updateComponents', 'updateDataModel']",
+   "messages": [
+    [
+     1
+    ]
+   ]
+  },
+  {
+   "id": "v1.0:call_renderer_unknown_function",
+   "version": "v1.0",
+   "note": "callRendererFunction naming an unknown function",
+   "expect": "retry",
+   "error": "Operation 0: unknown function 'nope' (at /callRendererFunction/callFunction)",
+   "messages": [
+    {
+     "version": "1.0",
+     "callRendererFunction": {
+      "functionCallId": "f",
+      "callFunction": {
+       "@call": "nope",
+       "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:text_field_missing_value",
+   "version": "v1.0",
+   "note": "TextField requires value in v1.0",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (TextField): 'value' is a required property",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "TextField",
+        "label": "Name"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:text_field_with_value",
+   "version": "v1.0",
+   "note": "TextField with value",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "TextField",
+        "label": "Name",
+        "value": "Ada"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_basic_text_with_custom_catalog",
+   "version": "v0.9",
+   "note": "v0.9: the custom catalog is used in place of the basic one",
+   "expect": "retry",
+   "catalog": "widget_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ],
+   "error": "Operation 0: Component 'root' (Text): unknown component 'Text'"
+  },
+  {
+   "id": "custom:v10_ref_local_def",
+   "version": "v1.0",
+   "note": "custom catalog $ref to its own $defs",
+   "expect": "frames",
+   "catalog": "ref_local_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_ref_common_types",
+   "version": "v1.0",
+   "note": "custom catalog $ref to common_types.json",
+   "expect": "frames",
+   "catalog": "ref_common_types_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_ref_own_components_and_functions",
+   "version": "v1.0",
+   "note": "custom catalog anyComponent/anyFunction over its own definitions",
+   "expect": "frames",
+   "catalog": "ref_own_definitions_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_ref_in_annotations_ignored",
+   "version": "v1.0",
+   "note": "$ref inside annotation keywords is not a reference",
+   "expect": "frames",
+   "catalog": "ref_in_annotations_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_cross_catalog_ref",
+   "version": "v0.9",
+   "note": "v0.9 keeps cross-catalog references",
+   "expect": "frames",
+   "catalog": "cross_catalog_ref_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": {
+         "id": "t",
+         "component": "Text",
+         "text": "Hi"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v09_cross_catalog_ref_wrong_type",
+   "version": "v0.9",
+   "note": "v0.9 cross-catalog reference is enforced",
+   "expect": "retry",
+   "error": "Operation 0: Component 'root' (Label): 'Hi' is not of type 'object'",
+   "catalog": "cross_catalog_ref_v09",
+   "messages": [
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Label",
+        "text": "Hi"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:button_fn_openUrl_not_a_uri",
+   "version": "v0.9",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_leap_day",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_time",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_not_a_date",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9:datetime_min_non_leap_day",
+   "version": "v0.9",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:button_fn_openUrl_not_a_uri",
+   "version": "v0.9.1",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_leap_day",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_time",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_not_a_date",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v0.9.1:datetime_min_non_leap_day",
+   "version": "v0.9.1",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "v0.9.1",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "v0.9.1",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:button_fn_openUrl_not_a_uri",
+   "version": "v1.0",
+   "note": "openUrl url must be a 'uri' (upstream function_catalog_validation.json, asserted as ajv-formats does)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (Button): 'not a uri' is not a 'uri'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Button",
+        "child": "bt",
+        "action": {
+         "functionCall": {
+          "@call": "openUrl",
+          "args": {
+           "url": "not a uri"
+          }
+         }
+        }
+       },
+       {
+        "id": "bt",
+        "component": "Text",
+        "text": "Open"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_leap_day",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_time",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "frames",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "10:00:00Z"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_not_a_date",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2024-13-01' is not a 'date'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2024-13-01"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "v1.0:datetime_min_non_leap_day",
+   "version": "v1.0",
+   "note": "DateTimeInput min must be a date, time or date-time (RFC 3339)",
+   "expect": "retry",
+   "error": "Operation 1: Component 'root' (DateTimeInput): '2023-02-29' is not a 'date'",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "DateTimeInput",
+        "value": {
+         "@path": "/d"
+        },
+        "enableDate": true,
+        "enableTime": true,
+        "min": "2023-02-29"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_ok",
+   "version": "v1.0",
+   "note": "allowedParents/allowedChildren satisfied (after upstream conformance composition_catalog_v1_0.json)",
+   "expect": "frames",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "t",
+         "inner"
+        ]
+       },
+       {
+        "id": "t",
+        "component": "Text",
+        "text": "a"
+       },
+       {
+        "id": "inner",
+        "component": "Column",
+        "children": []
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_unconstrained_root",
+   "version": "v1.0",
+   "note": "a type with no allowedParents may be root",
+   "expect": "frames",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Badge",
+        "label": "x"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_root_not_allowed_under_surface",
+   "version": "v1.0",
+   "note": "root mounts under Surface; Text allows only Column (UNALLOWED_PARENT)",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Text) cannot be placed in 'Surface' (Surface): its allowedParents are 'Column'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_root_not_allowed_under_surface_on_update",
+   "version": "v1.0",
+   "note": "root mounts under Surface on any updateComponents, not only a new surface",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Text) cannot be placed in 'Surface' (Surface): its allowedParents are 'Column'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Text",
+        "text": "a"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "custom:v10_composition_child_not_allowed",
+   "version": "v1.0",
+   "note": "Column allows only Text and Column children (UNALLOWED_CHILD)",
+   "expect": "retry",
+   "error": "Surface 's': component 'root' (Column) cannot contain 'b' (Badge): its allowedChildren are 'Column', 'Text'",
+   "catalog": "composition_v10",
+   "messages": [
+    {
+     "version": "1.0",
+     "createSurface": {
+      "surfaceId": "s",
+      "catalogId": "https://example.com/composition.json"
+     }
+    },
+    {
+     "version": "1.0",
+     "updateComponents": {
+      "surfaceId": "s",
+      "components": [
+       {
+        "id": "root",
+        "component": "Column",
+        "children": [
+         "b"
+        ]
+       },
+       {
+        "id": "b",
+        "component": "Badge",
+        "label": "x"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

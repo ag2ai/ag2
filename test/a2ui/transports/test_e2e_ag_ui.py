@@ -31,6 +31,8 @@ from ag2.events import ModelMessage, ModelRequest, ModelResponse, TextInput, Too
 from ag2.middleware.base import BaseMiddleware
 from ag2.testing import TestConfig, TrackingConfig
 
+from ..seam import from_renderer
+
 _CATALOG = "https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"
 _A2UI_RESPONSE = (
     "Here is your UI.\n<a2ui-json>\n"
@@ -215,7 +217,7 @@ async def test_call_agent_function_in_forwarded_props_is_answered_by_the_server(
     )
     envelope: Any = _CALL_AGENT_FUNCTION if carrier == "a2uiAction" else [_CALL_AGENT_FUNCTION]
 
-    events = await _dispatch_events(server, _forwarded_input({carrier: envelope}))
+    events = await _dispatch_events(server, _forwarded_input(from_renderer({carrier: envelope})))
 
     assert called == ["PRV-102"]
     assert [e for e in events if e["type"] == "TEXT_MESSAGE_CHUNK"] == []
@@ -304,6 +306,21 @@ async def test_renderer_function_response_in_forwarded_props_reaches_the_agent()
     assert isinstance(sent, ModelRequest)
     turn_text = " ".join(p.content for p in sent.parts if isinstance(p, TextInput))
     assert "Berlin" in turn_text
+
+
+@pytest.mark.asyncio
+async def test_renderer_function_response_is_dropped_before_v1_0(caplog: pytest.LogCaptureFixture) -> None:
+    tracking = TrackingConfig(TestConfig("Got it."))
+    server = A2UIServer(Agent(name="ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    response = {"version": "v0.9", "rendererFunctionResponse": {"functionCallId": "fc-7", "value": "Berlin"}}
+
+    with caplog.at_level("WARNING", logger="ag2.a2ui.incoming"):
+        await _dispatch_events(server, _forwarded_input({"a2uiAction": response}))
+
+    assert "exists only in protocol v1.0" in caplog.text
+    sent = tracking.mock.call_args_list[0].args[0]
+    assert isinstance(sent, ModelRequest)
+    assert "Berlin" not in " ".join(p.content for p in sent.parts if isinstance(p, TextInput))
 
 
 @pytest.mark.asyncio
@@ -499,3 +516,33 @@ async def test_client_context_reaches_the_prompt() -> None:
     [prompt] = seen
     assert prompt[0] == "Be helpful."
     assert prompt[-1] == "## Context from the application\n\n- The user's locale: en-GB"
+
+
+@pytest.mark.asyncio
+async def test_renderer_capabilities_and_data_model_ride_forwarded_props() -> None:
+    tracking = TrackingConfig(TestConfig("ok"))
+    server = A2UIServer(Agent("ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.forwarded_props = {
+        "a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": [_CATALOG]}},
+        "a2uiClientDataModel": {"surfaces": {"s1": {"name": "Ada"}}},
+    }
+
+    await _dispatch_events(server, incoming)
+
+    prompt = "\n".join(tracking.calls[0].prompt)
+    assert "## A2UI Client Capabilities" in prompt
+    assert '"name": "Ada"' in prompt
+
+
+@pytest.mark.asyncio
+async def test_renderer_without_the_agents_catalog_gets_no_a2ui_over_ag_ui() -> None:
+    tracking = TrackingConfig(TestConfig(_A2UI_RESPONSE))
+    server = A2UIServer(Agent("ui", config=tracking), transport=AgUiTransport(), validate_responses=False)
+    incoming = _run_input("hi")
+    incoming.forwarded_props = {"a2uiClientCapabilities": {"v0.9": {"supportedCatalogIds": ["https://x.example/c"]}}}
+
+    events = await _dispatch_events(server, incoming)
+
+    assert [e for e in events if e["type"] == "ACTIVITY_SNAPSHOT"] == []
+    assert _CATALOG not in "\n".join(tracking.calls[0].prompt)

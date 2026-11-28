@@ -18,7 +18,6 @@ class TestDecorator:
         assert isinstance(action, A2UIEventAction)
         assert action.name == "add_to_basket"
         assert action.description == "Add to cart."
-        assert action.action_type == "event"
 
     def test_call_with_overrides(self) -> None:
         @a2ui_action(name="add", description="Add an item")
