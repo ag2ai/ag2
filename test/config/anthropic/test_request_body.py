@@ -4,8 +4,8 @@
 
 """What actually goes out on the wire, pinned through an ``httpx2`` mock transport.
 
-The `anthropic` 1.x floor made header names match case-insensitively, and the
-2.x API version dropped the sampling parameters. Both are only observable in the
+The `anthropic` SDK matches header names case-insensitively, and the API version
+it sends dropped the sampling parameters. Both are only observable in the
 request the SDK builds, so they are asserted there rather than against AG2's own kwargs.
 """
 
