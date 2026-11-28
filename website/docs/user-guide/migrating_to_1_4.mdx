@@ -3,12 +3,13 @@ title: Migrating to 1.4
 sidebarTitle: Migration · 1.4
 ---
 
-AG2 1.4.0 removes the APIs that 1.3 deprecated. Each of them emitted a `DeprecationWarning` in 1.3, so running your tests on 1.3 with warnings turned into errors (`python -W error::DeprecationWarning` or `pytest -W error::DeprecationWarning`) finds every call site below before you upgrade.
+AG2 1.4.0 removes the APIs that 1.3 deprecated, and drops `anthropic` 1.x. Each removed API emitted a `DeprecationWarning` in 1.3, so running your tests on 1.3 with warnings turned into errors (`python -W error::DeprecationWarning` or `pytest -W error::DeprecationWarning`) finds every call site below before you upgrade.
 
 | Removed in 1.4.0 | Use instead |
 |---|---|
 | `OpenAIConfig` selecting Chat Completions | `OpenAICompletionsConfig`, or `OpenAIConfig` / `OpenAIResponsesConfig` for the Responses API |
-| `temperature`, `top_p`, `top_k` on `AnthropicConfig` | Nothing on `anthropic` 2.x; `extra_body` on `anthropic` 1.x |
+| `temperature`, `top_p`, `top_k` on `AnthropicConfig` | Nothing: the API rejects them |
+| `anthropic` 1.x | `anthropic>=2,<3` |
 | `google-genai` 2.x | `google-genai>=3,<4` |
 | `Agent(assembly=...)` | `middleware=[Middleware(AssemblerMiddleware, ...), Middleware(HaltCheckMiddleware)]` |
 | `Agent(knowledge=KnowledgeConfig(...))` | `plugins=[KnowledgePlugin(...)]` |
@@ -33,15 +34,11 @@ config = OpenAIConfig(model="gpt-5", max_output_tokens=1024)
 
 `OpenAIConfig` rejects Chat Completions parameters with a `TypeError`. Translate them when moving to Responses, for example `max_completion_tokens` to `max_output_tokens` and `reasoning_effort` to `reasoning`. See [Model Configuration](/docs/user-guide/model_configuration).
 
-## Anthropic sampling parameters
+## Anthropic SDK 2.x and sampling parameters
 
-`AnthropicConfig` no longer has `temperature`, `top_p` or `top_k`. The Messages API version that `anthropic` 2.x sends answers HTTP 400 to all three, so with 2.x delete them. With `anthropic` 1.x, whose API version still reads them, pass them through `extra_body`:
+`ag2[anthropic]` requires `anthropic>=2.0.0,<3`. 1.3 did not warn about this, so check `pip show anthropic` and upgrade with `pip install -U "anthropic>=2,<3"`.
 
-```python linenums="1"
-from ag2.config import AnthropicConfig
-
-config = AnthropicConfig(model="claude-haiku-4-5", extra_body={"temperature": 0})
-```
+`AnthropicConfig` no longer has `temperature`, `top_p` or `top_k`. The Messages API version that `anthropic` 2.x sends answers HTTP 400 to all three, so delete them.
 
 ## google-genai 3.x
 
