@@ -1,0 +1,142 @@
+---
+title: Migrating to 1.4
+sidebarTitle: Migration · 1.4
+---
+
+AG2 1.4.0 removes the APIs that 1.3 deprecated, and drops `anthropic` 1.x. Each removed API emitted a `DeprecationWarning` in 1.3, so running your tests on 1.3 with warnings turned into errors (`python -W error::DeprecationWarning` or `pytest -W error::DeprecationWarning`) finds every call site below before you upgrade.
+
+| Removed in 1.4.0 | Use instead |
+|---|---|
+| `OpenAIConfig` selecting Chat Completions | `OpenAICompletionsConfig`, or `OpenAIConfig` / `OpenAIResponsesConfig` for the Responses API |
+| `temperature`, `top_p`, `top_k` on `AnthropicConfig` | Nothing: the API rejects them |
+| `anthropic` 1.x | `anthropic>=2,<3` |
+| `google-genai` 2.x | `google-genai>=3,<4` |
+| `Agent(assembly=...)` | `middleware=[Middleware(AssemblerMiddleware, ...), Middleware(HaltCheckMiddleware)]` |
+| `Agent(knowledge=KnowledgeConfig(...))` | `plugins=[KnowledgePlugin(...)]` |
+| `Agent(tasks=TaskConfig(...))`, `Agent.tasks`, `run_subtask` / `run_subtasks` | Worker Agents exposed through `Agent.as_tool()` |
+| `Agent.task()` | `Task(owner_id=agent.name, spec=TaskSpec(...))` |
+
+## OpenAIConfig is the Responses API
+
+`OpenAIConfig` is now an alias for `OpenAIResponsesConfig`. Code that relied on it calling Chat Completions, including OpenAI-compatible servers that serve only `/chat/completions`, must name `OpenAICompletionsConfig`:
+
+```python linenums="1"
+from ag2.config import OpenAICompletionsConfig, OpenAIConfig
+
+# 1.3 (Chat Completions): OpenAIConfig(model="gpt-5", max_completion_tokens=1024)
+
+# 1.4: keep Chat Completions
+config = OpenAICompletionsConfig(model="gpt-5", max_completion_tokens=1024)
+
+# 1.4: or move to the Responses API
+config = OpenAIConfig(model="gpt-5", max_output_tokens=1024)
+```
+
+`OpenAIConfig` rejects Chat Completions parameters with a `TypeError`. Translate them when moving to Responses, for example `max_completion_tokens` to `max_output_tokens` and `reasoning_effort` to `reasoning`. See [Model Configuration](/docs/user-guide/model_configuration).
+
+## Anthropic SDK 2.x and sampling parameters
+
+`ag2[anthropic]` requires `anthropic>=2.0.0,<3`. 1.3 did not warn about this, so check `pip show anthropic` and upgrade with `pip install -U "anthropic>=2,<3"`.
+
+`AnthropicConfig` no longer has `temperature`, `top_p` or `top_k`. The Messages API version that `anthropic` 2.x sends answers HTTP 400 to all three, so delete them.
+
+## google-genai 3.x
+
+`ag2[gemini]` requires `google-genai>=3.0.0,<4`. Upgrade with `pip install -U "google-genai>=3,<4"`. Developer API requests now go to `v1` by default; set `api_version="v1beta"` for the `-latest` aliases and the `-preview` models that exist only there. See [Gemini API Version and HTTP Client](/docs/user-guide/model_configuration#gemini-api-version-and-http-client).
+
+## Context policies: `assembly=`
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.assembly import AssemblerMiddleware
+from ag2.config import OpenAIResponsesConfig
+from ag2.middleware import HaltCheckMiddleware, Middleware
+from ag2.policies import AlertPolicy, SlidingWindowPolicy
+
+config = OpenAIResponsesConfig(model="gpt-5")
+
+# 1.3: Agent("assistant", config=config, assembly=[AlertPolicy(), SlidingWindowPolicy(max_events=50)])
+
+# 1.4
+agent = Agent(
+    "assistant",
+    config=config,
+    middleware=[
+        Middleware(AssemblerMiddleware, policies=[AlertPolicy(), SlidingWindowPolicy(max_events=50)]),
+        Middleware(HaltCheckMiddleware),
+    ],
+)
+```
+
+`HaltCheckMiddleware` is needed only with `AlertPolicy`. Policies added by plugins or `add_policy()` still join the agent's assembler. See [Assembly](/docs/user-guide/advanced/assembly).
+
+## Knowledge: `knowledge=`
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.config import OpenAIResponsesConfig
+from ag2.knowledge import KnowledgePlugin, MemoryKnowledgeStore
+
+config = OpenAIResponsesConfig(model="gpt-5")
+
+# 1.3: Agent("assistant", config=config, knowledge=KnowledgeConfig(store=MemoryKnowledgeStore()))
+
+# 1.4
+agent = Agent("assistant", config=config, plugins=[KnowledgePlugin(store=MemoryKnowledgeStore())])
+```
+
+Every other `KnowledgeConfig` field moves unchanged into `KnowledgePlugin`. One difference: the plugin's store is a dependency default, so `dependencies={KnowledgeStore: other}` on the Agent or on `ask()` now replaces it. See [Agent Harness](/docs/user-guide/agent_harness#migrating-from-knowledge).
+
+## Delegation: `tasks=TaskConfig(...)`
+
+Build the worker explicitly and give the parent its delegate tool. Nothing is inherited from the parent: pass the worker its own `config`, `prompt` and `tools`.
+
+```python linenums="1"
+from ag2 import Agent, tool
+from ag2.config import OpenAIResponsesConfig
+
+config = OpenAIResponsesConfig(model="gpt-5")
+
+@tool
+def search(query: str) -> str:
+    """Search the knowledge base."""
+    return f"results for {query}"
+
+# 1.3: Agent("coordinator", config=config, tools=[search], tasks=TaskConfig())
+
+# 1.4
+worker = Agent(
+    "worker",
+    prompt="Complete the assigned task concisely. Return only the result.",
+    config=config,
+    tools=[search],
+)
+coordinator = Agent(
+    "coordinator",
+    prompt="Delegate independent work to task_worker, then combine the results.",
+    config=config,
+    tools=[search, worker.as_tool(description="Complete a focused sub-task.")],
+)
+```
+
+Prompts that named `run_subtask` or `run_subtasks` must name the delegate tool (`task_worker` above). The [migration guide](/docs/user-guide/subagents#migrating-from-taskconfig) maps every `TaskConfig` field and explains how to cap concurrency without `max_concurrency`.
+
+## Tasks: `Agent.task()`
+
+```python linenums="1"
+from ag2 import Agent
+from ag2.task import Task, TaskSpec
+
+agent = Agent("indexer")
+
+# 1.3: agent.task("index documents", payload={"region": "eu"}, ttl_seconds=60)
+
+# 1.4
+task = Task(
+    owner_id=agent.name,
+    spec=TaskSpec(title="index documents", payload={"region": "eu"}),
+    ttl_seconds=60,
+)
+```
+
+`context`, `ttl_seconds`, `checkpoint_store` and `resume_from` are `Task` arguments; `description`, `payload` and `capability` belong to `TaskSpec`. See [Tasks](/docs/user-guide/tasks).
