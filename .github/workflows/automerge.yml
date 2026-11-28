@@ -32,6 +32,13 @@ jobs:
             echo 'Not a verified Dependabot head; leaving this PR for manual review.'
             exit 0
           fi
-          gh api --method POST "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" \
-            -f event=APPROVE -f commit_id="$HEAD_SHA" > /dev/null
+          # Dependabot re-triggers this workflow on the same head; approve each head only once.
+          reviews=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews?per_page=100")
+          if ! jq -e --arg head "$HEAD_SHA" 'flatten | any(.[]; .user.login == "github-actions[bot]" and
+            .state == "APPROVED" and .commit_id == $head)' <<< "$reviews" > /dev/null; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/pulls/$PR/reviews" \
+              -f event=APPROVE -f commit_id="$HEAD_SHA" > /dev/null
+          else
+            echo "Head $HEAD_SHA already approved by this workflow; re-enabling auto-merge only."
+          fi
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD_SHA"
