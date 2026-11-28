@@ -503,19 +503,41 @@ def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
     context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
 
 
-async def _record_configured_prompt(call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
-    """Publish the agent's own prompt, then hand the call to invocation middleware.
+class _ConfiguredPrompt:
+    """Capture session instructions at the boundaries of invocation middleware."""
 
-    Sits between the agent's middleware and the middleware supplied for this
-    invocation, so a client whose instructions outlive the invocation (an ACP
-    session) can tell the two apart. Fragments marked as ``_PluginPrompt`` were
-    contributed by invocation plugins (their prompts and assembly policies) and
-    are left out.
-    """
-    context.dependencies[CONFIGURED_PROMPT_CONTEXT_KEY] = tuple(
-        fragment for fragment in context.prompt if not isinstance(fragment, _PluginPrompt)
-    )
-    return await call_next(events, context)
+    def __init__(self) -> None:
+        self._before_invocation_turn: tuple[str, ...] | None = None
+        self._fallback: tuple[str, ...] | None = None
+
+    async def enter_invocation_turn(self, call_next: AgentTurn, event: BaseEvent, context: Context) -> ModelResponse:
+        previous = self._before_invocation_turn
+        self._before_invocation_turn = tuple(context.prompt)
+        try:
+            return await call_next(event, context)
+        finally:
+            self._before_invocation_turn = previous
+
+    async def enter_model_call(
+        self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context
+    ) -> ModelResponse:
+        previous = self._fallback
+        before_turn = self._before_invocation_turn
+        # Configured LLM middleware can assemble its instructions from the
+        # effective prompt. If invocation turn middleware changed that input,
+        # use the last snapshot taken before it could influence the result.
+        self._fallback = before_turn if before_turn is not None and tuple(context.prompt) != before_turn else None
+        try:
+            return await call_next(events, context)
+        finally:
+            self._fallback = previous
+
+    async def record(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        prompt = self._fallback if self._fallback is not None else context.prompt
+        context.dependencies[CONFIGURED_PROMPT_CONTEXT_KEY] = tuple(
+            fragment for fragment in prompt if not isinstance(fragment, _PluginPrompt)
+        )
+        return await call_next(events, context)
 
 
 class _InvocationPolicy:
@@ -1680,7 +1702,7 @@ class Agent(PluginTarget, Generic[TResult]):
             # apart from values the caller supplied for this request.
             configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
             _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
-            # Refreshed before each LLM call by `_record_configured_prompt`.
+            # Refreshed before each LLM call by `_ConfiguredPrompt`.
             _set_for_turn(stack, context.dependencies, CONFIGURED_PROMPT_CONTEXT_KEY, ())
             delegation = _owned_delegation(context)
             lifecycle: RunLifecycle | None = None
@@ -1827,15 +1849,21 @@ class Agent(PluginTarget, Generic[TResult]):
             if self._policies or turn_policies:
                 _attach_policies(factories, self._policies, turn_policies)
 
-            # Invocation middleware innermost, the agent's own outside it, and
-            # the configured prompt recorded at the boundary between the two.
+            # Invocation middleware runs inside the agent's middleware.
+            # Capture the prompt before invocation hooks can change it.
             agent_turn, llm_call = _wrap_in_middleware(
                 additional_middleware, event, context, agent_turn, llm_call, middleware_instances
             )
-            llm_call = partial(_record_configured_prompt, llm_call)
+            configured_prompt = _ConfiguredPrompt()
+            if additional_middleware:
+                agent_turn = partial(configured_prompt.enter_invocation_turn, agent_turn)
+            llm_call = partial(configured_prompt.record, llm_call)
             agent_turn, llm_call = _wrap_in_middleware(
                 factories, event, context, agent_turn, llm_call, middleware_instances
             )
+
+            if additional_middleware:
+                llm_call = partial(configured_prompt.enter_model_call, llm_call)
 
             # construct LLM callback
             async def _call_client(event: BaseEvent, context: Context) -> None:

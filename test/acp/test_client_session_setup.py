@@ -20,7 +20,7 @@ from acp import schema
 from ag2 import Agent, Context, MemoryStream, Plugin
 from ag2.acp.testing import FakeACPConfig, duplex_acp_config
 from ag2.events import BaseEvent, ModelResponse
-from ag2.middleware import BaseMiddleware, LLMCall
+from ag2.middleware import AgentTurn, BaseMiddleware, LLMCall
 
 OPTIONS = schema.SessionCapabilities(options=schema.SessionOptionsCapabilities())
 SYSTEM_PROMPT = schema.SessionCapabilities(system_prompt=schema.SessionSystemPromptCapabilities())
@@ -46,6 +46,16 @@ class SuffixMiddleware(BaseMiddleware):
         context.prompt = [*original, "Middleware instruction"]
         try:
             return await call_next(events, context)
+        finally:
+            context.prompt = original
+
+
+class TurnSuffixMiddleware(BaseMiddleware):
+    async def on_turn(self, call_next: AgentTurn, event: BaseEvent, context: Context) -> ModelResponse:
+        original = context.prompt
+        context.prompt = [*original, "Middleware instruction"]
+        try:
+            return await call_next(event, context)
         finally:
             context.prompt = original
 
@@ -227,8 +237,9 @@ class TestInstructions:
         ]
         assert "Instructions supplied for this invocation only are not sent" in caplog.text
 
+    @pytest.mark.parametrize("middleware", [SuffixMiddleware, TurnSuffixMiddleware])
     async def test_invocation_middleware_does_not_outlive_its_invocation_on_the_peer(
-        self, caplog: pytest.LogCaptureFixture
+        self, middleware: type[BaseMiddleware], caplog: pytest.LogCaptureFixture
     ) -> None:
         log: list[tuple[str, Any]] = []
         cfg = _config(log, capabilities=SYSTEM_PROMPT)
@@ -237,7 +248,7 @@ class TestInstructions:
 
         try:
             with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
-                await agent.ask("first", stream=stream, middleware=[SuffixMiddleware])
+                await agent.ask("first", stream=stream, middleware=[middleware])
             await agent.ask("second", stream=stream)
         finally:
             await cfg.aclose()
@@ -270,13 +281,16 @@ class TestInstructions:
         ]
         assert "Instructions supplied for this invocation only are not sent" in caplog.text
 
-    async def test_the_agents_own_middleware_reaches_the_peer(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.parametrize("middleware", [SuffixMiddleware, TurnSuffixMiddleware])
+    async def test_the_agents_own_middleware_reaches_the_peer(
+        self, middleware: type[BaseMiddleware], caplog: pytest.LogCaptureFixture
+    ) -> None:
         log: list[tuple[str, Any]] = []
         cfg = _config(log, capabilities=SYSTEM_PROMPT)
 
         try:
             with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
-                await Agent("acp", "Answer in French.", config=cfg, middleware=[SuffixMiddleware]).ask("hello")
+                await Agent("acp", "Answer in French.", config=cfg, middleware=[middleware]).ask("hello")
         finally:
             await cfg.aclose()
 

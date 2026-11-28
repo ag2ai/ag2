@@ -134,9 +134,12 @@ agent = Agent(
     The agent's `prompt` (and any `@agent.prompt` hooks) reaches the CLI agent as
     ACP `systemPrompt` in `append` mode: added to the CLI agent's own instructions,
     not replacing them. It is sent once, with `session/new`, from the first turn.
-    Instructions from plugins passed to a single `ask(..., plugins=[...])` are not
-    sent: the CLI agent would keep them for the whole session, past the invocation
-    they belong to. AG2 logs a warning when it leaves them out. ACP allows this only for an agent that advertises
+    Prompt changes from plugins or middleware supplied to a single invocation
+    apply only to that invocation. When they differ from the session instructions,
+    AG2 leaves them out of the ACP system prompt and logs a warning. If invocation
+    middleware changes the prompt through `on_turn`, AG2 uses the snapshot from
+    before that hook to keep subsequent prompt assembly from carrying its changes
+    into the session. ACP allows the system prompt only for an agent that advertises
     `sessionCapabilities.systemPrompt`; for any other the instructions cannot be
     delivered, and AG2 logs a warning saying so.
 
