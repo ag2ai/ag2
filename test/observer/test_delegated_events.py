@@ -181,10 +181,12 @@ async def test_loop_detector_observes_descendants_without_combining_sibling_hist
 async def test_alert_policy_delivers_loop_alerts_from_each_subtask() -> None:
     detector, policy, context = LoopDetector(), AlertPolicy(), MagicMock()
     call = ToolCallEvent(name="do_nothing", arguments="{}")
-    alerts = []
+    alerts: list[BaseEvent] = []
     for task_id in ("task-a", "task-b"):
         child = ChildEvent(inner=call, task_id=task_id, path=(task_id,), agent_name="worker", origin_event_id=call.id)
-        alerts.append(await detector.process([child] * 3, context))
+        alert = await detector.process([child] * 3, context)
+        assert alert is not None
+        alerts.append(alert)
 
     first, _ = await policy.apply([], alerts[:1], context)
     second, _ = await policy.apply([], alerts, context)
