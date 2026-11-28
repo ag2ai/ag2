@@ -2,13 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import warnings
 from typing import Any, Literal
 
 import pytest
 
 from ag2.config import AnthropicConfig
-from ag2.config.anthropic import AnthropicClient, _compat
+from ag2.config.anthropic import AnthropicClient
 
 
 def test_copy_without_overrides_returns_new_equal_instance() -> None:
@@ -46,32 +45,6 @@ def test_create_returns_anthropic_client() -> None:
 def test_max_tokens_defaults_to_4096() -> None:
     config = AnthropicConfig(model="claude-sonnet-5")
     assert config.max_tokens == 4096
-
-
-@pytest.mark.parametrize("sampling", [{"temperature": 0.2}, {"top_p": 0.9}, {"top_k": 5}])
-def test_sampling_parameters_are_deprecated_and_sent_only_by_sdk_1x(sampling: dict[str, Any]) -> None:
-    # `anthropic` 2.x sends an API version that answers 400 to temperature, top_p and top_k.
-    # The `test-anthropic-1x` CI job runs this against the 1.x SDK.
-    sent = not _compat.SDK_2X
-    config = AnthropicConfig(model="claude-sonnet-5", **sampling)
-
-    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
-        client = config.create()
-
-    assert not set(sampling) & client._create_options.keys()
-    assert client._extra_body == (sampling if sent else None)
-
-
-def test_no_warning_without_sampling_parameters() -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        AnthropicConfig(model="claude-sonnet-5").create()
-
-
-def test_sampling_parameters_survive_copy() -> None:
-    config = AnthropicConfig(model="claude-sonnet-5", temperature=0.2)
-
-    assert config.copy(max_tokens=10).temperature == 0.2
 
 
 def test_max_tokens_can_be_overridden() -> None:
@@ -124,18 +97,6 @@ def test_copy_with_extra_body() -> None:
 
     assert copied.extra_body == extra
     assert base.extra_body is None
-
-
-def test_drop_sampling_keeps_extra_body() -> None:
-    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
-        assert _compat._drop_sampling({"top_k": 5}, {"a": 1}) == {"a": 1}
-
-
-def test_send_sampling_merges_and_extra_body_wins() -> None:
-    with pytest.warns(DeprecationWarning, match="removed in 1.4.0"):
-        result = _compat._send_sampling({"temperature": 0.2, "top_k": 5}, {"top_k": 9})
-
-    assert result == {"temperature": 0.2, "top_k": 9}
 
 
 def test_open_telemetry_defaults_to_none() -> None:

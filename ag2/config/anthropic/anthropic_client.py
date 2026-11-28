@@ -60,7 +60,6 @@ def _tool_use_vendor_metadata(block: ToolUseBlock) -> dict[str, Any]:
     return meta
 
 
-from ._compat import sampling_extra_body, take_sampling_fields
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
@@ -123,8 +122,7 @@ class AnthropicClient(LLMClient):
         self._cache_diagnostics = cache_diagnostics
         self._last_message_id: str | None = None
 
-        # Reaching this class directly, not through `AnthropicConfig`, may still pass sampling keys.
-        self._extra_body = sampling_extra_body(take_sampling_fields(self._create_options), extra_body)
+        self._extra_body = extra_body
 
         self._default_betas = _default_betas(default_headers)
 

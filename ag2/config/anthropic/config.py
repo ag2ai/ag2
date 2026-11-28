@@ -3,16 +3,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, TypedDict, overload
+from typing import Any, TypedDict
 
 import httpx2
 from anthropic import OpenTelemetryClientOption
 from anthropic.types import ModelParam
-from typing_extensions import Unpack, deprecated
+from typing_extensions import Unpack
 
 from ag2.config.config import ModelConfig, ModelProvider
 
-from ._compat import SAMPLING_DEPRECATION, SAMPLING_FIELDS, sampling_extra_body
 from .anthropic_client import AnthropicClient, CreateOptions, Speed
 from .files import AnthropicFilesClient
 
@@ -37,24 +36,12 @@ class AnthropicConfigOverrides(TypedDict, total=False):
     open_telemetry: OpenTelemetryClientOption
 
 
-class _DeprecatedConfigOverrides(AnthropicConfigOverrides, total=False):
-    temperature: float | None
-    top_p: float | None
-    top_k: int | None
-
-
 @dataclass(slots=True)
 class AnthropicConfig(ModelConfig):
     model: ModelParam | str
     max_tokens: int = 4096
     api_key: str | None = None
     base_url: str | None = None
-    temperature: float | None = None
-    """Deprecated: ignored with `anthropic` 2.x, whose API version rejects it. Removed in 1.4.0."""
-    top_p: float | None = None
-    """Deprecated: ignored with `anthropic` 2.x, whose API version rejects it. Removed in 1.4.0."""
-    top_k: int | None = None
-    """Deprecated: ignored with `anthropic` 2.x, whose API version rejects it. Removed in 1.4.0."""
     streaming: bool = False
     stop_sequences: list[str] | None = None
     timeout: float | None = None
@@ -74,76 +61,14 @@ class AnthropicConfig(ModelConfig):
     `None` leaves the option unset, so the SDK reads the `ANTHROPIC_OPEN_TELEMETRY*` environment variables.
     """
 
-    if TYPE_CHECKING:
-        # The generated `__init__` carries the deprecated sampling parameters; these overloads
-        # exist only so type checkers can flag them. `sampling_extra_body` warns at runtime.
-        @overload
-        def __init__(
-            self,
-            model: ModelParam | str,
-            max_tokens: int = 4096,
-            api_key: str | None = None,
-            base_url: str | None = None,
-            streaming: bool = False,
-            stop_sequences: list[str] | None = None,
-            timeout: float | None = None,
-            max_retries: int = 2,
-            default_headers: dict[str, str] | None = None,
-            http_client: httpx2.AsyncClient | None = None,
-            metadata: dict[str, str] | None = None,
-            service_tier: str | None = None,
-            prompt_caching: bool = True,
-            cache_diagnostics: bool = False,
-            extra_body: dict[str, Any] | None = None,
-            speed: Speed | None = None,
-            open_telemetry: OpenTelemetryClientOption = None,
-        ) -> None: ...
-
-        @overload
-        @deprecated(SAMPLING_DEPRECATION)
-        def __init__(
-            self,
-            model: ModelParam | str,
-            max_tokens: int = 4096,
-            api_key: str | None = None,
-            base_url: str | None = None,
-            temperature: float | None = None,
-            top_p: float | None = None,
-            top_k: int | None = None,
-            streaming: bool = False,
-            stop_sequences: list[str] | None = None,
-            timeout: float | None = None,
-            max_retries: int = 2,
-            default_headers: dict[str, str] | None = None,
-            http_client: httpx2.AsyncClient | None = None,
-            metadata: dict[str, str] | None = None,
-            service_tier: str | None = None,
-            prompt_caching: bool = True,
-            cache_diagnostics: bool = False,
-            extra_body: dict[str, Any] | None = None,
-            speed: Speed | None = None,
-            open_telemetry: OpenTelemetryClientOption = None,
-        ) -> None: ...
-
-        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
-
     @property
     def provider(self) -> ModelProvider:
         return ModelProvider.ANTHROPIC
 
-    @overload
-    def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig": ...
-
-    @overload
-    @deprecated(SAMPLING_DEPRECATION)
-    def copy(self, /, **overrides: Unpack[_DeprecatedConfigOverrides]) -> "AnthropicConfig": ...
-
-    def copy(self, /, **overrides: Unpack[_DeprecatedConfigOverrides]) -> "AnthropicConfig":
+    def copy(self, /, **overrides: Unpack[AnthropicConfigOverrides]) -> "AnthropicConfig":
         return replace(self, **overrides)
 
     def create(self) -> AnthropicClient:
-        sampling = {name: value for name in SAMPLING_FIELDS if (value := getattr(self, name)) is not None}
-
         options = CreateOptions(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -169,7 +94,7 @@ class AnthropicConfig(ModelConfig):
             create_options=options,
             prompt_caching=self.prompt_caching,
             cache_diagnostics=self.cache_diagnostics,
-            extra_body=sampling_extra_body(sampling, self.extra_body),
+            extra_body=self.extra_body,
             open_telemetry=self.open_telemetry,
         )
 
