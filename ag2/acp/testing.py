@@ -25,7 +25,8 @@ import acp
 from acp import schema
 
 from .config import ACPConfig
-from .types import SessionUpdate
+from .session import _model_values
+from .types import ContentBlock, SessionUpdate
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -156,10 +157,23 @@ class _FakeConnection:
             if not PurePath(path).is_absolute():
                 raise acp.RequestError.invalid_params({"path": f"must be an absolute path, but received: {path}"})
         self.new_session_kwargs = kwargs
+        # Initial values apply in list order; per ACP one the agent will not
+        # apply is ignored, and the response carries what the session really has.
+        for entry in kwargs.get("config_options") or []:
+            self._config_options = [
+                option.model_copy(update={"current_value": entry.value})
+                if option.id == entry.config_id and entry.value in _model_values(option)
+                else option
+                for option in self._config_options
+            ]
         return schema.NewSessionResponse(
             session_id=FAKE_SESSION_ID,
             config_options=self._config_options or None,
         )
+
+    async def session_options(self, **kwargs: Any) -> schema.SessionOptionsResponse:
+        """What a new session would start with: the advertised config options."""
+        return schema.SessionOptionsResponse(config_options=list(self._config_options) or None)
 
     async def _elicit(self, elicitations: "Sequence[ScriptedElicitation]") -> None:
         """Put each scripted question to the client, recording what it answered."""
@@ -173,7 +187,7 @@ class _FakeConnection:
                 await self._client.complete_elicitation(elicitation_id=elicitation.mode.elicitation_id)
 
     async def set_config_option(
-        self, *, session_id: str, config_id: str, value: Any, **kwargs: Any
+        self, *, session_id: str, config_id: str, value: str | bool, **kwargs: Any
     ) -> schema.SetSessionConfigOptionResponse:
         """Record the call and echo back the option set with ``value`` applied.
 
@@ -192,7 +206,9 @@ class _FakeConnection:
     async def cancel(self, **kwargs: Any) -> None:
         self._cancelled.set()
 
-    async def prompt(self, *, session_id: str, prompt: Sequence[Any] = (), **kwargs: Any) -> schema.PromptResponse:
+    async def prompt(
+        self, *, session_id: str, prompt: Sequence[ContentBlock] = (), **kwargs: Any
+    ) -> schema.PromptResponse:
         self.prompt_calls.append("".join(block.text for block in prompt if isinstance(block, schema.TextContentBlock)))
         turn = next(self._turns)
         if turn.on_prompt is not None:
@@ -310,8 +326,11 @@ def fake_acp_config(
     ``permission_policy=...``, ``turn_timeout=...``). ``agent_capabilities``
     shapes the fake's ``initialize`` response; by default it advertises HTTP MCP
     support like the real Claude Code / Codex / OpenCode adapters do.
-    ``config_options`` are advertised in the ``session/new`` response (the
-    agent's model picker et al.); ``session/set_config_option`` calls are
+    ``config_options`` are advertised in the ``session/new`` and
+    ``session/options`` responses (the agent's model picker et al.), and initial
+    values sent with ``session/new`` are applied to them when offered — give
+    ``agent_capabilities`` ``sessionCapabilities.options`` for the client to send
+    any. ``session/set_config_option`` calls are
     appended to the caller-supplied ``config_option_calls`` list as
     ``(config_id, value)`` tuples. The text of each ``session/prompt`` the agent
     receives is appended to ``prompt_calls``.
@@ -376,11 +395,14 @@ def fake_remote_acp_config(
     return config
 
 
-def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook":
+def _duplex_connect(
+    agent: "Callable[[acp.Client], Any] | Any", *, use_unstable_protocol: bool = False
+) -> "ConnectHook":
     """A connection hook that reaches ``agent`` over a real ACP connection in-process.
 
     ``agent`` is what ``acp.run_agent`` takes: an object implementing the SDK's
     ``Agent`` protocol, or a callable handed the connection to talk back through.
+    ``use_unstable_protocol`` opens the agent side's unstable routes.
     """
 
     @asynccontextmanager
@@ -390,7 +412,9 @@ def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook"
         (agent_reader, agent_writer), (client_reader, client_writer) = await duplex()
         # `listening=False` + an explicit task: the receive loop must be owned here
         # so it is cancelled with the connection rather than outliving the test.
-        agent_conn = AgentSideConnection(agent, agent_writer, agent_reader, listening=False)
+        agent_conn = AgentSideConnection(
+            agent, agent_writer, agent_reader, listening=False, use_unstable_protocol=use_unstable_protocol
+        )
         serving = asyncio.ensure_future(agent_conn.listen())
         # The same arguments the real transports pass: a harness that connected
         # differently would not be exercising AG2's wiring.
@@ -409,7 +433,12 @@ def _duplex_connect(agent: "Callable[[acp.Client], Any] | Any") -> "ConnectHook"
     return cast("ConnectHook", connect)
 
 
-def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: Any) -> FakeACPConfig:
+def duplex_acp_config(
+    agent: "Callable[[acp.Client], Any] | Any",
+    *,
+    use_unstable_protocol: bool = False,
+    **overrides: Any,
+) -> FakeACPConfig:
     """An :class:`~.config.ACPConfig` reaching ``agent`` over a real ACP connection.
 
     Unlike :func:`fake_acp_config`, which calls the client's methods directly, both
@@ -423,9 +452,13 @@ def duplex_acp_config(agent: "Callable[[acp.Client], Any] | Any", **overrides: A
     :func:`fake_acp_config` — a scripted turn says more about behaviour with less
     machinery. What this does not cover is the launch path itself (argv, env,
     ``cwd``, a process to terminate); a test about that needs a real subprocess.
+
+    ``use_unstable_protocol`` opens the agent side's unstable routes — such as
+    ``session/options`` — which a real agent serving them would have enabled. The
+    client side always has them, as AG2's own transports do.
     """
     config = FakeACPConfig(**overrides)
-    config._connect = _duplex_connect(agent)
+    config._connect = _duplex_connect(agent, use_unstable_protocol=use_unstable_protocol)
     return config
 
 
@@ -448,7 +481,7 @@ class RecordingClient:
         """Only the updates belonging to ``session_id``, in arrival order."""
         return [u for sid, u in self.updates if sid == session_id]
 
-    async def session_update(self, *, session_id: str, update: Any, **kwargs: Any) -> None:
+    async def session_update(self, *, session_id: str, update: SessionUpdate, **kwargs: Any) -> None:
         self.updates.append((session_id, update))
 
     async def request_permission(self, **kwargs: Any) -> Any:
