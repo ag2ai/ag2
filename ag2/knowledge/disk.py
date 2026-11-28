@@ -162,12 +162,12 @@ class DiskKnowledgeStore:
         target = self._resolve(path)
         if not target.is_file():
             return None
-        return target.read_text(encoding="utf-8")
+        return target.read_bytes().decode("utf-8")
 
     async def write(self, path: str, content: str) -> None:
         target = self._resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_bytes(content.encode("utf-8"))
 
     async def list(self, path: str = "/") -> list[str]:
         target = self._resolve(path)
