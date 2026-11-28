@@ -99,6 +99,7 @@ from .usage import UsageReport
 from .utils import (
     AGENT_CONTEXT_DEPENDENCY_KEY,
     CONFIGURED_DEPENDENCIES_CONTEXT_KEY,
+    CONFIGURED_PROMPT_CONTEXT_KEY,
     MODEL_CONFIG_CONTEXT_DEPENDENCY_KEY,
 )
 
@@ -500,6 +501,61 @@ class _PluginPrompt(str):
 def _remove_plugin_prompts(context: Context, fragments: Sequence[str]) -> None:
     owned = {id(fragment) for fragment in fragments}
     context.prompt[:] = [fragment for fragment in context.prompt if id(fragment) not in owned]
+
+
+async def _record_configured_prompt(call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+    """Publish the agent's own prompt, then hand the call to invocation middleware.
+
+    Sits between the agent's middleware and the middleware supplied for this
+    invocation, so a client whose instructions outlive the invocation (an ACP
+    session) can tell the two apart. Fragments marked as ``_PluginPrompt`` were
+    contributed by invocation plugins (their prompts and assembly policies) and
+    are left out.
+    """
+    context.dependencies[CONFIGURED_PROMPT_CONTEXT_KEY] = tuple(
+        fragment for fragment in context.prompt if not isinstance(fragment, _PluginPrompt)
+    )
+    return await call_next(events, context)
+
+
+class _InvocationPolicy:
+    """An invocation plugin's assembly policy, whose prompt fragments last one invocation.
+
+    It runs inside the agent's own assembler, outside the point where the
+    configured prompt is recorded, so every fragment it adds is marked as a
+    ``_PluginPrompt``. Order and composition with the agent's policies are
+    unchanged.
+    """
+
+    def __init__(self, policy: AssemblyPolicy) -> None:
+        self._policy = policy
+        self.name = policy.name
+
+    async def apply(
+        self, prompts: list[str], events: list[BaseEvent], context: Context
+    ) -> tuple[list[str], list[BaseEvent]]:
+        # Held for the whole call so no identity in ``kept`` can be reused.
+        given = tuple(prompts)
+        kept = {id(fragment) for fragment in given}
+        result, events = await self._policy.apply(prompts, events, context)
+        return [fragment if id(fragment) in kept else _PluginPrompt(fragment) for fragment in result], events
+
+
+def _wrap_in_middleware(
+    factories: Iterable[MiddlewareFactory],
+    event: BaseEvent,
+    context: Context,
+    agent_turn: AgentTurn,
+    llm_call: LLMCall,
+    instances: list[BaseMiddleware],
+) -> tuple[AgentTurn, LLMCall]:
+    """Wrap the turn and the LLM call in each middleware; the first factory ends up outermost."""
+    for factory in reversed(tuple(factories)):
+        middleware = factory(event, context)
+        instances.append(middleware)
+        agent_turn = partial(middleware.on_turn, agent_turn)
+        llm_call = partial(middleware.on_llm_call, llm_call)
+    return agent_turn, llm_call
 
 
 def _set_for_turn(stack: AsyncExitStack, dependencies: dict[Any, Any], key: Any, value: Any) -> None:
@@ -1624,6 +1680,8 @@ class Agent(PluginTarget, Generic[TResult]):
             # apart from values the caller supplied for this request.
             configured = context.dependencies.get(CONFIGURED_DEPENDENCIES_CONTEXT_KEY, {}) | self._agent_dependencies
             _set_for_turn(stack, context.dependencies, CONFIGURED_DEPENDENCIES_CONTEXT_KEY, configured)
+            # Refreshed before each LLM call by `_record_configured_prompt`.
+            _set_for_turn(stack, context.dependencies, CONFIGURED_PROMPT_CONTEXT_KEY, ())
             delegation = _owned_delegation(context)
             lifecycle: RunLifecycle | None = None
             if delegation is not None:
@@ -1765,16 +1823,19 @@ class Agent(PluginTarget, Generic[TResult]):
             )
 
             factories = list(self._middleware)
-            turn_policies = list(additional_policies)
+            turn_policies: list[AssemblyPolicy] = [_InvocationPolicy(policy) for policy in additional_policies]
             if self._policies or turn_policies:
                 _attach_policies(factories, self._policies, turn_policies)
 
-            for m in reversed(tuple(chain(factories, additional_middleware))):
-                mw = m(event, context)
-                middleware_instances.append(mw)
-
-                agent_turn = partial(mw.on_turn, agent_turn)
-                llm_call = partial(mw.on_llm_call, llm_call)
+            # Invocation middleware innermost, the agent's own outside it, and
+            # the configured prompt recorded at the boundary between the two.
+            agent_turn, llm_call = _wrap_in_middleware(
+                additional_middleware, event, context, agent_turn, llm_call, middleware_instances
+            )
+            llm_call = partial(_record_configured_prompt, llm_call)
+            agent_turn, llm_call = _wrap_in_middleware(
+                factories, event, context, agent_turn, llm_call, middleware_instances
+            )
 
             # construct LLM callback
             async def _call_client(event: BaseEvent, context: Context) -> None:

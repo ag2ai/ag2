@@ -30,13 +30,13 @@ import acp
 from acp import schema
 from fast_depends.library.serializer import SerializerProto
 
-from ag2.agent import _PluginPrompt
 from ag2.context import ConversationContext
 from ag2.events import BaseEvent
 from ag2.events.types import ModelMessage, ModelResponse
 from ag2.response import ResponseProto
 from ag2.tools.final import FunctionToolSchema
 from ag2.tools.schemas import ToolSchema
+from ag2.utils import CONFIGURED_PROMPT_CONTEXT_KEY
 
 from .bridge import make_bridge
 from .mappers import map_usage, text_block
@@ -68,23 +68,24 @@ def _elicitation_capabilities(policy: "ElicitationPolicy") -> schema.Elicitation
     )
 
 
-def _session_instructions(prompt: Sequence[str], agent_label: str) -> list[str]:
-    """The part of a turn's ``prompt`` that may become the ACP session's instructions.
+def _session_instructions(context: ConversationContext, agent_label: str) -> list[str]:
+    """The instructions an ACP session may be created with: the agent's own prompt.
 
     ACP fixes ``systemPrompt`` at ``session/new``, and the session outlives the
-    invocation that created it. A fragment from a plugin passed to a single
-    ``ask(..., plugins=[...])`` lives only as long as that invocation, so it is
-    left out: the CLI agent would otherwise keep following it on every later
-    turn, after AG2 had already dropped it. A warning says it was not delivered.
+    invocation that created it. What was supplied for a single invocation (an
+    ``ask(..., plugins=[...])`` prompt, invocation middleware rewriting the
+    prompt) lives only as long as that invocation, so it is left out: the CLI
+    agent would otherwise keep following it on every later turn, after AG2 had
+    already dropped it. A warning says it was not delivered.
     """
-    session = [fragment for fragment in prompt if not isinstance(fragment, _PluginPrompt)]
-    if len(session) != len(prompt):
+    configured = context.dependencies.get(CONFIGURED_PROMPT_CONTEXT_KEY, ())
+    if list(configured) != list(context.prompt):
         logger.warning(
-            "Instructions from plugins passed to this invocation are not sent to ACP agent %r: ACP fixes the"
+            "Instructions supplied for this invocation only are not sent to ACP agent %r: ACP fixes the"
             " system prompt for the whole session, and they apply to this invocation only.",
             agent_label,
         )
-    return session
+    return list(configured)
 
 
 def _terminate_proc(proc: Process | None) -> None:
@@ -116,8 +117,8 @@ class ACPClient:
 
     async def _session_for(self, context: ConversationContext, tools: Sequence[ToolSchema]) -> ACPSession:
         # Every turn, not only the one that creates the session: a later
-        # invocation's plugin instructions never reach the agent either.
-        instructions = _session_instructions(context.prompt, self.config._agent_label)
+        # invocation's own instructions never reach the agent either.
+        instructions = _session_instructions(context, self.config._agent_label)
         key = context.stream.id
         session = self.config._sessions.get(key)
         if session is not None and session.started:

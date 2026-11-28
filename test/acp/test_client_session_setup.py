@@ -9,17 +9,45 @@ the peer decides for itself which model its session starts on.
 """
 
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import acp
 import pytest
 from acp import schema
 
-from ag2 import Agent, MemoryStream, Plugin
+from ag2 import Agent, Context, MemoryStream, Plugin
 from ag2.acp.testing import FakeACPConfig, duplex_acp_config
+from ag2.events import BaseEvent, ModelResponse
+from ag2.middleware import BaseMiddleware, LLMCall
 
 OPTIONS = schema.SessionCapabilities(options=schema.SessionOptionsCapabilities())
 SYSTEM_PROMPT = schema.SessionCapabilities(system_prompt=schema.SessionSystemPromptCapabilities())
+
+
+@dataclass
+class AppendPolicy:
+    """An assembly policy that appends its own instruction."""
+
+    name: str
+
+    async def apply(
+        self, prompts: list[str], events: list[BaseEvent], context: Context
+    ) -> tuple[list[str], list[BaseEvent]]:
+        return [*prompts, f"{self.name} instruction"], events
+
+
+class SuffixMiddleware(BaseMiddleware):
+    """Adds an instruction for the LLM calls it wraps, and takes it back after."""
+
+    async def on_llm_call(self, call_next: LLMCall, events: Sequence[BaseEvent], context: Context) -> ModelResponse:
+        original = context.prompt
+        context.prompt = [*original, "Middleware instruction"]
+        try:
+            return await call_next(events, context)
+        finally:
+            context.prompt = original
 
 
 def _picker(
@@ -197,7 +225,65 @@ class TestInstructions:
             ("session/prompt", ["Answer in French."]),
             ("session/prompt", ["Answer in French."]),
         ]
-        assert "Instructions from plugins passed to this invocation are not sent" in caplog.text
+        assert "Instructions supplied for this invocation only are not sent" in caplog.text
+
+    async def test_invocation_middleware_does_not_outlive_its_invocation_on_the_peer(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        log: list[tuple[str, Any]] = []
+        cfg = _config(log, capabilities=SYSTEM_PROMPT)
+        agent = Agent("acp", "Answer in French.", config=cfg)
+        stream = MemoryStream()
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                await agent.ask("first", stream=stream, middleware=[SuffixMiddleware])
+            await agent.ask("second", stream=stream)
+        finally:
+            await cfg.aclose()
+
+        assert [entry for entry in log if entry[0] == "session/prompt"] == [
+            ("session/prompt", ["Answer in French."]),
+            ("session/prompt", ["Answer in French."]),
+        ]
+        assert "Instructions supplied for this invocation only are not sent" in caplog.text
+
+    async def test_an_invocation_plugin_policy_does_not_outlive_its_invocation_on_the_peer(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        log: list[tuple[str, Any]] = []
+        cfg = _config(log, capabilities=SYSTEM_PROMPT)
+        agent = Agent("acp", "Answer in French.", config=cfg)
+        agent.add_policy(AppendPolicy("Agent"))
+        stream = MemoryStream()
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                await agent.ask("first", stream=stream, plugins=[Plugin().add_policy(AppendPolicy("Plugin"))])
+            await agent.ask("second", stream=stream)
+        finally:
+            await cfg.aclose()
+
+        assert [entry for entry in log if entry[0] == "session/prompt"] == [
+            ("session/prompt", ["Answer in French.", "Agent instruction"]),
+            ("session/prompt", ["Answer in French.", "Agent instruction"]),
+        ]
+        assert "Instructions supplied for this invocation only are not sent" in caplog.text
+
+    async def test_the_agents_own_middleware_reaches_the_peer(self, caplog: pytest.LogCaptureFixture) -> None:
+        log: list[tuple[str, Any]] = []
+        cfg = _config(log, capabilities=SYSTEM_PROMPT)
+
+        try:
+            with caplog.at_level(logging.WARNING, logger="ag2.acp.client"):
+                await Agent("acp", "Answer in French.", config=cfg, middleware=[SuffixMiddleware]).ask("hello")
+        finally:
+            await cfg.aclose()
+
+        assert [entry for entry in log if entry[0] == "session/prompt"] == [
+            ("session/prompt", ["Answer in French.", "Middleware instruction"]),
+        ]
+        assert caplog.text == ""
 
 
 @pytest.mark.asyncio
