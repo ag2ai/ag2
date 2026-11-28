@@ -343,12 +343,11 @@ class TestScope:
         assert dict(agent.dependencies) == {}
         assert dict(agent.variables) == {}
 
-    @pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
     async def test_middleware_observers_and_policies_are_local_to_the_turn(self) -> None:
         config = tracked("done", "again")
         recorder = ResponseRecorder()
         stream = MemoryStream()
-        agent = Agent("a", prompt="base", config=config, assembly=[AppendPolicy("agent-policy")])
+        agent = Agent("a", prompt="base", config=config, plugins=[Plugin().add_policy(AppendPolicy("agent-policy"))])
         plugin = Plugin(
             prompt="plugin",
             variables={"label": "one"},
@@ -374,10 +373,9 @@ class TestScope:
         await agent.ask("again")
         assert prompts(config) == [("plugin-policy",), ()]
 
-    @pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
     async def test_plugin_policies_preserve_existing_middleware_order(self) -> None:
         config = tracked("done")
-        agent = Agent("a", prompt="base", config=config, assembly=[AppendPolicy("agent-policy")])
+        agent = Agent("a", prompt="base", config=config, plugins=[Plugin().add_policy(AppendPolicy("agent-policy"))])
         agent.add_middleware(Middleware(SuffixMiddleware))
         plugin = Plugin()
         plugin.add_policy(AppendPolicy("plugin-policy"))
@@ -432,17 +430,6 @@ class TestScope:
         )
         await agent.ask("go")
         assert prompts(config) == [("agent-policy",)]
-
-
-class TestAssemblyDeprecation:
-    def test_assembly_warns_at_the_line_that_builds_the_agent(self) -> None:
-        with pytest.warns(DeprecationWarning, match=r"Agent\(assembly=\.\.\.\) is deprecated") as record:
-            Agent("a", config=tracked("done"), assembly=[AppendPolicy("agent-policy")])
-        assert record[0].filename == __file__
-
-    def test_empty_assembly_still_warns(self) -> None:
-        with pytest.warns(DeprecationWarning, match=r"Agent\(assembly=\.\.\.\)"):
-            Agent("a", config=tracked("done"), assembly=[])
 
 
 @pytest.mark.asyncio

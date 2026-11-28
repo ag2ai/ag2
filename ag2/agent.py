@@ -115,13 +115,6 @@ TASK_CONFIG_DEPRECATION = (
     "and will be removed in 1.4.0. Expose explicitly constructed worker Agents through Agent.as_tool() instead."
 )
 
-ASSEMBLY_DEPRECATION = (
-    "Agent(assembly=...) is deprecated and will be removed in 1.4.0. Register "
-    "middleware=[Middleware(AssemblerMiddleware, policies=[...]), Middleware(HaltCheckMiddleware)] instead; "
-    "import AssemblerMiddleware from ag2.assembly and Middleware / HaltCheckMiddleware from ag2.middleware."
-)
-
-
 KNOWLEDGE_DEPRECATION = (
     "Agent(knowledge=...) is deprecated and will be removed in 1.4.0. "
     "Use plugins=[KnowledgePlugin(store=..., ...)] instead; import KnowledgePlugin from ag2.knowledge."
@@ -858,8 +851,6 @@ class Agent(PluginTarget, Generic[TResult]):
     * ``middleware=`` — register context policies with
       ``Middleware(AssemblerMiddleware, policies=[...])``. Add
       ``Middleware(HaltCheckMiddleware)`` after it when using ``AlertPolicy``.
-      The legacy ``assembly=`` parameter is deprecated and will be removed
-      in 1.4.0; it keeps wiring both middleware automatically until then.
     * ``plugins=[KnowledgePlugin(store=...)]`` — persistent knowledge store,
       compaction, aggregation.
     * ``tasks=TaskConfig(...)`` — opt in to the auto-injected ``run_subtask``
@@ -886,7 +877,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -906,7 +896,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -926,7 +915,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     @overload
@@ -946,7 +934,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     # A schema only known at run time (e.g. forwarded from a caller's argument):
@@ -968,7 +955,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = ...,
         knowledge: KnowledgeConfig | None = ...,
         tasks: TaskConfig | Literal[False] = ...,
-        assembly: Iterable[AssemblyPolicy] | None = ...,
     ) -> None: ...
 
     def __init__(
@@ -987,7 +973,6 @@ class Agent(PluginTarget, Generic[TResult]):
         plugins: Iterable["Plugin"] = (),
         knowledge: KnowledgeConfig | None = None,
         tasks: TaskConfig | Literal[False] = False,
-        assembly: Iterable[AssemblyPolicy] | None = None,
     ) -> None:
         self._init_target(
             name,
@@ -1038,10 +1023,7 @@ class Agent(PluginTarget, Generic[TResult]):
             self._additional_tools.extend(legacy_knowledge.tools)
         validate_knowledge_middleware(self._middleware)
 
-        # Assembly policies (empty by default; bare Agent has no harness).
-        if assembly is not None:
-            warnings.warn(ASSEMBLY_DEPRECATION, DeprecationWarning, stacklevel=2)
-            self._policies.extend(assembly)
+        # Assembly policies from constructor plugins (empty by default; bare Agent has no harness).
         if self._policies:
             for w in AssemblerMiddleware.validate_order(self._policies):
                 logger.warning("Assembly policy ordering: %s", w)
@@ -1126,10 +1108,9 @@ class Agent(PluginTarget, Generic[TResult]):
 
     @property
     def assembly(self) -> tuple[AssemblyPolicy, ...]:
-        """Policies registered via legacy ``assembly=`` or plugins, in application order.
+        """Policies registered via plugins or ``add_policy()``, in application order.
 
         Policies registered directly through middleware are not included.
-        The ``assembly=`` constructor parameter will be removed in 1.4.0.
         """
 
         return tuple(self._policies)
@@ -2231,10 +2212,10 @@ def _attach_policies(
 ) -> None:
     """Hand agent and invocation-plugin policies to the turn's assembler, in place.
 
-    The assembler is the one ``assembly=`` wired implicitly, or else the first
-    ``Middleware(AssemblerMiddleware, ...)`` the user registered; a user
-    assembler's own policies run first. With neither, an assembler and a halt
-    check are appended, as ``assembly=`` would have done.
+    The assembler is the one wired implicitly for constructor-plugin policies,
+    or else the first ``Middleware(AssemblerMiddleware, ...)`` the user
+    registered; a user assembler's own policies run first. With neither, an
+    assembler and a halt check are appended.
     """
     for index, factory in enumerate(factories):
         if isinstance(factory, _AssemblerMiddlewareFactory):

@@ -7,9 +7,6 @@
 AlertPolicy is the assembly-chain replacement for the old Signal delivery
 system. HaltCheckMiddleware catches HaltEvent and short-circuits LLM calls.
 
-Most tests wire both through the deprecated ``Agent(assembly=...)``, which
-stays covered until its removal in 1.4.0.
-
 These tests isolate both components from the full Agent stack to verify
 edge cases not covered by Agent integration tests.
 """
@@ -19,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from ag2 import Agent, Context
-from ag2.assembly import AssemblerMiddleware
+from ag2.assembly import AssemblerMiddleware, AssemblyPolicy
 from ag2.events import (
     BaseEvent,
     HaltEvent,
@@ -30,6 +27,7 @@ from ag2.events import (
     ToolCallEvent,
 )
 from ag2.middleware import HaltCheckMiddleware, Middleware
+from ag2.middleware.base import MiddlewareFactory
 from ag2.observers import BaseObserver
 from ag2.policies import AlertPolicy, SlidingWindowPolicy
 from ag2.stream import MemoryStream
@@ -37,7 +35,10 @@ from ag2.testing import TestConfig, TrackingConfig
 from ag2.tools.final import tool
 from ag2.watch import EventWatch
 
-pytestmark = pytest.mark.filterwarnings("ignore:Agent\\(assembly=:DeprecationWarning")
+
+def assembled(*policies: AssemblyPolicy) -> list[MiddlewareFactory]:
+    """Policies wired the way the removed ``Agent(assembly=...)`` wired them."""
+    return [Middleware(AssemblerMiddleware, policies=list(policies)), Middleware(HaltCheckMiddleware)]
 
 
 @tool
@@ -251,7 +252,7 @@ class TestHaltCheckMiddleware:
         """Without any FATAL alert, LLM is called normally."""
         config = TrackingConfig(TestConfig("normal response"))
 
-        agent = Agent("test", config=config, assembly=[AlertPolicy()])
+        agent = Agent("test", config=config, middleware=assembled(AlertPolicy()))
         reply = await agent.ask("Hi")
 
         assert reply.body == "normal response"
@@ -292,7 +293,7 @@ class TestHaltCheckMiddleware:
             config=config,
             observers=[observer],
             tools=[echo_tool],
-            assembly=[AlertPolicy()],
+            middleware=assembled(AlertPolicy()),
         )
         reply = await agent.ask("Hi")
 
@@ -304,7 +305,7 @@ class TestHaltCheckMiddleware:
 
     @pytest.mark.asyncio
     async def test_registered_as_middleware_halts_the_same_way(self) -> None:
-        """The middleware= replacement for assembly= stops the second LLM call."""
+        """Registered inline, the assembler and halt check stop the second LLM call."""
         config = TrackingConfig(
             TestConfig(
                 ToolCallEvent(name="echo_tool", arguments='{"value": "test"}'),
@@ -364,7 +365,7 @@ class TestHaltCheckMiddleware:
             config=config,
             observers=[_Fatal()],
             tools=[echo_tool],
-            assembly=[AlertPolicy()],
+            middleware=assembled(AlertPolicy()),
         )
         await agent.ask("Hi", stream=stream)
 
@@ -398,7 +399,7 @@ class TestHaltCheckMiddleware:
             config=config,
             observers=[_Warning()],
             tools=[echo_tool],
-            assembly=[AlertPolicy()],
+            middleware=assembled(AlertPolicy()),
         )
         reply = await agent.ask("Hi")
 
@@ -433,7 +434,7 @@ class TestHaltCheckMiddleware:
             config=config,
             observers=[_FatalObs("obs-a", "crash-a"), _FatalObs("obs-b", "crash-b")],
             tools=[echo_tool],
-            assembly=[AlertPolicy()],
+            middleware=assembled(AlertPolicy()),
         )
         reply = await agent.ask("Hi")
 
