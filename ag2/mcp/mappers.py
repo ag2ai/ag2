@@ -5,6 +5,7 @@
 import base64
 from dataclasses import is_dataclass
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 import jsonschema
 from mcp.types import (
@@ -82,7 +83,8 @@ def _file_to_content(file: BinaryResult) -> ContentBlock:
     return EmbeddedResource(
         type="resource",
         resource=BlobResourceContents(
-            uri=f"resource://{file.name}",
+            # Percent-encoded so a name with spaces, ``#``, ``?`` or ``/`` stays one URI component.
+            uri=f"resource://{quote(file.name, safe='')}",
             blob=encoded,
             mimeType=media_type,
         ),

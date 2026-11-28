@@ -4,6 +4,7 @@
 
 import base64
 from dataclasses import dataclass
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -80,6 +81,20 @@ class TestContentMapping:
         resource = next(c for c in result.content if c.type == "resource")
         assert resource.resource.mime_type == "application/pdf"
         assert base64.b64decode(resource.resource.blob) == _BLOB
+
+
+@pytest.mark.parametrize("filename", ["my report.pdf", "a#b?.pdf", "dir/a b.pdf", "résumé.pdf"])
+def test_embedded_resource_uri_keeps_filename_intact(filename: str) -> None:
+    class _Reply:
+        body = None
+        files = [BinaryResult(_BLOB, metadata={"media_type": "application/pdf", "filename": filename})]
+
+    (block,) = reply_to_content(_Reply())  # type: ignore[arg-type]
+
+    parts = urlsplit(str(block.resource.uri))
+    assert (parts.scheme, parts.query, parts.fragment) == ("resource", "", "")
+    assert " " not in str(block.resource.uri)
+    assert unquote(parts.netloc) == filename
 
 
 def test_empty_reply_maps_to_single_empty_text() -> None:
